@@ -1,0 +1,11 @@
+# Development defaults for the docker-compose stack. Cargo sets these only for
+# what it spawns (`cargo run`, `cargo test`), not for
+# ./target/debug/convertisseur-api run by hand or the binary in a container; a
+# variable already set in the environment wins.
+[env]
+DATABASE_URL = "postgres://convertisseur:convertisseur@localhost:5434/convertisseur"
+CONVERTISSEUR_BIND_ADDR = "127.0.0.1:3000"
+CONVERTISSEUR_WEBAPP_DIR = { value = "convertisseur-webapp/dist", relative = true }
+# The throwaway super admin of the local stack.
+CONVERTISSEUR_SUPER_ADMIN_USERNAME = "admin"
+CONVERTISSEUR_SUPER_ADMIN_PASSWORD = "convertisseur-admin"
