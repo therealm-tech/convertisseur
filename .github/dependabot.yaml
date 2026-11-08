@@ -1,0 +1,116 @@
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "api:"
+    groups:
+      # aide re-exports schemars and wraps axum: bumped one at a time, each
+      # PR fails to build.
+      aide:
+        patterns:
+          - aide
+          - axum
+          - schemars
+      cargo:
+        exclude-patterns:
+          - aide
+          - axum
+          - schemars
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "api:"
+
+  - package-ecosystem: npm
+    directory: /convertisseur-webapp
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "webapp:"
+    groups:
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      vite-pwa:
+        patterns:
+          - vite-plugin-pwa
+          - "@vite-pwa/*"
+          - workbox-*
+      npm:
+        # Dependabot gives a dependency to its most specific matching group,
+        # not the first: a wildcard pattern ranks below this pattern-less
+        # group, so the groups above stay empty unless excluded here.
+        # https://github.com/dependabot/dependabot-core/issues/14576
+        exclude-patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+          - vite-plugin-pwa
+          - "@vite-pwa/*"
+          - workbox-*
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "docker:"
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "docker:"
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "ci:"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "ci:"
+    groups:
+      github-actions:
+        update-types:
+          - minor
+          - patch
