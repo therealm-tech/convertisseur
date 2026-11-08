@@ -27,8 +27,8 @@ services:
       context: .
     environment:
       DATABASE_URL: postgres://convertisseur:convertisseur@postgres:5432/convertisseur
-      CONVERTISSEUR_SUPER_ADMIN_USERNAME: admin
-      CONVERTISSEUR_SUPER_ADMIN_PASSWORD: convertisseur-admin
+      SUPER_ADMIN_USERNAME: admin
+      SUPER_ADMIN_PASSWORD: convertisseur-admin
     ports:
       - 3000:3000
     depends_on:

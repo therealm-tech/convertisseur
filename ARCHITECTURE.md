@@ -117,9 +117,11 @@ CDN; for an app this size, a precached PWA, that load is negligible.
 rather than moving with the API's own prefix. The webapp therefore never routes
 them, and the service worker leaves them, like `/api`, to the network.
 
-**Environment variables carry a `CONVERTISSEUR_` prefix**, except
-`DATABASE_URL`, which keeps its standard name: sqlx's test harness reads it
-too, so one variable serves the server and the tests.
+**Environment variables have bare names**, such as `BIND_ADDR` or
+`SUPER_ADMIN_PASSWORD`. The server runs in a container whose environment is
+written for it alone, so a prefix would only be noise. `DATABASE_URL` is the
+standard name, which sqlx's test harness reads too, so one variable serves the
+server and the tests.
 
 **Fonts are self-hosted.** Nunito and Amiri come from Fontsource packages and
 ship in the build, so the installed app renders offline and no font request
