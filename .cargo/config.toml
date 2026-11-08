@@ -6,6 +6,8 @@
 DATABASE_URL = "postgres://convertisseur:convertisseur@localhost:5434/convertisseur"
 BIND_ADDR = "127.0.0.1:3000"
 WEBAPP_DIR = { value = "convertisseur-webapp/dist", relative = true }
+# The local server speaks plain HTTP, where a Secure cookie is not sent back.
+COOKIE_SECURE = "false"
 # The throwaway super admin of the local stack.
 SUPER_ADMIN_USERNAME = "admin"
 SUPER_ADMIN_PASSWORD = "convertisseur-admin"

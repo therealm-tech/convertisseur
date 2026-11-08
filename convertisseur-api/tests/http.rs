@@ -5,7 +5,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header::CONTENT_TYPE},
 };
-use convertisseur_api::{AppState, app};
+use convertisseur_api::{AppState, ClientSettings, app};
 use http_body_util::BodyExt;
 use sqlx::PgPool;
 use tempfile::TempDir;
@@ -22,7 +22,7 @@ fn webapp_dir() -> TempDir {
 }
 
 fn router(pool: PgPool, webapp_dir: &Path) -> Router {
-    app(AppState::new(pool), webapp_dir)
+    app(AppState::new(pool, ClientSettings::default()), webapp_dir)
 }
 
 struct Answer {

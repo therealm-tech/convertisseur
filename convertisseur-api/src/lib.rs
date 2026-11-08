@@ -9,11 +9,15 @@ mod db;
 mod error;
 mod health;
 mod password;
+mod rate_limit;
 mod router;
+mod sessions;
+mod users;
 mod webapp;
 
 pub use bootstrap::ensure_super_admin;
-pub use router::{AppState, app};
+pub use router::{AppState, ClientSettings, app};
+pub use sessions::COOKIE_NAME;
 
 /// The schema migrations, embedded at compile time.
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();

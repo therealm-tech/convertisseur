@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, path::PathBuf};
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use axum::http::HeaderName;
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(version, about = "Convertisseur HTTP API and web server")]
@@ -73,6 +74,18 @@ pub struct ServeArgs {
     /// on every start-up
     #[arg(long, env = "SUPER_ADMIN_PASSWORD", hide_env_values = true)]
     pub super_admin_password: String,
+
+    /// Mark the session cookie `Secure`, so that browsers only send it over
+    /// HTTPS; turn it off only to serve plain HTTP in development
+    #[arg(long, env = "COOKIE_SECURE", default_value_t = true, action = ArgAction::Set)]
+    pub cookie_secure: bool,
+
+    /// Header in which the reverse proxy in front of the server passes the
+    /// client's IP (e.g. `X-Forwarded-For`, `X-Real-IP`); its last address is
+    /// used. Unset, the client is the TCP peer. Set it only behind a proxy
+    /// that overwrites the header, since clients can forge it
+    #[arg(long, env = "CLIENT_IP_HEADER")]
+    pub client_ip_header: Option<HeaderName>,
 }
 
 #[derive(Args)]
@@ -119,6 +132,8 @@ mod tests {
             names,
             [
                 ("bind_addr", "BIND_ADDR"),
+                ("client_ip_header", "CLIENT_IP_HEADER"),
+                ("cookie_secure", "COOKIE_SECURE"),
                 ("database_url", "DATABASE_URL"),
                 ("db_max_connections", "DB_MAX_CONNECTIONS"),
                 ("log_filter", "LOG_FILTER"),

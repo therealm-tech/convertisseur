@@ -1,16 +1,24 @@
+mod extract;
+mod sessions;
+mod users;
+
 use std::sync::Arc;
 
 use aide::{
     axum::ApiRouter,
-    openapi::{Info, OpenApi},
+    openapi::{ApiKeyLocation, Info, OpenApi, SecurityScheme, Tag},
 };
 use axum::{
     Extension, Json, Router,
     response::Html,
     routing::{any, get},
 };
+use indexmap::IndexMap;
 
-use crate::{error::ApiError, router::AppState};
+use crate::{error::ApiError, router::AppState, sessions::COOKIE_NAME};
+
+/// Name of the session cookie's security scheme in the `OpenAPI` document.
+const SESSION_SECURITY: &str = "SessionCookie";
 
 /// The JSON API under `/api`, its `OpenAPI` document at `/openapi.json` and
 /// the Scalar reference at `/docs`. Any other path under `/api` answers a
@@ -18,19 +26,49 @@ use crate::{error::ApiError, router::AppState};
 pub fn routes(state: AppState) -> Router {
     aide::generate::on_error(|error| tracing::warn!(%error, "OpenAPI generation error"));
     aide::generate::extract_schemas(true);
+    // Every operation lists its responses itself: inference would document
+    // the plain-text rejections of axum's extractors, which the API never
+    // sends.
+    aide::generate::infer_responses(false);
 
     let mut api = OpenApi {
         info: Info {
             title: "Convertisseur API".to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            description: Some("Clients must ignore unknown fields.".to_owned()),
+            description: Some(
+                "Clients must ignore unknown fields. Requests with a body must send it as \
+                 `application/json`."
+                    .to_owned(),
+            ),
             ..Info::default()
         },
         ..OpenApi::default()
     };
 
     ApiRouter::new()
-        .finish_api(&mut api)
+        .merge(sessions::routes())
+        .merge(users::routes())
+        .finish_api_with(&mut api, |doc| {
+            doc.tag(Tag {
+                name: "Sessions".to_owned(),
+                description: Some("Logging in and out, with a session cookie".to_owned()),
+                ..Tag::default()
+            })
+            .tag(Tag {
+                name: "Users".to_owned(),
+                description: Some("Accounts".to_owned()),
+                ..Tag::default()
+            })
+            .security_scheme(
+                SESSION_SECURITY,
+                SecurityScheme::ApiKey {
+                    location: ApiKeyLocation::Cookie,
+                    name: COOKIE_NAME.to_owned(),
+                    description: Some("Set by `POST /api/v1/sessions`".to_owned()),
+                    extensions: IndexMap::default(),
+                },
+            )
+        })
         .with_state(state)
         .route("/openapi.json", get(openapi))
         .route("/docs", get(docs))
