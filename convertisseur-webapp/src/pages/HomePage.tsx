@@ -1,11 +1,12 @@
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { useState } from "react";
 import { Logo } from "@/components/Logo";
 import { logout } from "@/lib/api";
 import { logger } from "@/lib/logger";
+import { isStaff } from "@/lib/roles";
 
 export function HomePage() {
-	const { user } = useRouteContext({ from: "/" });
+	const { user } = useRouteContext({ from: "/_app/" });
 	const navigate = useNavigate();
 	const [failed, setFailed] = useState(false);
 
@@ -29,6 +30,16 @@ export function HomePage() {
 					La déconnexion a échoué. Réessaie dans un moment.
 				</p>
 			) : null}
+			<nav aria-label="Mon compte" className="home-links">
+				{isStaff(user.role) ? (
+					<Link to="/admin/utilisateurs" className="button-primary">
+						Administration
+					</Link>
+				) : null}
+				<Link to="/mot-de-passe" className="home-link">
+					Changer mon mot de passe
+				</Link>
+			</nav>
 			<button type="button" className="button-secondary" onClick={onLogout}>
 				Se déconnecter
 			</button>
