@@ -49,6 +49,22 @@ pub async fn delete_for_user(exec: impl PgExecutor<'_>, user_id: Uuid) -> sqlx::
     Ok(result.rows_affected())
 }
 
+/// Deletes every session of `user_id` but the one hashed `kept_hash`.
+pub async fn delete_others_for_user(
+    exec: impl PgExecutor<'_>,
+    user_id: Uuid,
+    kept_hash: &[u8],
+) -> sqlx::Result<u64> {
+    let result = sqlx::query(include_str!(
+        "../../queries/sessions/delete_others_for_user.sql"
+    ))
+    .bind(user_id)
+    .bind(kept_hash)
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 pub async fn delete_expired(exec: impl PgExecutor<'_>) -> sqlx::Result<u64> {
     let result = sqlx::query(include_str!("../../queries/sessions/delete_expired.sql"))
         .execute(exec)

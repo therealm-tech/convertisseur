@@ -79,7 +79,7 @@ export function validateLogin(credentials: Credentials): CredentialErrors {
 	return firstErrorPerField(LoginSchema, credentials);
 }
 
-function retryDelay(seconds: number | undefined): string {
+export function retryDelay(seconds: number | undefined): string {
 	if (seconds === undefined) {
 		return "un moment";
 	}

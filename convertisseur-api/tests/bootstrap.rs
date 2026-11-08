@@ -111,6 +111,28 @@ async fn promotes_an_existing_account(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn the_configured_password_clears_a_pending_forced_change(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO users (username, password_hash, must_change_password) \
+         VALUES ('carol', 'x', true)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    ensure_super_admin(&pool, "carol", PASSWORD.to_owned())
+        .await
+        .unwrap();
+
+    let pending: bool =
+        sqlx::query_scalar("SELECT must_change_password FROM users WHERE username = 'carol'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(!pending);
+}
+
+#[sqlx::test]
 async fn is_idempotent(pool: PgPool) {
     let first = ensure_super_admin(&pool, "admin", PASSWORD.to_owned())
         .await

@@ -1,21 +1,55 @@
-use aide::{axum::ApiRouter, axum::routing::post_with, transform::TransformOperation};
-use axum::{Json, extract::State, http::StatusCode};
+use aide::{
+    axum::{
+        ApiRouter,
+        routing::{delete_with, post_with, put_with},
+    },
+    transform::TransformOperation,
+};
+use axum::{Json, extract::State, http::StatusCode, response::NoContent};
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
-use super::extract::{RateLimited, Registration, ValidJson};
+use super::{
+    SESSION_SECURITY,
+    extract::{
+        Admin, ApiPath, RateLimited, Registration, RequireRole, SuperAdmin, ValidJson, ValidQuery,
+    },
+};
 use crate::{
-    db,
+    accounts, db,
     error::ApiError,
     password,
     router::AppState,
-    users::{self, Role, USERNAME_CHARS, User},
+    users::{self, ListedUser, Role, USERNAME_CHARS, User},
 };
 
+const DEFAULT_PER_PAGE: u32 = 50;
+const MAX_PER_PAGE: u32 = 100;
+
 pub fn routes() -> ApiRouter<AppState> {
-    ApiRouter::new().api_route("/api/v1/users", post_with(create_user, create_user_docs))
+    ApiRouter::new()
+        .api_route(
+            "/api/v1/users",
+            post_with(create_user, create_user_docs).get_with(list_users, list_users_docs),
+        )
+        .api_route(
+            "/api/v1/users/{userId}",
+            delete_with(delete_user, delete_user_docs),
+        )
+        .api_route(
+            "/api/v1/users/{userId}/role",
+            put_with(set_role, set_role_docs),
+        )
+}
+
+/// Names one account in the path.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserPath {
+    pub user_id: Uuid,
 }
 
 /// A new account.
@@ -45,7 +79,7 @@ fn validate_username(username: &str) -> Result<(), ValidationError> {
     Ok(())
 }
 
-fn validate_password(password: &str) -> Result<(), ValidationError> {
+pub(super) fn validate_password(password: &str) -> Result<(), ValidationError> {
     if password::is_long_enough(password) {
         Ok(())
     } else {
@@ -70,16 +104,40 @@ pub enum RoleResponse {
     SuperAdmin,
 }
 
+impl From<Role> for RoleResponse {
+    fn from(role: Role) -> Self {
+        match role {
+            Role::User => Self::User,
+            Role::Admin => Self::Admin,
+            Role::SuperAdmin => Self::SuperAdmin,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RoleRequest {
+    User,
+    Admin,
+    SuperAdmin,
+}
+
+impl From<RoleRequest> for Role {
+    fn from(role: RoleRequest) -> Self {
+        match role {
+            RoleRequest::User => Self::User,
+            RoleRequest::Admin => Self::Admin,
+            RoleRequest::SuperAdmin => Self::SuperAdmin,
+        }
+    }
+}
+
 impl From<User> for UserResponse {
     fn from(user: User) -> Self {
         Self {
             id: user.id,
             username: user.username,
-            role: match user.role {
-                Role::User => RoleResponse::User,
-                Role::Admin => RoleResponse::Admin,
-                Role::SuperAdmin => RoleResponse::SuperAdmin,
-            },
+            role: user.role.into(),
         }
     }
 }
@@ -129,5 +187,192 @@ fn create_user_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         })
         .response_with::<429, ApiError, _>(|r| {
             r.description("Too many registrations from this IP; see `Retry-After`")
+        })
+}
+
+/// Which accounts to list, and which page of them.
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct ListUsersQuery {
+    /// 1-based; 1 by default.
+    #[validate(range(min = 1))]
+    page: Option<u32>,
+    /// 1 to 100; 50 by default.
+    #[validate(range(min = 1, max = MAX_PER_PAGE))]
+    per_page: Option<u32>,
+    /// Part of the username, compared case-insensitively.
+    q: Option<String>,
+    /// Only the accounts with this role.
+    role: Option<RoleRequest>,
+}
+
+/// One page of accounts: the super admin, then the admins, then the users,
+/// each by username.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserPageResponse {
+    items: Vec<UserListItemResponse>,
+    page: u32,
+    per_page: u32,
+    /// How many accounts match the filters, across all pages.
+    total: u64,
+}
+
+/// An account, as the admin area lists it.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserListItemResponse {
+    id: Uuid,
+    username: String,
+    role: RoleResponse,
+    created_at: DateTime<Utc>,
+    /// The last time one of its sessions was used; `null` if it never logged
+    /// in.
+    last_active_at: Option<DateTime<Utc>>,
+}
+
+impl From<ListedUser> for UserListItemResponse {
+    fn from(user: ListedUser) -> Self {
+        Self {
+            id: user.id,
+            username: user.username,
+            role: user.role.into(),
+            created_at: user.created_at,
+            last_active_at: user.last_active_at,
+        }
+    }
+}
+
+async fn list_users(
+    State(state): State<AppState>,
+    RequireRole { user: actor, .. }: RequireRole<Admin>,
+    ValidQuery(query): ValidQuery<ListUsersQuery>,
+) -> Result<Json<UserPageResponse>, ApiError> {
+    let page = query.page.unwrap_or(1);
+    let per_page = query.per_page.unwrap_or(DEFAULT_PER_PAGE);
+    let filter = db::users::UserFilter {
+        username_contains: query.q.as_deref().map(str::trim).filter(|q| !q.is_empty()),
+        role: query.role.map(Role::from),
+    };
+    let offset = i64::from(page - 1) * i64::from(per_page);
+    let total = db::users::count(&state.pool, &filter).await?;
+    let items = db::users::list(&state.pool, &filter, per_page.into(), offset).await?;
+    tracing::debug!(actor_id = %actor.id, page, per_page, total, "accounts listed");
+    Ok(Json(UserPageResponse {
+        items: items.into_iter().map(Into::into).collect(),
+        page,
+        per_page,
+        total: total.try_into().unwrap_or_default(),
+    }))
+}
+
+fn list_users_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    op.tag("Users")
+        .summary("List accounts")
+        .description("For an `admin` or the `super_admin`.")
+        .security_requirement(SESSION_SECURITY)
+        .response_with::<200, Json<UserPageResponse>, _>(|r| r.description("One page of accounts"))
+        .response_with::<400, ApiError, _>(|r| {
+            r.description("A query parameter is not of the expected type")
+        })
+        .response_with::<401, ApiError, _>(|r| r.description("No live session"))
+        .response_with::<403, ApiError, _>(|r| {
+            r.description(
+                "`forbidden`: the account is a `user`; `password-change-required`: it must \
+                 change its password first",
+            )
+        })
+        .response_with::<422, ApiError, _>(|r| r.description("`page` or `perPage` is out of range"))
+}
+
+async fn delete_user(
+    State(state): State<AppState>,
+    RequireRole { user: actor, .. }: RequireRole<Admin>,
+    ApiPath(path): ApiPath<UserPath>,
+) -> Result<NoContent, ApiError> {
+    accounts::delete(&state.pool, &actor, path.user_id).await?;
+    Ok(NoContent)
+}
+
+fn delete_user_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    op.tag("Users")
+        .summary("Delete an account")
+        .description(
+            "Deletes the account and closes its sessions. An `admin` deletes `user` accounts; \
+             the `super_admin` deletes `user` and `admin` accounts. Nobody deletes the \
+             `super_admin` or their own account. Answers 204 when the account is already gone, \
+             so that a retry is harmless.",
+        )
+        .security_requirement(SESSION_SECURITY)
+        .response_with::<204, NoContent, _>(|r| r.description("The account is gone"))
+        .response_with::<401, ApiError, _>(|r| r.description("No live session"))
+        .response_with::<403, ApiError, _>(|r| {
+            r.description(
+                "`forbidden`: the account may not delete this one; `password-change-required`: \
+                 it must change its password first",
+            )
+        })
+}
+
+/// The role to give an account.
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
+#[schemars(extend("example" = serde_json::json!({ "role": "admin" })))]
+pub struct SetRoleRequest {
+    /// `user` or `admin`: the `super_admin` comes from the server's
+    /// configuration.
+    #[validate(custom(function = validate_assignable_role))]
+    role: RoleRequest,
+}
+
+fn validate_assignable_role(role: &RoleRequest) -> Result<(), ValidationError> {
+    if role == &RoleRequest::SuperAdmin {
+        Err(ValidationError::new("role_not_assignable"))
+    } else {
+        Ok(())
+    }
+}
+
+/// An account's role.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoleAssignmentResponse {
+    role: RoleResponse,
+}
+
+async fn set_role(
+    State(state): State<AppState>,
+    RequireRole { user: actor, .. }: RequireRole<SuperAdmin>,
+    ApiPath(path): ApiPath<UserPath>,
+    ValidJson(request): ValidJson<SetRoleRequest>,
+) -> Result<Json<RoleAssignmentResponse>, ApiError> {
+    let role = Role::from(request.role);
+    accounts::set_role(&state.pool, &actor, path.user_id, role).await?;
+    Ok(Json(RoleAssignmentResponse { role: role.into() }))
+}
+
+fn set_role_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    op.tag("Users")
+        .summary("Set an account's role")
+        .description(
+            "For the `super_admin` only, on any account but their own. The account's sessions \
+             stay open and carry the new role from their next request.",
+        )
+        .security_requirement(SESSION_SECURITY)
+        .response_with::<200, Json<RoleAssignmentResponse>, _>(|r| r.description("The new role"))
+        .response_with::<400, ApiError, _>(|r| {
+            r.description("The body is not JSON of the expected shape")
+        })
+        .response_with::<401, ApiError, _>(|r| r.description("No live session"))
+        .response_with::<403, ApiError, _>(|r| {
+            r.description(
+                "`forbidden`: the account is not the `super_admin`, or the target is itself; \
+                 `password-change-required`: it must change its password first",
+            )
+        })
+        .response_with::<404, ApiError, _>(|r| r.description("No account has this id"))
+        .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
+        .response_with::<422, ApiError, _>(|r| {
+            r.description("`role_not_assignable`: the role is `super_admin`")
         })
 }

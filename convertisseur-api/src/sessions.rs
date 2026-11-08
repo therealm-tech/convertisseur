@@ -42,7 +42,7 @@ impl SessionToken {
             .map(|cookie| Self(cookie.value().to_owned()))
     }
 
-    fn hash(&self) -> Vec<u8> {
+    pub(crate) fn hash(&self) -> Vec<u8> {
         Sha256::digest(self.0.as_bytes()).to_vec()
     }
 

@@ -9,9 +9,43 @@ pub const MIN_PASSWORD_CHARS: usize = 12;
 /// Its parameters must stay those of [`hash`], which a test checks.
 const DUMMY_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$Tqh6p5XHi3Dl78bgBRoViw$KtfE1KceUUV6zHodS7Q192s0cYaQ8QTLRx7dIcDDhsY";
 
+/// Lowercase letters and digits a reader cannot mistake for one another: no
+/// `0`/`o`, `1`/`l`/`i`, so that a password read out or copied by hand
+/// arrives intact.
+const TEMPORARY_ALPHABET: &[u8] = b"abcdefghjkmnpqrstuvwxyz23456789";
+const TEMPORARY_GROUPS: usize = 4;
+const TEMPORARY_GROUP_CHARS: usize = 5;
+
 #[must_use]
 pub fn is_long_enough(password: &str) -> bool {
     password.chars().count() >= MIN_PASSWORD_CHARS
+}
+
+/// A random password for an admin to hand over: four groups of five
+/// characters joined by `-`, about 99 bits of entropy.
+pub fn generate_temporary() -> anyhow::Result<String> {
+    // The largest multiple of the alphabet's length that fits in a byte:
+    // bytes above it are drawn again, so that every character is equally
+    // likely.
+    let alphabet_len = TEMPORARY_ALPHABET.len();
+    let limit = u8::try_from(256 / alphabet_len * alphabet_len).unwrap_or(u8::MAX);
+    let mut chars = Vec::with_capacity(TEMPORARY_GROUPS * TEMPORARY_GROUP_CHARS);
+    while chars.len() < chars.capacity() {
+        let mut bytes = [0u8; 32];
+        getrandom::fill(&mut bytes).map_err(|e| anyhow!("no randomness for a password: {e}"))?;
+        chars.extend(
+            bytes
+                .into_iter()
+                .filter(|&byte| byte < limit)
+                .map(|byte| TEMPORARY_ALPHABET[usize::from(byte) % alphabet_len] as char)
+                .take(chars.capacity() - chars.len()),
+        );
+    }
+    Ok(chars
+        .chunks(TEMPORARY_GROUP_CHARS)
+        .map(|group| group.iter().collect::<String>())
+        .collect::<Vec<_>>()
+        .join("-"))
 }
 
 /// Hashes a password with argon2id, in PHC string format.
@@ -65,6 +99,28 @@ mod tests {
         assert_eq!(params.m_cost(), default.m_cost());
         assert_eq!(params.t_cost(), default.t_cost());
         assert_eq!(params.p_cost(), default.p_cost());
+    }
+
+    #[test]
+    fn temporary_passwords_are_long_unambiguous_and_distinct() {
+        let first = super::generate_temporary().unwrap();
+        let second = super::generate_temporary().unwrap();
+        assert_ne!(first, second);
+        assert_eq!(first.len(), 23);
+        assert!(super::is_long_enough(&first));
+        let groups: Vec<_> = first.split('-').collect();
+        assert_eq!(groups.len(), 4);
+        for group in groups {
+            assert_eq!(group.len(), 5);
+            assert!(
+                group
+                    .bytes()
+                    .all(|b| super::TEMPORARY_ALPHABET.contains(&b))
+            );
+        }
+        for ambiguous in ['0', 'o', '1', 'l', 'i'] {
+            assert!(!super::TEMPORARY_ALPHABET.contains(&(ambiguous as u8)));
+        }
     }
 
     #[test]

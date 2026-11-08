@@ -62,6 +62,19 @@ pub struct CreateSessionRequest {
 pub struct SessionResponse {
     /// The account the session belongs to.
     user: UserResponse,
+    /// Whether the account must choose a new password, with
+    /// `PUT /api/v1/users/{userId}/password`, before any other endpoint
+    /// answers it.
+    must_change_password: bool,
+}
+
+impl From<crate::users::User> for SessionResponse {
+    fn from(user: crate::users::User) -> Self {
+        Self {
+            must_change_password: user.must_change_password,
+            user: user.into(),
+        }
+    }
 }
 
 async fn create_session(
@@ -84,9 +97,7 @@ async fn create_session(
     let token = sessions::open(&state.pool, account.user.id).await?;
     tracing::info!(user_id = %account.user.id, "logged in");
 
-    let body = SessionResponse {
-        user: account.user.into(),
-    };
+    let body = SessionResponse::from(account.user);
     Ok((
         StatusCode::CREATED,
         [
@@ -111,7 +122,8 @@ fn create_session_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
             "Opens a session and sets it in the `convertisseur_session` cookie: `HttpOnly`, \
              `SameSite=Lax`, `Secure` unless the server is configured otherwise. A session \
              expires 30 days after its last use. A wrong password and an unknown username \
-             get the same answer.",
+             get the same answer. After a password reset, the temporary password logs in with \
+             `mustChangePassword` set.",
         )
         .response_with::<201, Json<SessionResponse>, _>(|r| {
             r.description("Logged in; `Set-Cookie` holds the session")
@@ -129,9 +141,7 @@ fn create_session_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
 }
 
 async fn get_current_session(State(state): State<AppState>, session: CurrentSession) -> Response {
-    let body = SessionResponse {
-        user: session.user.into(),
-    };
+    let body = SessionResponse::from(session.user);
     (
         [(
             header::SET_COOKIE,

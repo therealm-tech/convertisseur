@@ -58,7 +58,11 @@ Every navigation first asks the API who is logged in
 (`GET /api/v1/sessions/current`): the session cookie is `HttpOnly`, so the
 server is the only one that knows, and the webapp keeps no copy of the session
 of its own. A visitor without a session lands on `/connexion`, the login and
-registration screen; a logged-in user is sent from there to `/`.
+registration screen; a logged-in user is sent from there to `/`. An account
+whose password was reset by an admin can reach `/mot-de-passe` only, and the
+admin area under `/admin` is open to `admin` and `super_admin` alone. These
+guards spare the user a page that would only fail: the server enforces the
+same rules on every request.
 
 The interface is in French. The visual identity lives in CSS custom properties
 in [`styles.css`](convertisseur-webapp/src/styles.css), with a light and a dark
@@ -83,7 +87,9 @@ changed.
 
 `users` holds the accounts: a username, unique case-insensitively through an
 index on `lower(username)`; an argon2id password hash in PHC string format;
-and a `role` of the `user_role` enum, `user`, `admin` or `super_admin`.
+a `role` of the `user_role` enum, `user`, `admin` or `super_admin`;
+`must_change_password`, set by an admin's password reset; and
+`last_active_at`, the last time one of its sessions was opened or used.
 
 `sessions` holds the logged-in sessions: the SHA-256 of the session token, the
 user it belongs to, and when it expires. Deleting a user deletes its sessions.
@@ -136,6 +142,84 @@ sequenceDiagram
   minutes. A refusal is a `429` problem with `Retry-After`. The client IP is
   the TCP peer, or the last address in the header named by `CLIENT_IP_HEADER`
   when the server sits behind a reverse proxy that sets it.
+
+## Roles and permissions
+
+Three roles, in increasing order of power: `user`, `admin`, `super_admin`.
+
+| Action | `admin` | `super_admin` |
+| --- | --- | --- |
+| Open the admin area, list and search accounts | yes | yes |
+| Reset the password of, or delete, a `user` | yes | yes |
+| Reset the password of, or delete, an `admin` | no | yes |
+| Change a role between `user` and `admin` | no | yes |
+
+The rule behind the table, in
+[`users::may`](convertisseur-api/src/users.rs): an account manages only
+accounts of a lower role, and only the super admin changes roles. Two
+exceptions win over it: nobody acts on the super admin, which exists only
+through the configuration, and nobody acts on their own account from the
+admin area. A refusal is a `403` `forbidden` problem.
+
+The server checks this on every request, in two places:
+
+- **A role guard on the endpoint.** The `RequireRole` extractor in
+  [`extract.rs`](convertisseur-api/src/api/extract.rs) refuses an account
+  below the endpoint's least role before the handler runs: `admin` for the
+  listing, the reset and the deletion, `super_admin` for a role change.
+- **The rule on the target**, in
+  [`accounts.rs`](convertisseur-api/src/accounts.rs), inside the transaction
+  that acts: the target's row is locked with `SELECT … FOR UPDATE`, so its
+  role cannot change between the check and the action.
+
+The role is read from the database on every request, with the session, so a
+new role applies to the account's open sessions at once.
+
+## Password resets
+
+Accounts have no email address, so a forgotten password goes through an admin:
+
+```mermaid
+sequenceDiagram
+    participant A as Admin's browser
+    participant S as convertisseur-api
+    participant P as PostgreSQL
+    participant U as User's browser
+    A->>S: POST /api/v1/users/{userId}/password-resets
+    S->>P: BEGIN, lock the target's row, check the rule
+    S->>S: draw a temporary password, hash it (argon2id)
+    S->>P: store the hash, set must_change_password
+    S->>P: delete the target's sessions, COMMIT
+    S-->>A: 201 {temporaryPassword}, Cache-Control: no-store
+    Note over A,U: the admin hands the password over
+    U->>S: POST /api/v1/sessions with the temporary password
+    S-->>U: 201 {user, mustChangePassword: true}
+    U->>S: PUT /api/v1/users/{userId}/password {currentPassword, newPassword}
+    S->>P: swap the hash if unchanged, clear the flag, delete the other sessions
+    S-->>U: 204
+```
+
+- **The temporary password exists once, in the response.** The server keeps
+  only its hash and logs neither it nor its length. It is 20 characters drawn
+  from 31 lowercase letters and digits with no look-alikes (no `0`/`o`,
+  `1`/`l`/`i`), in groups of five, so that it survives being read out or
+  copied by hand.
+- **Until the change, the account can do nothing else.** Every endpoint but
+  the password change, the current session and logout takes the
+  `Authenticated` extractor, which answers a `403` `password-change-required`
+  problem; the session payload carries `mustChangePassword`, and the webapp
+  keeps the account on `/mot-de-passe`.
+- **The temporary password works until it is replaced.** It is the account's
+  password in every respect but the flag, so a login with it can be repeated
+  until the change succeeds; after that it matches nothing.
+
+Any account changes its own password the same way, with
+`PUT /api/v1/users/{userId}/password`, which accepts only the session's own
+account. It checks the current password and counts against the login rate
+limit, so a stolen session cannot be used to guess it. On success, the
+account's other sessions are closed and the current one is kept. The new hash
+replaces the old one only if the old one is still stored, so two concurrent
+changes cannot both succeed.
 
 ## The super admin bootstrap
 
@@ -204,13 +288,29 @@ bodies, without tokens.** A `Lax` cookie is not sent on a cross-site `POST`,
 `PUT` or `DELETE`, and every endpoint with a body refuses any content type but
 `application/json` with a `415`, which an HTML form cannot send and a
 cross-origin `fetch` cannot send without a CORS preflight that the server never
-grants. A `GET` changes nothing but the expiry of the caller's own session, so
+grants. The endpoints without a body, logout, account deletion and password
+reset, rest on `SameSite=Lax` alone: an HTML form cannot send a `DELETE`, and
+the browser keeps the cookie off a cross-site form `POST`. A `GET` changes nothing but the expiry of the caller's own session, so
 the top-level navigations `Lax` still lets the cookie through on are harmless.
 
 **Rate limits are counted in memory, per process.** They need no shared store,
 and they hold a brute force to a few thousand guesses a day per address, on
 passwords of at least 12 characters. The cost is that each replica counts on
 its own and a restart forgets the counts.
+
+**Last activity lives on the account, not in `sessions`.** Logout, expiry,
+a password change and a reset all delete sessions, and the admin area must
+still say when the account was last seen. The cost is a second row written on
+each authenticated request, in the same statement that slides the session.
+
+**An account forced to change its password is refused with a `403`, not a
+`401`.** It is logged in, and a `401` would tell the webapp to send it back to
+the login screen; the dedicated problem type tells it where to go instead.
+
+**The admin area lists accounts by role, then by username**, the super admin
+first. A listing that puts the accounts with the most power on top is the
+one an admin reads most often; usernames sort byte-wise on their lowercase
+form, which is stable across database locales.
 
 **Environment variables have bare names**, such as `BIND_ADDR` or
 `SUPER_ADMIN_PASSWORD`. The server runs in a container whose environment is
@@ -237,7 +337,13 @@ and no raster that can drift from it.
 - **Usernames are unique regardless of case.** The bootstrap and the login
   match a username case-insensitively, and keep the stored spelling.
 - **A session token never reaches the database or a log.** Only its SHA-256 is
-  stored, and no log line carries a token or a password.
+  stored, and no log line carries a token or a password, temporary passwords
+  included.
+- **The super admin is changed only through the configuration.** No endpoint
+  resets its password, deletes it or changes its role, and the bootstrap
+  clears any pending forced change on it.
+- **Permissions are enforced by the server.** The webapp hides what the
+  server would refuse, and nothing more.
 - **The configured super admin's username is not reserved.** It exists from
   the first start-up, so registering it answers the same `409` as any other
   taken username. Its format is exempt from the registration rules.
@@ -250,7 +356,8 @@ and no raster that can drift from it.
 
 ## Limitations
 
-- Accounts have no email address, so there is no self-service password reset.
+- Accounts have no email address, so there is no self-service password reset:
+  an admin resets a forgotten password and hands the temporary one over.
 - The rate limits key on an IP address: people behind one NAT, a school or a
   mosque network, share their limits.
 

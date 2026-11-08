@@ -17,7 +17,9 @@ path, backed by PostgreSQL.
 Registration is open on the Internet: an account is a username and a password,
 with no email address. Accounts have one of three roles: `user`, `admin` or
 `super_admin`. There is always exactly one super admin, the account named in
-the server's configuration.
+the server's configuration. Admins manage accounts in the admin area, at
+`/admin/utilisateurs`: they search them, reset forgotten passwords and delete
+accounts, and the super admin also promotes users to admin and back.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and the reasoning behind
 it.

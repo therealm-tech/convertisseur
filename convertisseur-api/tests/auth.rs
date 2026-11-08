@@ -375,6 +375,7 @@ async fn the_current_session_names_its_user_and_renews_the_cookie(pool: PgPool) 
     assert_eq!(answer.body["user"]["username"], "aicha");
     assert_eq!(answer.body["user"]["role"], "user");
     assert!(answer.body["user"]["id"].is_string());
+    assert_eq!(answer.body["mustChangePassword"], false);
     assert_eq!(answer.cookie(), cookie);
     assert!(answer.set_cookie().contains("Max-Age=2592000"));
 }
