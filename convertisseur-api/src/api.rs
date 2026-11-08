@@ -1,4 +1,5 @@
 mod extract;
+mod passwords;
 mod sessions;
 mod users;
 
@@ -48,6 +49,7 @@ pub fn routes(state: AppState) -> Router {
     ApiRouter::new()
         .merge(sessions::routes())
         .merge(users::routes())
+        .merge(passwords::routes())
         .finish_api_with(&mut api, |doc| {
             doc.tag(Tag {
                 name: "Sessions".to_owned(),
@@ -56,7 +58,7 @@ pub fn routes(state: AppState) -> Router {
             })
             .tag(Tag {
                 name: "Users".to_owned(),
-                description: Some("Accounts".to_owned()),
+                description: Some("Accounts, their passwords and their roles".to_owned()),
                 ..Tag::default()
             })
             .security_scheme(

@@ -11,21 +11,22 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-aide = { version = "0.16.0-alpha.4", features = ["axum", "axum-json", "macros"] }
+aide = { version = "0.16.0-alpha.4", features = ["axum", "axum-json", "axum-query", "macros"] }
 anyhow = "1.0.104"
 argon2 = "0.6.0"
 axum = "0.8.9"
 base64 = "0.23.1"
+chrono = { version = "0.4.45", default-features = false, features = ["serde"] }
 clap = { version = "4.6.7", features = ["derive", "env"] }
 cookie = "0.18.2"
 getrandom = "0.4.3"
 governor = { version = "0.10.4", default-features = false, features = ["std", "dashmap", "quanta"] }
 indexmap = "2.14.2"
-schemars = { version = "1.2.3", features = ["uuid1"] }
+schemars = { version = "1.2.3", features = ["chrono04", "uuid1"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
-sqlx = { version = "0.9.0", default-features = false, features = ["postgres", "uuid", "macros", "migrate", "runtime-tokio", "tls-rustls"] }
+sqlx = { version = "0.9.0", default-features = false, features = ["postgres", "uuid", "chrono", "macros", "migrate", "runtime-tokio", "tls-rustls"] }
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "io-util"] }
 tower-http = { version = "0.7.1", features = ["fs", "trace"] }
 tracing = "0.1.44"

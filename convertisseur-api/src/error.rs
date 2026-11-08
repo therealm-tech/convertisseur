@@ -12,7 +12,9 @@ use axum::{
 };
 use schemars::JsonSchema;
 use serde::Serialize;
-use validator::ValidationErrors;
+use validator::{ValidationError, ValidationErrors};
+
+use crate::accounts::Refusal;
 
 const PROBLEM_JSON: &str = "application/problem+json";
 
@@ -21,9 +23,12 @@ const PROBLEM_JSON: &str = "application/problem+json";
 pub enum ApiError {
     NotFound,
     MalformedBody,
+    MalformedQuery,
     UnsupportedMediaType,
     Validation(ValidationErrors),
     Unauthenticated,
+    PasswordChangeRequired,
+    Forbidden,
     InvalidCredentials,
     UsernameTaken,
     RateLimited { retry_after: Duration },
@@ -74,6 +79,23 @@ impl From<ValidationErrors> for ApiError {
     }
 }
 
+impl From<Refusal> for ApiError {
+    fn from(refusal: Refusal) -> Self {
+        let invalid = |field, code| {
+            let mut errors = ValidationErrors::new();
+            errors.add(field, ValidationError::new(code));
+            Self::Validation(errors)
+        };
+        match refusal {
+            Refusal::NotFound => Self::NotFound,
+            Refusal::Forbidden => Self::Forbidden,
+            Refusal::WrongPassword => invalid("current_password", "password_incorrect"),
+            Refusal::SamePassword => invalid("new_password", "password_unchanged"),
+            Refusal::Failed(error) => Self::Internal(error),
+        }
+    }
+}
+
 impl ApiError {
     fn describe(&self) -> (StatusCode, &'static str, &'static str, &'static str) {
         match self {
@@ -88,6 +110,12 @@ impl ApiError {
                 "urn:convertisseur:problem:malformed-body",
                 "Malformed body",
                 "the body is not JSON of the expected shape",
+            ),
+            Self::MalformedQuery => (
+                StatusCode::BAD_REQUEST,
+                "urn:convertisseur:problem:malformed-query",
+                "Malformed query",
+                "a query parameter is not of the expected type",
             ),
             Self::UnsupportedMediaType => (
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -106,6 +134,18 @@ impl ApiError {
                 "urn:convertisseur:problem:unauthenticated",
                 "Not logged in",
                 "the request carries no live session",
+            ),
+            Self::PasswordChangeRequired => (
+                StatusCode::FORBIDDEN,
+                "urn:convertisseur:problem:password-change-required",
+                "Password change required",
+                "the account must choose a new password before anything else",
+            ),
+            Self::Forbidden => (
+                StatusCode::FORBIDDEN,
+                "urn:convertisseur:problem:forbidden",
+                "Forbidden",
+                "the account may not do this",
             ),
             Self::InvalidCredentials => (
                 StatusCode::UNAUTHORIZED,
@@ -147,7 +187,7 @@ impl IntoResponse for ApiError {
             Self::Validation(invalid) => {
                 for (field, field_errors) in invalid.field_errors() {
                     errors.extend(field_errors.iter().map(|e| FieldProblem {
-                        field: field.to_string(),
+                        field: camel_case(&field),
                         code: e.code.to_string(),
                     }));
                 }
@@ -174,6 +214,20 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// validator names a field as Rust does; the wire names it in camelCase.
+fn camel_case(field: &str) -> String {
+    let mut words = field.split('_');
+    let mut name = words.next().unwrap_or_default().to_owned();
+    for word in words {
+        let mut chars = word.chars();
+        if let Some(first) = chars.next() {
+            name.extend(first.to_uppercase());
+            name.push_str(chars.as_str());
+        }
+    }
+    name
+}
+
 /// Documents an error as a problem document; each operation declares the
 /// statuses it answers.
 impl OperationOutput for ApiError {
@@ -185,5 +239,15 @@ impl OperationOutput for ApiError {
             response.content.insert(PROBLEM_JSON.to_owned(), media);
         }
         Some(response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn names_fields_in_camel_case() {
+        assert_eq!(super::camel_case("username"), "username");
+        assert_eq!(super::camel_case("current_password"), "currentPassword");
+        assert_eq!(super::camel_case("per_page"), "perPage");
     }
 }

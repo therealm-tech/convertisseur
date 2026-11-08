@@ -4,5 +4,6 @@ ON CONFLICT ((lower(username))) DO UPDATE
     SET
         password_hash = excluded.password_hash,
         role = excluded.role,
+        must_change_password = false,
         updated_at = now()
 RETURNING id;

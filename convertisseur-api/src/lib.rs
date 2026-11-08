@@ -2,6 +2,7 @@
 //! the start-up bootstrap live here so that the integration tests can drive
 //! them without a socket.
 
+mod accounts;
 mod api;
 mod bootstrap;
 pub mod config;

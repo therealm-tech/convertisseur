@@ -1,5 +1,6 @@
-//! The request extractors the API handlers share: a JSON body that must be
-//! valid, the rate limits on the client's IP, and the live session.
+//! The request extractors the API handlers share: a JSON body, a query and a
+//! path that must be valid, the rate limits on the client's IP, the live
+//! session, and the role guard.
 
 use std::{
     marker::PhantomData,
@@ -9,7 +10,9 @@ use std::{
 use aide::{OperationInput, generate::GenContext, openapi::Operation};
 use axum::{
     Json,
-    extract::{ConnectInfo, FromRequest, FromRequestParts, Request, rejection::JsonRejection},
+    extract::{
+        ConnectInfo, FromRequest, FromRequestParts, Path, Query, Request, rejection::JsonRejection,
+    },
     http::{HeaderMap, HeaderName, request::Parts},
 };
 use schemars::JsonSchema;
@@ -21,7 +24,7 @@ use crate::{
     rate_limit::Bucket,
     router::AppState,
     sessions::{self, SessionToken},
-    users::User,
+    users::{Role, User},
 };
 
 /// A JSON body, deserialised then validated. Any other content type is
@@ -53,6 +56,64 @@ where
 impl<T: JsonSchema> OperationInput for ValidJson<T> {
     fn operation_input(ctx: &mut GenContext, operation: &mut Operation) {
         Json::<T>::operation_input(ctx, operation);
+    }
+}
+
+/// Query parameters, deserialised then validated.
+pub struct ValidQuery<T>(pub T);
+
+impl<T, S> FromRequestParts<S> for ValidQuery<T>
+where
+    T: DeserializeOwned + Validate,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Query(value) =
+            Query::<T>::from_request_parts(parts, state)
+                .await
+                .map_err(|rejection| {
+                    tracing::debug!(%rejection, "query refused");
+                    ApiError::MalformedQuery
+                })?;
+        value.validate()?;
+        Ok(Self(value))
+    }
+}
+
+impl<T: JsonSchema> OperationInput for ValidQuery<T> {
+    fn operation_input(ctx: &mut GenContext, operation: &mut Operation) {
+        Query::<T>::operation_input(ctx, operation);
+    }
+}
+
+/// Path parameters. One that does not parse names nothing, so it answers a
+/// 404 problem.
+pub struct ApiPath<T>(pub T);
+
+impl<T, S> FromRequestParts<S> for ApiPath<T>
+where
+    T: DeserializeOwned + Send,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Path(value) =
+            Path::<T>::from_request_parts(parts, state)
+                .await
+                .map_err(|rejection| {
+                    tracing::debug!(%rejection, "path refused");
+                    ApiError::NotFound
+                })?;
+        Ok(Self(value))
+    }
+}
+
+impl<T: JsonSchema> OperationInput for ApiPath<T> {
+    fn operation_input(ctx: &mut GenContext, operation: &mut Operation) {
+        Path::<T>::operation_input(ctx, operation);
     }
 }
 
@@ -119,7 +180,9 @@ impl<L: Limited + Send> FromRequestParts<AppState> for RateLimited<L> {
 impl<L> OperationInput for RateLimited<L> {}
 
 /// The live session the request's cookie names, slid forward by this use.
-/// Refuses the request with a 401 when there is none.
+/// Refuses the request with a 401 when there is none. It lets through an
+/// account that must change its password: only the endpoints it needs to do
+/// so take it, every other one takes [`Authenticated`].
 pub struct CurrentSession {
     pub token: SessionToken,
     pub user: User,
@@ -141,3 +204,71 @@ impl FromRequestParts<AppState> for CurrentSession {
 }
 
 impl OperationInput for CurrentSession {}
+
+/// The account of a live session that has no pending password change.
+/// Refuses the request with a 401 without a session, and with a 403
+/// `password-change-required` problem while a reset password is unchanged.
+pub struct Authenticated(pub User);
+
+impl FromRequestParts<AppState> for Authenticated {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let CurrentSession { user, .. } = CurrentSession::from_request_parts(parts, state).await?;
+        if user.must_change_password {
+            tracing::debug!(user_id = %user.id, "refused until the password is changed");
+            return Err(ApiError::PasswordChangeRequired);
+        }
+        Ok(Self(user))
+    }
+}
+
+impl OperationInput for Authenticated {}
+
+/// The least role an endpoint needs.
+pub trait MinimumRole {
+    const ROLE: Role;
+}
+
+pub struct Admin;
+
+impl MinimumRole for Admin {
+    const ROLE: Role = Role::Admin;
+}
+
+pub struct SuperAdmin;
+
+impl MinimumRole for SuperAdmin {
+    const ROLE: Role = Role::SuperAdmin;
+}
+
+/// An [`Authenticated`] account whose role is at least `R`'s. Refuses any
+/// other with a 403 `forbidden` problem.
+pub struct RequireRole<R> {
+    pub user: User,
+    role: PhantomData<R>,
+}
+
+impl<R: MinimumRole + Send> FromRequestParts<AppState> for RequireRole<R> {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let Authenticated(user) = Authenticated::from_request_parts(parts, state).await?;
+        if user.role < R::ROLE {
+            tracing::info!(user_id = %user.id, role = ?user.role, needed = ?R::ROLE, "role too low");
+            return Err(ApiError::Forbidden);
+        }
+        Ok(Self {
+            user,
+            role: PhantomData,
+        })
+    }
+}
+
+impl<R> OperationInput for RequireRole<R> {}
