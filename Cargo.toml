@@ -1,0 +1,21 @@
+[workspace]
+members = [
+  "convertisseur-api",
+]
+resolver = "3"
+
+[workspace.package]
+authors = [
+  "Guillaume Leroy <gleroy@therealm.tech>",
+]
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/therealm-tech/convertisseur"
+version = "0.1.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

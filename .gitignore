@@ -1,0 +1,19 @@
+# Rust
+target/
+
+# Node
+node_modules/
+convertisseur-webapp/dist/
+convertisseur-webapp/dev-dist/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store

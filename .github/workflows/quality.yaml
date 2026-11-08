@@ -1,0 +1,118 @@
+name: quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HADOLINT_VERSION: 2.15.1
+  TRIVY_VERSION: v0.76.2
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-24.04
+    steps:
+      - name: check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: set up the Rust toolchain
+        # Installs the toolchain and components pinned in rust-toolchain.toml.
+        run: rustup toolchain install
+
+      - name: cache the Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: convertisseur-webapp/.nvmrc
+
+      - name: install the webapp dependencies
+        working-directory: convertisseur-webapp
+        run: npm ci
+
+      - name: install hadolint
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/hadolint \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          sudo chmod +x /usr/local/bin/hadolint
+
+      - name: set up Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          cache: true
+
+      - name: set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+
+      - name: install pre-commit
+        run: pip install pre-commit==4.6.2
+
+      - name: run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  test-api:
+    name: test (API)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+        env:
+          POSTGRES_USER: convertisseur
+          POSTGRES_PASSWORD: convertisseur
+          POSTGRES_DB: convertisseur
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://convertisseur:convertisseur@localhost:5432/convertisseur
+    steps:
+      - name: check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: set up the Rust toolchain
+        run: rustup toolchain install
+
+      - name: cache the Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: run the API tests
+        run: cargo test --locked
+
+  test-webapp:
+    name: test (webapp)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: convertisseur-webapp
+    steps:
+      - name: check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: convertisseur-webapp/.nvmrc
+
+      - name: install the webapp dependencies
+        run: npm ci
+
+      - name: run the webapp tests
+        run: npm test

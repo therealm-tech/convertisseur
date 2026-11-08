@@ -1,0 +1,96 @@
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args:
+          - --allow-multiple-documents
+      - id: check-toml
+      - id: check-json
+        # tsconfig files are JSONC (comments, trailing commas).
+        exclude: tsconfig.*\.json$
+      - id: check-added-large-files
+        exclude: ^(.*/)?(package-lock\.json|Cargo\.lock)$
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: cba56bcde1fdd01c1deb3f945e69764c291a6530 # frozen: v1.38.0
+    hooks:
+      - id: yamllint
+        # Warning-level rules (document-start among them) are printed and then
+        # ignored without this — the hook passes anyway.
+        args:
+          - --strict
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: 2eece55955ced00200be9729e9728cb7dacca505 # frozen: v2.15.1
+    hooks:
+      - id: hadolint
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 0a7c698408dc56e5efcbe37edc1ec23c782c003b # frozen: 4.5.0
+    hooks:
+      - id: sqlfluff-lint
+
+  - repo: local
+    hooks:
+      - id: no-co-authors
+        name: no co-authors in commit message
+        entry: '^\s*co-authored-by:|\bgenerated with\b'
+        language: pygrep
+        args:
+          - --ignore-case
+        stages:
+          - commit-msg
+      - id: trivy-dockerfile
+        name: trivy config (Dockerfile)
+        entry: trivy config --exit-code 1 Dockerfile
+        language: system
+        pass_filenames: false
+        files: ^Dockerfile$
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all
+        language: system
+        types:
+          - rust
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --locked -- -D warnings
+        language: system
+        files: (\.rs|Cargo\.toml|Cargo\.lock|\.sql)$
+        pass_filenames: false
+      # Runs the Biome version pinned in the webapp's lockfile, with the
+      # biome.json that lives next to it.
+      - id: biome-check
+        name: biome check
+        entry: bash -c 'cd convertisseur-webapp && npx --no-install biome check --write --error-on-warnings'
+        language: system
+        files: ^convertisseur-webapp/
+        types_or:
+          - ts
+          - tsx
+          - javascript
+          - json
+          - css
+          - html
+        pass_filenames: false
+      - id: tsc
+        name: tsc
+        entry: bash -c 'cd convertisseur-webapp && npx --no-install tsc -b --noEmit'
+        language: system
+        files: ^convertisseur-webapp/.*\.(ts|tsx|json)$
+        pass_filenames: false

@@ -1,0 +1,31 @@
+[package]
+name = "convertisseur-api"
+description = "HTTP API and web server of Convertisseur"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+aide = { version = "0.16.0-alpha.4", features = ["axum", "axum-json", "macros"] }
+anyhow = "1.0.104"
+argon2 = "0.6.0"
+axum = "0.8.9"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+serde = { version = "1.0.229", features = ["derive"] }
+sqlx = { version = "0.9.0", default-features = false, features = ["postgres", "uuid", "macros", "migrate", "runtime-tokio", "tls-rustls"] }
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "io-util"] }
+tower-http = { version = "0.7.1", features = ["fs", "trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+uuid = "1.29.1"
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+serde_json = "1.0.154"
+tempfile = "3.27.0"
+tower = { version = "0.5.3", features = ["util"] }
