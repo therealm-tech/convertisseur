@@ -1,0 +1,8 @@
+.git/
+.github/
+.cargo/
+target/
+**/node_modules/
+convertisseur-webapp/dist/
+convertisseur-webapp/dev-dist/
+*.md
