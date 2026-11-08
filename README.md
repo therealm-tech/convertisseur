@@ -14,9 +14,10 @@ a phone's home screen. It ships as a single container image: a Rust server that
 answers the JSON API under `/api` and serves the React webapp for every other
 path, backed by PostgreSQL.
 
-Registration is open on the Internet. Accounts have one of three roles: `user`,
-`admin` or `super_admin`. There is always exactly one super admin, the account
-named in the server's configuration.
+Registration is open on the Internet: an account is a username and a password,
+with no email address. Accounts have one of three roles: `user`, `admin` or
+`super_admin`. There is always exactly one super admin, the account named in
+the server's configuration.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and the reasoning behind
 it.
@@ -52,10 +53,12 @@ The server reads its configuration from flags or environment variables;
 | `WEBAPP_DIR` | no | `/usr/share/convertisseur/webapp` | Directory holding the built webapp |
 | `LOG_FILTER` | no | `info` | [`tracing` filter directive](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives), e.g. `info,convertisseur_api=debug` |
 | `LOG_FORMAT` | no | `text` | Log format: `text` or `json` |
+| `COOKIE_SECURE` | no | `true` | Mark the session cookie `Secure`, so that browsers only send it over HTTPS; set `false` only to serve plain HTTP in development |
+| `CLIENT_IP_HEADER` | no | — | Header in which the reverse proxy in front of the server passes the client's IP, e.g. `X-Forwarded-For`; its last address is used for rate limiting. Leave unset when clients connect directly, since they can forge it |
 | `VITE_LOG_LEVEL` | no | `debug` in dev, `warn` in builds | Browser console verbosity (`debug`, `info`, `warn`, `error`, `silent`), read when the webapp is built |
 
 Changing the super admin username demotes the previous super admin to `admin`
-on the next start-up.
+on the next start-up. Changing its password logs it out everywhere.
 
 ### Usage
 
@@ -65,8 +68,10 @@ Start PostgreSQL and the app:
 docker compose --profile app up --build
 ```
 
-Then open <http://localhost:3000>. The local super admin is `admin`, with the
-password set in [docker-compose.yaml](docker-compose.yaml).
+Then open <http://localhost:3000>, and register or log in. The local super
+admin is `admin`, with the password set in
+[docker-compose.yaml](docker-compose.yaml), which also turns off the `Secure`
+cookie flag so that the session works over plain HTTP.
 
 | Path | What answers |
 | --- | --- |
@@ -96,6 +101,11 @@ docker run --rm -p 3000:3000 \
 
 `-e SUPER_ADMIN_PASSWORD` with no value passes the variable from your shell,
 so the password stays out of the command line.
+
+Serve it over HTTPS: the session cookie is `Secure`, so browsers do not send it
+back over plain HTTP. Behind a reverse proxy, set `CLIENT_IP_HEADER` to the
+header the proxy writes the client's address into, or every client shares the
+proxy's rate limits.
 
 ## Contributing
 

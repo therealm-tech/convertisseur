@@ -39,7 +39,7 @@ It owns the whole URL space, split by path:
 
 | Path | Answered by |
 | --- | --- |
-| `/api/…` | The JSON API, built with aide so that every operation is documented. A path under `/api` that matches no operation answers a `404` `application/problem+json`, never the webapp. |
+| `/api/v1/…` | The JSON API, versioned in its path and built with aide so that every operation is documented. Every failure is an `application/problem+json` document. A path under `/api` that matches no operation answers a `404` problem, never the webapp. |
 | `/openapi.json`, `/docs` | The `OpenAPI` document generated from the code, and the Scalar reference that renders it. |
 | `/healthz`, `/readyz` | Liveness, and readiness, which runs `SELECT 1` against PostgreSQL. Outside the `OpenAPI` document. |
 | anything else | A file of the built webapp, or its `index.html` when no file matches, so that the client-side router resolves deep links. |
@@ -53,6 +53,12 @@ under [`queries/`](convertisseur-api/queries/), loaded with `include_str!`.
 React and TypeScript, built by Vite into static files. TanStack Router maps
 paths to pages. `vite-plugin-pwa` generates the web app manifest, a Workbox
 service worker that precaches the build, and the PWA icons.
+
+Every navigation first asks the API who is logged in
+(`GET /api/v1/sessions/current`): the session cookie is `HttpOnly`, so the
+server is the only one that knows, and the webapp keeps no copy of the session
+of its own. A visitor without a session lands on `/connexion`, the login and
+registration screen; a logged-in user is sent from there to `/`.
 
 The interface is in French. The visual identity lives in CSS custom properties
 in [`styles.css`](convertisseur-webapp/src/styles.css), with a light and a dark
@@ -79,6 +85,58 @@ changed.
 index on `lower(username)`; an argon2id password hash in PHC string format;
 and a `role` of the `user_role` enum, `user`, `admin` or `super_admin`.
 
+`sessions` holds the logged-in sessions: the SHA-256 of the session token, the
+user it belongs to, and when it expires. Deleting a user deletes its sessions.
+
+## Accounts and sessions
+
+An account is a username and a password, with no email address. Registration
+creates a `user`; usernames are 3 to 32 characters among ASCII letters, digits,
+`.`, `_` and `-`, and passwords at least 12 characters, the rule the super
+admin's password follows too. Registering does not log in: the webapp chains
+the two calls.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant S as convertisseur-api
+    participant P as PostgreSQL
+    B->>S: POST /api/v1/sessions {username, password}
+    S->>S: count the attempt against the client IP
+    S->>P: the account, by lower(username)
+    S->>S: verify the password (argon2id), or a dummy hash
+    S->>S: draw a random 256-bit token
+    S->>P: INSERT the token's SHA-256, user, expiry
+    S-->>B: 201, Set-Cookie: convertisseur_session=token
+    B->>S: GET /api/v1/sessions/current, Cookie
+    S->>P: UPDATE the live session's expiry, RETURNING its user
+    S-->>B: 200 {user}, Set-Cookie renewed
+```
+
+- **The browser holds an opaque token; the database holds its SHA-256.** The
+  token is 32 random bytes, so a fast hash is enough, and a copy of the table
+  yields nothing that can be replayed as a cookie.
+- **A session lasts 30 days after its last use.** Each authenticated request
+  moves the expiry 30 days ahead and renews the cookie's `Max-Age` to match.
+  An expired session is refused at once, and an hourly task in the server
+  deletes the expired rows.
+- **Logout deletes the session** and clears the cookie. It answers `204`
+  whether or not there was a session, so a retry is harmless.
+- **A new super admin password closes that account's sessions.** The bootstrap
+  verifies the configured password against the stored hash; when it no longer
+  matches, it stores the new hash and deletes the account's sessions in the
+  same transaction. The same password keeps the stored hash and the sessions,
+  so a restart logs nobody out.
+- **A failed login says nothing about the username.** An unknown username and a
+  wrong password get the same `401`, and an unknown username is verified
+  against a fixed dummy hash, with the same argon2 parameters, so that both take
+  as long.
+- **Login and registration are rate limited per client IP**: 10 login attempts
+  at once then one a minute, and 5 registrations at once then one every 10
+  minutes. A refusal is a `429` problem with `Retry-After`. The client IP is
+  the TCP peer, or the last address in the header named by `CLIENT_IP_HEADER`
+  when the server sits behind a reverse proxy that sets it.
+
 ## The super admin bootstrap
 
 At every start-up, the server makes the account named by
@@ -88,16 +146,24 @@ At every start-up, the server makes the account named by
 sequenceDiagram
     participant S as convertisseur-api
     participant P as PostgreSQL
-    S->>S: hash the configured password (argon2id)
     S->>P: BEGIN
     S->>P: pg_advisory_xact_lock
     S->>P: demote every other super_admin to admin
+    S->>P: the configured account's password hash, if any
+    S->>S: verify the configured password against it (argon2id)
+    opt the password differs, or no account yet
+        S->>S: hash the configured password (argon2id)
+    end
     S->>P: upsert the configured username: password hash, role super_admin
+    opt the password differs
+        S->>P: delete the account's sessions
+    end
     S->>P: COMMIT
 ```
 
 - The password is re-applied on every start-up, so rotating it is a
-  configuration change and a restart.
+  configuration change and a restart, which also logs the super admin out
+  everywhere.
 - Renaming the super admin in the configuration demotes the previous one to
   `admin` instead of leaving a second super admin behind.
 - The advisory lock serialises replicas starting at the same time.
@@ -116,6 +182,35 @@ CDN; for an app this size, a precached PWA, that load is negligible.
 `/openapi.json` and `/docs` keep fixed, well-known paths, the same on any API,
 rather than moving with the API's own prefix. The webapp therefore never routes
 them, and the service worker leaves them, like `/api`, to the network.
+
+**Sessions live in PostgreSQL rather than in a signed token.** A server-side
+session can be deleted: logout, an expiry and a password change take effect on
+the next request, which a self-contained token such as a JWT cannot do without
+a revocation list that is a session table under another name. The price is a
+database round trip on every authenticated request, which the one database this
+app already depends on absorbs easily.
+
+**The session travels in a cookie, not in an `Authorization` header.** An
+`HttpOnly` cookie is out of reach of the page's JavaScript, so a script injected
+into the webapp cannot read the token, where a token kept in `localStorage`
+could be stolen. The cookie is `SameSite=Lax`, `Path=/`, with no `Domain`, and
+`Secure` unless `COOKIE_SECURE` turns it off for plain-HTTP development. Its
+name, `convertisseur_session`, is the app's own, because browsers share
+cookies across the ports of one host and a generic name collides with other
+apps on `localhost`.
+
+**Cross-site request forgery is stopped by `SameSite=Lax` and JSON-only
+bodies, without tokens.** A `Lax` cookie is not sent on a cross-site `POST`,
+`PUT` or `DELETE`, and every endpoint with a body refuses any content type but
+`application/json` with a `415`, which an HTML form cannot send and a
+cross-origin `fetch` cannot send without a CORS preflight that the server never
+grants. A `GET` changes nothing but the expiry of the caller's own session, so
+the top-level navigations `Lax` still lets the cookie through on are harmless.
+
+**Rate limits are counted in memory, per process.** They need no shared store,
+and they hold a brute force to a few thousand guesses a day per address, on
+passwords of at least 12 characters. The cost is that each replica counts on
+its own and a restart forgets the counts.
 
 **Environment variables have bare names**, such as `BIND_ADDR` or
 `SUPER_ADMIN_PASSWORD`. The server runs in a container whose environment is
@@ -139,8 +234,13 @@ and no raster that can drift from it.
 - **The super admin password never reaches a log.** clap hides its environment
   value from `--help`, the configuration types do not implement `Debug`, and
   only its hash is stored.
-- **Usernames are unique regardless of case.** The bootstrap matches the
-  configured username case-insensitively, and keeps the stored spelling.
+- **Usernames are unique regardless of case.** The bootstrap and the login
+  match a username case-insensitively, and keep the stored spelling.
+- **A session token never reaches the database or a log.** Only its SHA-256 is
+  stored, and no log line carries a token or a password.
+- **The configured super admin's username is not reserved.** It exists from
+  the first start-up, so registering it answers the same `409` as any other
+  taken username. Its format is exempt from the registration rules.
 - **Arabic text is always `lang="ar"` and `dir="rtl"`**, which the
   [`Arabic`](convertisseur-webapp/src/components/Arabic.tsx) component sets
   together; `:lang(ar)` sets it in Amiri.
@@ -149,6 +249,10 @@ and no raster that can drift from it.
   `--color-on-accent-soft`.
 
 ## Limitations
+
+- Accounts have no email address, so there is no self-service password reset.
+- The rate limits key on an IP address: people behind one NAT, a school or a
+  mosque network, share their limits.
 
 - The server does not start when PostgreSQL is unreachable: it exits, and the
   orchestrator restarts it.

@@ -29,6 +29,7 @@ services:
       DATABASE_URL: postgres://convertisseur:convertisseur@postgres:5432/convertisseur
       SUPER_ADMIN_USERNAME: admin
       SUPER_ADMIN_PASSWORD: convertisseur-admin
+      COOKIE_SECURE: "false"
     ports:
       - 3000:3000
     depends_on:

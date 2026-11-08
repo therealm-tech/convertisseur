@@ -3,7 +3,7 @@ use std::{net::SocketAddr, time::Duration};
 use anyhow::{Context, bail};
 use clap::Parser;
 use convertisseur_api::{
-    AppState,
+    AppState, ClientSettings,
     config::{Cli, Command, HealthcheckArgs, LogFormat, ServeArgs},
 };
 use sqlx::postgres::PgPoolOptions;
@@ -50,17 +50,45 @@ async fn serve(args: ServeArgs) -> anyhow::Result<()> {
     .await
     .context("failed to set up the super admin account")?;
 
-    let app = convertisseur_api::app(AppState::new(pool.clone()), &args.webapp_dir);
+    let state = AppState::new(
+        pool.clone(),
+        ClientSettings {
+            cookie_secure: args.cookie_secure,
+            client_ip_header: args.client_ip_header,
+        },
+    );
+    if !args.cookie_secure {
+        tracing::warn!("the session cookie is not Secure: it travels over plain HTTP");
+    }
+    tokio::spawn(housekeeping(state.clone()));
+
+    let app = convertisseur_api::app(state, &args.webapp_dir);
     let listener = TcpListener::bind(args.bind_addr)
         .await
         .with_context(|| format!("failed to bind {}", args.bind_addr))?;
     tracing::info!(addr = %args.bind_addr, "listening");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     pool.close().await;
     tracing::info!("server stopped");
     Ok(())
+}
+
+const HOUSEKEEPING_PERIOD: Duration = Duration::from_hours(1);
+
+/// Runs until the process exits; a failed round is retried at the next one.
+async fn housekeeping(state: AppState) {
+    let mut interval = tokio::time::interval(HOUSEKEEPING_PERIOD);
+    loop {
+        interval.tick().await;
+        if let Err(error) = state.housekeeping().await {
+            tracing::warn!(%error, "housekeeping failed");
+        }
+    }
 }
 
 async fn shutdown_signal() {

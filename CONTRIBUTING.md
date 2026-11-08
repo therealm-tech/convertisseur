@@ -64,8 +64,8 @@ pre-commit install
 
 `cargo run` and `cargo test` take their settings from
 [.cargo/config.toml](.cargo/config.toml), which points them at the compose
-PostgreSQL and sets a throwaway super admin; a variable already set in your
-environment wins. Cargo applies them only to what it spawns, not to
+PostgreSQL, sets a throwaway super admin and lets the session cookie travel
+over plain HTTP; a variable already set in your environment wins. Cargo applies them only to what it spawns, not to
 `./target/debug/convertisseur-api` run by hand.
 
 To work on the app with hot reload, run the server:

@@ -5,8 +5,10 @@
 	--color-surface: #ffffff;
 	--color-surface-muted: #f3ecdc;
 	--color-border: #ece3cf;
+	--color-input-border: #d8ccb1;
 	--color-text: #1d2a23;
 	--color-text-muted: #4a5a51;
+	--color-text-subtle: #5f6e66;
 	--color-primary: #0c6a3c;
 	--color-primary-hover: #084d2b;
 	--color-on-primary: #ffffff;
@@ -21,6 +23,7 @@
 	--color-error-text: #b3261e;
 	--color-focus: #dca61d;
 	--shadow-logo: 0 12px 30px -16px rgba(12, 106, 60, 0.55);
+	--shadow-card: 0 16px 40px -28px rgba(29, 42, 35, 0.45);
 
 	--font-latin: "Nunito Variable", "Avenir Next", system-ui, sans-serif;
 	--font-arabic: "Amiri", "Noto Naskh Arabic", serif;
@@ -36,8 +39,10 @@
 		--color-surface: #182820;
 		--color-surface-muted: #1f3227;
 		--color-border: #2a3d31;
+		--color-input-border: #3b5243;
 		--color-text: #f3eee2;
 		--color-text-muted: #b5c2b9;
+		--color-text-subtle: #a3b3a9;
 		--color-primary: #2f9e63;
 		--color-primary-hover: #3fb57a;
 		--color-on-primary: #ffffff;
@@ -47,6 +52,7 @@
 		--color-on-accent-soft: #f6dd96;
 		--color-error-text: #f2b8b5;
 		--shadow-logo: 0 12px 30px -16px rgba(0, 0, 0, 0.8);
+		--shadow-card: 0 16px 40px -28px rgba(0, 0, 0, 0.8);
 	}
 }
 
@@ -129,6 +135,140 @@ body {
 
 .button-primary:hover {
 	background: var(--color-primary-hover);
+}
+
+.button-primary:disabled {
+	cursor: progress;
+	opacity: 0.7;
+}
+
+button.button-primary {
+	border: 0;
+	font: inherit;
+	font-size: 17px;
+	font-weight: 900;
+	cursor: pointer;
+}
+
+.button-secondary {
+	min-height: 48px;
+	margin-top: 12px;
+	padding: 0 20px;
+	border: 1.5px solid var(--color-border);
+	border-radius: var(--radius-medium);
+	background: var(--color-surface);
+	color: var(--color-text);
+	font: inherit;
+	font-size: 15px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.auth {
+	min-height: 100dvh;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	width: 100%;
+	max-width: 440px;
+	margin: 0 auto;
+	padding: 48px 20px 24px;
+}
+
+.auth-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	text-align: center;
+}
+
+.auth-card {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 18px;
+	border: 1.5px solid var(--color-border);
+	border-radius: var(--radius-large);
+	background: var(--color-surface);
+	box-shadow: var(--shadow-card);
+}
+
+.auth-tabs {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 4px;
+	padding: 4px;
+	border-radius: 16px;
+	background: var(--color-surface-muted);
+}
+
+.auth-tab {
+	height: 44px;
+	border: 0;
+	border-radius: var(--radius-small);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 15px;
+	font-weight: 900;
+	cursor: pointer;
+}
+
+.auth-tab[aria-selected="true"] {
+	background: var(--color-surface);
+}
+
+.auth-form {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin: 0;
+}
+
+.auth-submit {
+	margin-top: 4px;
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.field-label {
+	font-size: 14px;
+	font-weight: 800;
+}
+
+.field-input {
+	height: 50px;
+	padding: 0 14px;
+	border: 1.5px solid var(--color-input-border);
+	border-radius: 14px;
+	background: var(--color-bg);
+	color: var(--color-text);
+	font: inherit;
+	/* Below 16px, iOS Safari zooms into the field on focus. */
+	font-size: 16px;
+}
+
+.field-input[aria-invalid="true"] {
+	border-color: var(--color-error-text);
+}
+
+.field-hint {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--color-text-subtle);
+}
+
+.field-error,
+.form-error {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 800;
+	color: var(--color-error-text);
 }
 
 @media (min-width: 768px) {
