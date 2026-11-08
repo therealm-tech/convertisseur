@@ -7,5 +7,6 @@ export async function renderAt(path: string) {
 		createMemoryHistory({ initialEntries: [path] }),
 	);
 	await router.load();
-	return render(<RouterProvider router={router} />);
+	render(<RouterProvider router={router} />);
+	return router;
 }
