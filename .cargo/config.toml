@@ -4,8 +4,8 @@
 # variable already set in the environment wins.
 [env]
 DATABASE_URL = "postgres://convertisseur:convertisseur@localhost:5434/convertisseur"
-CONVERTISSEUR_BIND_ADDR = "127.0.0.1:3000"
-CONVERTISSEUR_WEBAPP_DIR = { value = "convertisseur-webapp/dist", relative = true }
+BIND_ADDR = "127.0.0.1:3000"
+WEBAPP_DIR = { value = "convertisseur-webapp/dist", relative = true }
 # The throwaway super admin of the local stack.
-CONVERTISSEUR_SUPER_ADMIN_USERNAME = "admin"
-CONVERTISSEUR_SUPER_ADMIN_PASSWORD = "convertisseur-admin"
+SUPER_ADMIN_USERNAME = "admin"
+SUPER_ADMIN_PASSWORD = "convertisseur-admin"

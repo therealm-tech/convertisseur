@@ -45,13 +45,13 @@ The server reads its configuration from flags or environment variables;
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | yes | — | PostgreSQL connection string |
-| `CONVERTISSEUR_SUPER_ADMIN_USERNAME` | yes | — | Username of the super admin, created or updated on every start-up |
-| `CONVERTISSEUR_SUPER_ADMIN_PASSWORD` | yes | — | Password of the super admin, at least 12 characters, applied on every start-up |
-| `CONVERTISSEUR_BIND_ADDR` | no | `0.0.0.0:3000` | Address the HTTP server listens on |
-| `CONVERTISSEUR_DB_MAX_CONNECTIONS` | no | `10` | Size of the database connection pool |
-| `CONVERTISSEUR_WEBAPP_DIR` | no | `/usr/share/convertisseur/webapp` | Directory holding the built webapp |
-| `CONVERTISSEUR_LOG_FILTER` | no | `info` | [`tracing` filter directive](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives), e.g. `info,convertisseur_api=debug` |
-| `CONVERTISSEUR_LOG_FORMAT` | no | `text` | Log format: `text` or `json` |
+| `SUPER_ADMIN_USERNAME` | yes | — | Username of the super admin, created or updated on every start-up |
+| `SUPER_ADMIN_PASSWORD` | yes | — | Password of the super admin, at least 12 characters, applied on every start-up |
+| `BIND_ADDR` | no | `0.0.0.0:3000` | Address the HTTP server listens on |
+| `DB_MAX_CONNECTIONS` | no | `10` | Size of the database connection pool |
+| `WEBAPP_DIR` | no | `/usr/share/convertisseur/webapp` | Directory holding the built webapp |
+| `LOG_FILTER` | no | `info` | [`tracing` filter directive](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives), e.g. `info,convertisseur_api=debug` |
+| `LOG_FORMAT` | no | `text` | Log format: `text` or `json` |
 | `VITE_LOG_LEVEL` | no | `debug` in dev, `warn` in builds | Browser console verbosity (`debug`, `info`, `warn`, `error`, `silent`), read when the webapp is built |
 
 Changing the super admin username demotes the previous super admin to `admin`
@@ -89,13 +89,13 @@ Run it against a PostgreSQL database; it applies the migrations on start-up:
 ```sh
 docker run --rm -p 3000:3000 \
   -e DATABASE_URL=postgres://user:password@db.example.com/convertisseur \
-  -e CONVERTISSEUR_SUPER_ADMIN_USERNAME=admin \
-  -e CONVERTISSEUR_SUPER_ADMIN_PASSWORD \
+  -e SUPER_ADMIN_USERNAME=admin \
+  -e SUPER_ADMIN_PASSWORD \
   convertisseur
 ```
 
-`-e CONVERTISSEUR_SUPER_ADMIN_PASSWORD` with no value passes the variable from
-your shell, so the password stays out of the command line.
+`-e SUPER_ADMIN_PASSWORD` with no value passes the variable from your shell,
+so the password stays out of the command line.
 
 ## Contributing
 
