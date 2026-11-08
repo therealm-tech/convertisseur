@@ -53,7 +53,7 @@ pub struct ServeArgs {
     pub bind_addr: SocketAddr,
 
     /// PostgreSQL connection string
-    #[arg(long, env = "DATABASE_URL")]
+    #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
     pub database_url: String,
 
     /// Maximum number of connections in the database pool
