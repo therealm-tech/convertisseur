@@ -36,7 +36,7 @@ pub enum LogFormat {
 pub enum Command {
     /// Apply the database migrations, set up the super admin and serve the
     /// API and the webapp
-    Serve(ServeArgs),
+    Serve(Box<ServeArgs>),
     /// Probe the liveness endpoint of a server running on this host; exits
     /// non-zero when it does not answer 200
     Healthcheck(HealthcheckArgs),
@@ -86,6 +86,50 @@ pub struct ServeArgs {
     /// that overwrites the header, since clients can forge it
     #[arg(long, env = "CLIENT_IP_HEADER")]
     pub client_ip_header: Option<HeaderName>,
+
+    #[command(flatten)]
+    pub storage: StorageArgs,
+}
+
+/// The S3-compatible object store holding uploaded media.
+#[derive(Args, Clone)]
+pub struct StorageArgs {
+    /// URL of the S3-compatible object store, e.g.
+    /// `https://s3.eu-west-3.amazonaws.com`
+    #[arg(long = "s3-endpoint", env = "S3_ENDPOINT")]
+    pub endpoint: String,
+
+    /// Region of the bucket; a store with no regions accepts any
+    #[arg(long = "s3-region", env = "S3_REGION", default_value = "us-east-1")]
+    pub region: String,
+
+    /// Bucket holding the media; the server creates it on start-up when it
+    /// does not exist
+    #[arg(long = "s3-bucket", env = "S3_BUCKET")]
+    pub bucket: String,
+
+    /// Access key ID of the object store's credentials
+    #[arg(long = "s3-access-key-id", env = "S3_ACCESS_KEY_ID")]
+    pub access_key_id: String,
+
+    /// Secret access key of the object store's credentials
+    #[arg(
+        long = "s3-secret-access-key",
+        env = "S3_SECRET_ACCESS_KEY",
+        hide_env_values = true
+    )]
+    pub secret_access_key: String,
+
+    /// Name the bucket in the URL's path (`endpoint/bucket/key`) rather than
+    /// in its host name (`bucket.endpoint/key`); most self-hosted stores
+    /// need it
+    #[arg(
+        long = "s3-force-path-style",
+        env = "S3_FORCE_PATH_STYLE",
+        default_value_t = false,
+        action = ArgAction::Set
+    )]
+    pub force_path_style: bool,
 }
 
 #[derive(Args)]
@@ -131,13 +175,19 @@ mod tests {
         assert_eq!(
             names,
             [
+                ("access_key_id", "S3_ACCESS_KEY_ID"),
                 ("bind_addr", "BIND_ADDR"),
+                ("bucket", "S3_BUCKET"),
                 ("client_ip_header", "CLIENT_IP_HEADER"),
                 ("cookie_secure", "COOKIE_SECURE"),
                 ("database_url", "DATABASE_URL"),
                 ("db_max_connections", "DB_MAX_CONNECTIONS"),
+                ("endpoint", "S3_ENDPOINT"),
+                ("force_path_style", "S3_FORCE_PATH_STYLE"),
                 ("log_filter", "LOG_FILTER"),
                 ("log_format", "LOG_FORMAT"),
+                ("region", "S3_REGION"),
+                ("secret_access_key", "S3_SECRET_ACCESS_KEY"),
                 ("super_admin_password", "SUPER_ADMIN_PASSWORD"),
                 ("super_admin_username", "SUPER_ADMIN_USERNAME"),
                 ("webapp_dir", "WEBAPP_DIR"),

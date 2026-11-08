@@ -8,7 +8,11 @@ use axum::{
         header::{CACHE_CONTROL, CONTENT_TYPE, IF_MODIFIED_SINCE, LAST_MODIFIED},
     },
 };
-use convertisseur_api::{AppState, ClientSettings, app};
+use convertisseur_api::{
+    AppState, ClientSettings, app,
+    config::StorageArgs,
+    storage::{MemoryStore, S3Store, Storage},
+};
 use http_body_util::BodyExt;
 use sqlx::PgPool;
 use tempfile::TempDir;
@@ -33,7 +37,14 @@ fn webapp_dir() -> TempDir {
 }
 
 fn router(pool: PgPool, webapp_dir: &Path) -> Router {
-    app(AppState::new(pool, ClientSettings::default()), webapp_dir)
+    app(
+        AppState::new(
+            pool,
+            Storage::Memory(MemoryStore::default()),
+            ClientSettings::default(),
+        ),
+        webapp_dir,
+    )
 }
 
 struct Answer {
@@ -85,6 +96,27 @@ async fn readiness_follows_the_database(pool: PgPool) {
     pool.close().await;
     let answer = get(&router, "/readyz").await;
     assert_eq!(answer.status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(answer.body, "database unavailable");
+    assert_eq!(get(&router, "/healthz").await.status, StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn readiness_follows_the_object_store(pool: PgPool) {
+    let dir = webapp_dir();
+    let unreachable = S3Store::new(&StorageArgs {
+        endpoint: "http://127.0.0.1:9".to_owned(),
+        region: "us-east-1".to_owned(),
+        bucket: "convertisseur".to_owned(),
+        access_key_id: "convertisseur".to_owned(),
+        secret_access_key: "convertisseur".to_owned(),
+        force_path_style: true,
+    });
+    let state = AppState::new(pool, Storage::S3(unreachable), ClientSettings::default());
+    let router = app(state, dir.path());
+
+    let answer = get(&router, "/readyz").await;
+    assert_eq!(answer.status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(answer.body, "object store unavailable");
     assert_eq!(get(&router, "/healthz").await.status, StatusCode::OK);
 }
 

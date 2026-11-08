@@ -11,3 +11,9 @@ COOKIE_SECURE = "false"
 # The throwaway super admin of the local stack.
 SUPER_ADMIN_USERNAME = "admin"
 SUPER_ADMIN_PASSWORD = "convertisseur-admin"
+# The compose SeaweedFS and its development-only credentials.
+S3_ENDPOINT = "http://localhost:8333"
+S3_BUCKET = "convertisseur"
+S3_ACCESS_KEY_ID = "convertisseur"
+S3_SECRET_ACCESS_KEY = "convertisseur"
+S3_FORCE_PATH_STYLE = "true"

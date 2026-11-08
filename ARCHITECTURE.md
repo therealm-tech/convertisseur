@@ -2,8 +2,8 @@
 
 ## Overview
 
-Convertisseur is one HTTP server in front of one PostgreSQL database. The
-server, [`convertisseur-api`](convertisseur-api/), answers the JSON API under
+Convertisseur is one HTTP server in front of a PostgreSQL database and an
+S3-compatible object store. The server, [`convertisseur-api`](convertisseur-api/), answers the JSON API under
 `/api` and serves the built [`convertisseur-webapp`](convertisseur-webapp/), a
 React progressive web app, for every other path. Both ship in a single
 container image.
@@ -16,9 +16,11 @@ flowchart LR
         dist["/usr/share/convertisseur/webapp<br/>built webapp"]
     end
     pg[("PostgreSQL")]
+    s3[("S3-compatible object store<br/>SeaweedFS in development")]
     browser -->|"HTTP, same origin: /api, pages, assets"| api
     api -->|"reads static files"| dist
     api -->|"sqlx, TCP 5432"| pg
+    api -->|"S3 API over HTTP(S), aws-sdk-s3"| s3
 ```
 
 ## Components
@@ -32,7 +34,8 @@ tokio for the runtime. One binary with two subcommands: `serve`, and
 container's health check, since the runtime image has no shell or HTTP client.
 
 On `serve`, it connects to PostgreSQL, applies the embedded migrations, runs
-the super admin bootstrap, then listens. `SIGTERM` and `SIGINT` stop it
+the super admin bootstrap, creates the object store's bucket if it does not
+exist, then listens. `SIGTERM` and `SIGINT` stop it
 accepting connections and let in-flight requests finish before it exits.
 
 It owns the whole URL space, split by path:
@@ -41,7 +44,7 @@ It owns the whole URL space, split by path:
 | --- | --- |
 | `/api/v1/…` | The JSON API, versioned in its path and built with aide so that every operation is documented. Every failure is an `application/problem+json` document. A path under `/api` that matches no operation answers a `404` problem, never the webapp. |
 | `/openapi.json`, `/docs` | The `OpenAPI` document generated from the code, and the Scalar reference that renders it. |
-| `/healthz`, `/readyz` | Liveness, and readiness, which runs `SELECT 1` against PostgreSQL. Outside the `OpenAPI` document. |
+| `/healthz`, `/readyz` | Liveness, and readiness, which runs `SELECT 1` against PostgreSQL and looks up the bucket in the object store, both at once; its `503` names what does not answer. Outside the `OpenAPI` document. |
 | anything else | A file of the built webapp, or its `index.html` when no file matches, so that the client-side router resolves deep links; a missing file under `/assets` answers `404` instead. Files under `/assets` are named by Vite after their content, so they are `immutable` for a year; every other file, `index.html`, the service worker and the manifest among them, is `no-cache`, so that a browser revalidates it and picks up a new build on its next load. |
 
 Configuration comes from flags or environment variables, parsed once by clap
@@ -76,7 +79,25 @@ icon are rasterised from `logo.svg` at build time.
 
 ### PostgreSQL
 
-The only store. The server creates and migrates its schema itself.
+The store of everything structured, and the source of truth for who may read
+what. The server creates and migrates its schema itself.
+
+### Object store
+
+Any S3-compatible service holds the bytes of uploaded media, in one bucket,
+under keys the server generates; PostgreSQL holds what they belong to. Local
+development and CI run [SeaweedFS](https://github.com/seaweedfs/seaweedfs) with
+its S3 gateway. Browsers never reach it: the server reads an object and streams
+it back after its own permission checks. The decision and its trade-offs are
+recorded in
+[ADR 0001](docs/adr/0001-store-media-in-an-s3-compatible-object-store.md).
+
+The server sees it through the `ObjectStore` trait in
+[`storage.rs`](convertisseur-api/src/storage.rs): check, put, get with an
+optional byte range, delete. `S3Store` implements it over the S3 API;
+`MemoryStore` keeps objects in a map for the tests that do not exercise S3. A
+contract test runs the same checks against both, the S3 one against the
+SeaweedFS of the development stack, in a throwaway bucket.
 
 ## State and persistence
 
@@ -312,11 +333,31 @@ first. A listing that puts the accounts with the most power on top is the
 one an admin reads most often; usernames sort byte-wise on their lowercase
 form, which is stable across database locales.
 
+**The S3 client is `aws-sdk-s3`.** It speaks the whole S3 API, so the server
+can look up and create its bucket at start-up and send byte-range reads, and
+it is the reference implementation every S3-compatible store tests against.
+`object_store`, the lighter alternative, has no bucket operations. The price
+is a large dependency tree and a longer first build. Its HTTP client is built
+on rustls with the `ring` provider, the one the rest of the server already
+uses, rather than the SDK's default `aws-lc-rs`, which needs a C toolchain and
+CMake.
+
+**The server creates its bucket, rather than the deployment.** On start-up it
+looks the bucket up and creates it only when the store answers that it does
+not exist, so development, CI and tests need no setup step, and a production
+bucket provisioned beforehand works with credentials that cannot create one.
+
+**The storage implementations are chosen by an enum, `Storage`**, rather than
+by a type parameter on `AppState`: handlers and extractors stay non-generic,
+and dispatch stays static.
+
 **Environment variables have bare names**, such as `BIND_ADDR` or
 `SUPER_ADMIN_PASSWORD`. The server runs in a container whose environment is
 written for it alone, so a prefix would only be noise. `DATABASE_URL` is the
 standard name, which sqlx's test harness reads too, so one variable serves the
-server and the tests.
+server and the tests. The object store's settings share an `S3_` prefix, which
+names the protocol they configure; the `AWS_` names are left alone because the
+store need not be AWS.
 
 **Fonts are self-hosted.** Nunito and Amiri come from Fontsource packages and
 ship in the build, so the installed app renders offline and no font request
@@ -331,6 +372,9 @@ and no raster that can drift from it.
 - **Exactly one super admin**, the account named in the configuration, after
   every successful start-up. The database guarantees at most one; the
   bootstrap guarantees at least one.
+- **The object store's secret key never reaches a log.** clap hides its
+  environment value from `--help`, the configuration types do not implement
+  `Debug`, and the SDK redacts credentials in its own output.
 - **The super admin password never reaches a log.** clap hides its environment
   value from `--help`, the configuration types do not implement `Debug`, and
   only its hash is stored.
@@ -360,8 +404,9 @@ and no raster that can drift from it.
   an admin resets a forgotten password and hands the temporary one over.
 - The rate limits key on an IP address: people behind one NAT, a school or a
   mosque network, share their limits.
-
-- The server does not start when PostgreSQL is unreachable: it exits, and the
-  orchestrator restarts it.
+- The server does not start when PostgreSQL or the object store is
+  unreachable: it exits, and the orchestrator restarts it.
+- The object store's credentials are a static access key pair; instance
+  roles and web identity federation are not supported.
 - The theme follows the operating system's light or dark preference; the app
   has no theme setting of its own.

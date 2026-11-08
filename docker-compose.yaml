@@ -20,6 +20,27 @@ services:
       timeout: 5s
       retries: 10
 
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52@sha256:57877e32bb90073b37dc109b438ba66e84fd5ed9ced5f5c04f56444ef243ce59
+    environment:
+      # Development-only credentials: SeaweedFS refuses any other request.
+      AWS_ACCESS_KEY_ID: convertisseur
+      AWS_SECRET_ACCESS_KEY: convertisseur
+    ports:
+      - 8333:8333
+    volumes:
+      - seaweedfs_data:/data
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://127.0.0.1:8333/healthz
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   app:
     profiles:
       - app
@@ -30,11 +51,19 @@ services:
       SUPER_ADMIN_USERNAME: admin
       SUPER_ADMIN_PASSWORD: convertisseur-admin
       COOKIE_SECURE: "false"
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_BUCKET: convertisseur
+      S3_ACCESS_KEY_ID: convertisseur
+      S3_SECRET_ACCESS_KEY: convertisseur
+      S3_FORCE_PATH_STYLE: "true"
     ports:
       - 3000:3000
     depends_on:
       postgres:
         condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  seaweedfs_data:
