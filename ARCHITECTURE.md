@@ -42,7 +42,7 @@ It owns the whole URL space, split by path:
 | `/api/v1/…` | The JSON API, versioned in its path and built with aide so that every operation is documented. Every failure is an `application/problem+json` document. A path under `/api` that matches no operation answers a `404` problem, never the webapp. |
 | `/openapi.json`, `/docs` | The `OpenAPI` document generated from the code, and the Scalar reference that renders it. |
 | `/healthz`, `/readyz` | Liveness, and readiness, which runs `SELECT 1` against PostgreSQL. Outside the `OpenAPI` document. |
-| anything else | A file of the built webapp, or its `index.html` when no file matches, so that the client-side router resolves deep links. |
+| anything else | A file of the built webapp, or its `index.html` when no file matches, so that the client-side router resolves deep links; a missing file under `/assets` answers `404` instead. Files under `/assets` are named by Vite after their content, so they are `immutable` for a year; every other file, `index.html`, the service worker and the manifest among them, is `no-cache`, so that a browser revalidates it and picks up a new build on its next load. |
 
 Configuration comes from flags or environment variables, parsed once by clap
 in [`config.rs`](convertisseur-api/src/config.rs). SQL lives in `.sql` files
