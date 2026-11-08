@@ -18,6 +18,14 @@ pub struct MemoryStore {
 }
 
 impl MemoryStore {
+    /// The keys of the stored objects, sorted.
+    #[must_use]
+    pub fn keys(&self) -> Vec<String> {
+        let mut keys: Vec<String> = self.objects().keys().cloned().collect();
+        keys.sort();
+        keys
+    }
+
     fn objects(&self) -> MutexGuard<'_, HashMap<String, Bytes>> {
         self.objects.lock().unwrap_or_else(PoisonError::into_inner)
     }

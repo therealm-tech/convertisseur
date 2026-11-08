@@ -2,9 +2,9 @@ import { useEffect, useId, useState } from "react";
 import { Dialog } from "@/components/Dialog";
 import { ApiError, problemTypes } from "@/lib/api";
 import {
-	type Card,
 	type ContentItem,
 	createItem,
+	deleteAudio,
 	deleteItem,
 	type FieldsOf,
 	getItem,
@@ -14,15 +14,11 @@ import {
 	setStatus,
 	type Track,
 	updateItem,
+	uploadAudio,
 	type Variety,
 } from "@/lib/content";
-import {
-	describeAudio,
-	kindLabels,
-	trackLabels,
-	varietyLabels,
-} from "@/lib/contentLabels";
-import { formatDay } from "@/lib/dates";
+import { kindLabels, trackLabels, varietyLabels } from "@/lib/contentLabels";
+import { AudioBlock } from "@/pages/admin/AudioBlock";
 import { ItemTitle, StatusPill } from "@/pages/admin/contentParts";
 
 export type Selection =
@@ -271,6 +267,13 @@ export function ContentDetail({
 		}
 	}
 
+	/** Reloads the item after a change of its recording. */
+	async function refresh(current: Loaded, message: string) {
+		const reloaded = await load(current.kind, current.item.id);
+		setState({ phase: "ready", loaded: reloaded, draft });
+		onChanged(message);
+	}
+
 	async function toggleStatus(current: Loaded) {
 		const next =
 			current.item.status === "validated" ? "to_review" : "validated";
@@ -351,7 +354,24 @@ export function ContentDetail({
 					</div>
 				) : null}
 
-				{loaded?.kind === "card" ? <AudioState card={loaded.item} /> : null}
+				{loaded && loaded.kind !== "unit" ? (
+					<AudioBlock
+						audio={loaded.item.audio}
+						onUpload={async (file, filename) => {
+							await uploadAudio(loaded.kind, loaded.item.id, file, filename);
+							await refresh(loaded, "Audio enregistré : à relire.");
+						}}
+						onRemove={async () => {
+							await deleteAudio(loaded.kind, loaded.item.id);
+							await refresh(loaded, "Audio supprimé : à relire.");
+						}}
+					/>
+				) : null}
+				{!loaded && kind !== "unit" ? (
+					<p className="field-hint">
+						L'audio s'ajoute une fois la {kindLabels[kind].toLowerCase()} créée.
+					</p>
+				) : null}
 
 				{loaded ? <ReviewNote loaded={loaded} /> : null}
 
@@ -445,25 +465,6 @@ function ReviewNote({ loaded }: { loaded: Loaded }) {
 				? `Validé par ${validatedBy?.username ?? "un compte supprimé"}. Toute modification le repasse « à relire ».`
 				: "En attente de relecture. Invisible pour les apprenants."}
 		</p>
-	);
-}
-
-/** The audio block, as it stands: the recording a card has, if any. */
-function AudioState({ card }: { card: Card }) {
-	return (
-		<div className="field">
-			<span className="field-label">Audio</span>
-			{card.audio ? (
-				<div className="audio-file">
-					<span className="audio-file-name">{describeAudio(card.audio)}</span>
-					<span className="audio-file-meta">
-						Ajouté le {formatDay(card.audio.createdAt)}
-					</span>
-				</div>
-			) : (
-				<p className="field-hint">Aucun audio pour cette carte.</p>
-			)}
-		</div>
 	);
 }
 

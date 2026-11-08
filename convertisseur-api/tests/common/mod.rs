@@ -31,7 +31,9 @@ const PEER: SocketAddr =
 pub struct Answer {
     pub status: StatusCode,
     pub headers: HeaderMap,
+    /// The body as JSON, or as text when it is not JSON.
     pub body: Value,
+    pub bytes: Vec<u8>,
 }
 
 impl Answer {
@@ -101,6 +103,7 @@ impl Server {
             status,
             headers,
             body,
+            bytes: bytes.to_vec(),
         }
     }
 

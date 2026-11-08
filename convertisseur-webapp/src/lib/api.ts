@@ -46,6 +46,8 @@ export const problemTypes = {
 	notEmpty: "urn:convertisseur:problem:not-empty",
 	invalidCredentials: "urn:convertisseur:problem:invalid-credentials",
 	passwordChangeRequired: "urn:convertisseur:problem:password-change-required",
+	tooLarge: "urn:convertisseur:problem:too-large",
+	unsupportedAudio: "urn:convertisseur:problem:unsupported-audio",
 	rateLimited: "urn:convertisseur:problem:rate-limited",
 	usernameTaken: "urn:convertisseur:problem:username-taken",
 	validation: "urn:convertisseur:problem:validation",
@@ -107,6 +109,22 @@ export async function send(
 		init.body = JSON.stringify(body);
 	}
 	const response = await fetch(path, init);
+	logger.debug("api.response", { method, path, status: response.status });
+	return response;
+}
+
+/** Sends a `multipart/form-data` body; the browser sets its boundary. */
+export async function sendForm(
+	method: "POST" | "PUT",
+	path: string,
+	body: FormData,
+): Promise<Response> {
+	const response = await fetch(path, {
+		method,
+		credentials: "same-origin",
+		headers: { Accept: "application/json" },
+		body,
+	});
 	logger.debug("api.response", { method, path, status: response.status });
 	return response;
 }

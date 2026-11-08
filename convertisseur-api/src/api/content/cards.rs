@@ -6,15 +6,16 @@ use aide::{
     transform::TransformOperation,
 };
 use axum::{Json, extract::State, response::Response};
-use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
 use super::{
-    MAX_TEXT_CHARS, Resource, ReviewResponse, TAG, TrackJson, VarietyJson, created, delete,
-    delete_docs, optional_text, refused, set_status, set_status_docs, validate_text,
+    AudioResponse, MAX_TEXT_CHARS, Resource, ReviewResponse, TAG, TrackJson, VarietyJson,
+    audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
+    created, delete, delete_docs, optional_text, refused, set_status, set_status_docs,
+    validate_text,
 };
 use crate::{
     api::{
@@ -35,6 +36,15 @@ pub fn routes() -> ApiRouter<AppState> {
             get_with(get_card, get_card_docs)
                 .put_with(update_card, update_card_docs)
                 .delete_with(delete::<CardResource>, delete_docs::<CardResource>),
+        )
+        .api_route(
+            "/api/v1/cards/{cardId}/audio",
+            put_with(put_audio::<CardResource>, put_audio_docs::<CardResource>)
+                .delete_with(
+                    delete_audio::<CardResource>,
+                    delete_audio_docs::<CardResource>,
+                )
+                .layer(upload_limit()),
         )
         .api_route(
             "/api/v1/cards/{cardId}/status",
@@ -150,19 +160,6 @@ pub struct CardLessonResponse {
     title: String,
 }
 
-/// A card's recording.
-#[derive(Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AudioResponse {
-    id: Uuid,
-    /// The type the recording was stored with, e.g. `audio/mpeg`.
-    content_type: String,
-    size_bytes: u64,
-    /// `null` when it could not be read from the file cheaply.
-    duration_ms: Option<u32>,
-    created_at: DateTime<Utc>,
-}
-
 /// A card of a lesson.
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -185,21 +182,6 @@ pub struct CardResponse {
 
 impl CardResponse {
     async fn of(state: &AppState, card: Card) -> Result<Self, ApiError> {
-        let audio = match (
-            card.audio_id,
-            card.audio_content_type,
-            card.audio_size_bytes,
-            card.audio_created_at,
-        ) {
-            (Some(id), Some(content_type), Some(size), Some(created_at)) => Some(AudioResponse {
-                id,
-                content_type,
-                size_bytes: u64::try_from(size).unwrap_or_default(),
-                duration_ms: card.audio_duration_ms.and_then(|ms| u32::try_from(ms).ok()),
-                created_at,
-            }),
-            _ => None,
-        };
         Ok(Self {
             id: card.id,
             lesson: CardLessonResponse {
@@ -212,7 +194,7 @@ impl CardResponse {
             transliteration: card.transliteration,
             meaning_fr: card.meaning_fr,
             variety: card.variety.into(),
-            audio,
+            audio: card.audio.into_audio().map(Into::into),
             review: ReviewResponse::of(state, card.review).await?,
         })
     }

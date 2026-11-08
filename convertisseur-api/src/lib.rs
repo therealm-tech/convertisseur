@@ -4,6 +4,7 @@
 
 mod accounts;
 mod api;
+mod audio;
 mod bootstrap;
 pub mod config;
 mod content;

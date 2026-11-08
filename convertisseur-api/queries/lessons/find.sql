@@ -6,6 +6,11 @@ SELECT
     units.track,
     lessons.position,
     lessons.title,
+    audio.id AS audio_id,
+    audio.content_type AS audio_content_type,
+    audio.size_bytes AS audio_size_bytes,
+    audio.duration_ms AS audio_duration_ms,
+    audio.created_at AS audio_created_at,
     lessons.status,
     lessons.created_at,
     lessons.created_by,
@@ -15,4 +20,5 @@ SELECT
     lessons.validated_by
 FROM lessons
 INNER JOIN units ON lessons.unit_id = units.id
+LEFT JOIN audio ON lessons.audio_id = audio.id
 WHERE lessons.id = $1;
