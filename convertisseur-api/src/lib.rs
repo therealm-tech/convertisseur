@@ -6,6 +6,7 @@ mod accounts;
 mod api;
 mod bootstrap;
 pub mod config;
+mod content;
 mod db;
 mod error;
 mod health;

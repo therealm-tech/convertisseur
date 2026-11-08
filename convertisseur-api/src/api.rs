@@ -1,3 +1,4 @@
+mod content;
 mod extract;
 mod passwords;
 mod sessions;
@@ -50,6 +51,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(sessions::routes())
         .merge(users::routes())
         .merge(passwords::routes())
+        .merge(content::routes())
         .finish_api_with(&mut api, |doc| {
             doc.tag(Tag {
                 name: "Sessions".to_owned(),
@@ -59,6 +61,13 @@ pub fn routes(state: AppState) -> Router {
             .tag(Tag {
                 name: "Users".to_owned(),
                 description: Some("Accounts, their passwords and their roles".to_owned()),
+                ..Tag::default()
+            })
+            .tag(Tag {
+                name: content::TAG.to_owned(),
+                description: Some(
+                    "Units, lessons and cards of the two tracks, and their review".to_owned(),
+                ),
                 ..Tag::default()
             })
             .security_scheme(

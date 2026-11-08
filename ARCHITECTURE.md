@@ -65,7 +65,8 @@ registration screen; a logged-in user is sent from there to `/`. An account
 whose password was reset by an admin can reach `/mot-de-passe` only, and the
 admin area under `/admin` is open to `admin` and `super_admin` alone. These
 guards spare the user a page that would only fail: the server enforces the
-same rules on every request.
+same rules on every request. The admin area opens on `/admin/contenu`, where
+staff write and review the learning content, beside `/admin/utilisateurs`.
 
 The interface is in French. The visual identity lives in CSS custom properties
 in [`styles.css`](convertisseur-webapp/src/styles.css), with a light and a dark
@@ -114,6 +115,80 @@ a `role` of the `user_role` enum, `user`, `admin` or `super_admin`;
 
 `sessions` holds the logged-in sessions: the SHA-256 of the session token, the
 user it belongs to, and when it expires. Deleting a user deletes its sessions.
+
+The learning content is a tree of three tables:
+
+```mermaid
+erDiagram
+    units ||--o{ lessons : "unit_id"
+    lessons ||--o{ cards : "lesson_id"
+    cards |o--o| audio : "audio_id"
+    units {
+        content_track track "arabe or islam"
+        integer position
+        text title
+    }
+    lessons {
+        integer position
+        text title
+    }
+    cards {
+        integer position
+        text arabic "vocalised"
+        text transliteration
+        text meaning_fr
+        arabic_variety variety "classique or darija"
+    }
+    audio {
+        text object_key "in the object store"
+        text content_type
+        bigint size_bytes
+    }
+```
+
+- **Every unit, lesson and card carries its review**: a `status` of
+  `to_review` or `validated`, `created_by` and `updated_by`, and
+  `validated_by` and `validated_at` while it is validated. The author columns
+  are set to `NULL` when the account is deleted; the content stays.
+- **Positions are 1-based and dense among siblings**: the units of a track,
+  the lessons of a unit, the cards of a lesson. A `UNIQUE (parent, position)`
+  constraint, deferred to the end of the transaction, lets an insertion, a
+  move or a deletion shift the siblings it passes.
+- **A card's recording is an `audio` row**, which holds the key of the object
+  in the object store, its content type and size, and who uploaded it.
+- **`content_items` is a view** over the three tables, in the shape of the
+  review list: kind, track, title, parent title, status, last edit.
+
+## Content and its review
+
+Staff write units, lessons and cards in the admin area; a reviewer, any
+`admin` or the `super_admin`, validates them. The rules, in
+[`content.rs`](convertisseur-api/src/content.rs):
+
+- **New content starts `to_review`, and any edit sends it back there**, by
+  whoever makes it: the `UPDATE` resets the status and the validation in the
+  same statement, when one of the fields differs from the stored row
+  (`IS DISTINCT FROM`). Saving a row unchanged keeps its validation. Moving a
+  row to another place is an edit of that row; the siblings it shifts keep
+  their status.
+- **Validating needs no second person.** Any admin validates, the author
+  included; setting the status a row already has changes nothing, so the
+  first validator and time stay.
+- **Every write runs in one transaction under one advisory lock**, which
+  serialises the shifting of positions across concurrent editors. Content is
+  written by a few staff members, so one lock for all of it costs nothing.
+- **A unit with lessons or a lesson with cards is not deleted**: the request
+  answers `409` `not-empty`, and its children have to be moved or deleted
+  first. A deletion never takes more than the row named.
+- **The review status is stored, and only the admin area reads content.**
+  Every content endpoint takes `RequireRole<Admin>`.
+
+The review list (`GET /api/v1/content-items`) spans the three kinds, the most
+recently edited first, filtered by status, track, kind and text. Its
+`statusCounts` count each status under the other filters, for the filter's
+badges. The text search compares through `content_search_key`, a SQL function
+that lowercases and strips the Arabic short vowels, other diacritics and the
+tatweel, so `شكرا` finds `شُكْرًا`.
 
 ## Accounts and sessions
 
@@ -174,6 +249,7 @@ Three roles, in increasing order of power: `user`, `admin`, `super_admin`.
 | Reset the password of, or delete, a `user` | yes | yes |
 | Reset the password of, or delete, an `admin` | no | yes |
 | Change a role between `user` and `admin` | no | yes |
+| Write, validate and delete learning content | yes | yes |
 
 The rule behind the table, in
 [`users::may`](convertisseur-api/src/users.rs): an account manages only
@@ -187,7 +263,8 @@ The server checks this on every request, in two places:
 - **A role guard on the endpoint.** The `RequireRole` extractor in
   [`extract.rs`](convertisseur-api/src/api/extract.rs) refuses an account
   below the endpoint's least role before the handler runs: `admin` for the
-  listing, the reset and the deletion, `super_admin` for a role change.
+  listing, the reset, the deletion and every content endpoint, `super_admin`
+  for a role change.
 - **The rule on the target**, in
   [`accounts.rs`](convertisseur-api/src/accounts.rs), inside the transaction
   that acts: the target's row is locked with `SELECT … FOR UPDATE`, so its
@@ -351,6 +428,13 @@ bucket provisioned beforehand works with credentials that cannot create one.
 by a type parameter on `AppState`: handlers and extractors stay non-generic,
 and dispatch stays static.
 
+**The review list is one collection over three tables.** Reviewers read the
+units, lessons and cards to review as one queue, ordered by their last edit,
+so `content-items` is a read-only collection backed by a `UNION ALL` view;
+each kind keeps its own collection (`/units`, `/lessons`, `/cards`) for
+reading one item and writing. The review status is a state of the item, set
+with `PUT …/status`, rather than an action endpoint.
+
 **Environment variables have bare names**, such as `BIND_ADDR` or
 `SUPER_ADMIN_PASSWORD`. The server runs in a container whose environment is
 written for it alone, so a prefix would only be noise. `DATABASE_URL` is the
@@ -410,3 +494,5 @@ and no raster that can drift from it.
   roles and web identity federation are not supported.
 - The theme follows the operating system's light or dark preference; the app
   has no theme setting of its own.
+- The content forms offer the 100 most recently edited units, or lessons, as
+  the parent of a new lesson or card.

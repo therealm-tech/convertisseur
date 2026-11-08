@@ -1,6 +1,24 @@
 import { Link, Outlet, useRouteContext } from "@tanstack/react-router";
 import { roleLabels } from "@/lib/roles";
 
+function ContentIcon() {
+	return (
+		<svg
+			width="20"
+			height="20"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10l2 2h6.5A1.5 1.5 0 0 1 20 7.5v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z" />
+		</svg>
+	);
+}
+
 function UsersIcon() {
 	return (
 		<svg
@@ -53,6 +71,10 @@ export function AdminLayout() {
 					</div>
 				</div>
 				<nav aria-label="Administration" className="admin-nav">
+					<Link to="/admin/contenu" className="admin-nav-link">
+						<ContentIcon />
+						Contenu
+					</Link>
 					<Link to="/admin/utilisateurs" className="admin-nav-link">
 						<UsersIcon />
 						Utilisateurs et rôles
