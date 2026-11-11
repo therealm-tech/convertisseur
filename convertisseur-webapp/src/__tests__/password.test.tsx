@@ -35,7 +35,7 @@ describe("forced password change", () => {
 		const api = installFakeApi();
 		resetByAnAdmin(api, "aicha");
 		const user = userEvent.setup();
-		const router = await renderAt("/connexion");
+		const router = await renderAt("/login");
 		const form = await screen.findByRole("tabpanel", { name: "Connexion" });
 
 		await user.type(screen.getByLabelText("Pseudo"), "aicha");
@@ -47,11 +47,11 @@ describe("forced password change", () => {
 				name: "Choisis un nouveau mot de passe",
 			}),
 		).toBeInTheDocument();
-		expect(router.state.location.pathname).toBe("/mot-de-passe");
+		expect(router.state.location.pathname).toBe("/password");
 		expect(screen.getByLabelText("Mot de passe temporaire")).toBeVisible();
 	});
 
-	it.each(["/", "/admin/utilisateurs", "/connexion"])(
+	it.each(["/", "/admin/users", "/login"])(
 		"blocks %s until the password is changed",
 		async (path) => {
 			const api = installFakeApi();
@@ -65,7 +65,7 @@ describe("forced password change", () => {
 					name: "Choisis un nouveau mot de passe",
 				}),
 			).toBeInTheDocument();
-			expect(router.state.location.pathname).toBe("/mot-de-passe");
+			expect(router.state.location.pathname).toBe("/password");
 		},
 	);
 
@@ -74,7 +74,7 @@ describe("forced password change", () => {
 		resetByAnAdmin(api, "aicha");
 		api.logIn("aicha");
 		const user = userEvent.setup();
-		await renderAt("/mot-de-passe");
+		await renderAt("/password");
 		await screen.findByRole("heading", {
 			name: "Choisis un nouveau mot de passe",
 		});
@@ -99,7 +99,7 @@ describe("forced password change", () => {
 		resetByAnAdmin(api, "aicha");
 		api.logIn("aicha");
 		const user = userEvent.setup();
-		const router = await renderAt("/mot-de-passe");
+		const router = await renderAt("/password");
 		await screen.findByRole("heading", {
 			name: "Choisis un nouveau mot de passe",
 		});
@@ -121,7 +121,7 @@ describe("forced password change", () => {
 		const api = installFakeApi();
 		resetByAnAdmin(api, "aicha");
 		api.logIn("aicha");
-		await renderAt("/mot-de-passe");
+		await renderAt("/password");
 
 		await userEvent.click(
 			await screen.findByRole("button", { name: "Se déconnecter" }),
@@ -146,14 +146,14 @@ describe("changing your own password", () => {
 		expect(
 			await screen.findByRole("heading", { name: "Changer mon mot de passe" }),
 		).toBeInTheDocument();
-		expect(router.state.location.pathname).toBe("/mot-de-passe");
+		expect(router.state.location.pathname).toBe("/password");
 	});
 
 	it("says when the current password is wrong, then changes it", async () => {
 		const api = installFakeApi();
 		api.logIn("aicha");
 		const user = userEvent.setup();
-		await renderAt("/mot-de-passe");
+		await renderAt("/password");
 		await screen.findByRole("heading", { name: "Changer mon mot de passe" });
 
 		await fillChange(user, "pas le bon mot de passe", NEW_PASSWORD);

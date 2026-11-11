@@ -37,7 +37,7 @@ export function ReviewDesktop({ data, actions, error }: ViewProps) {
 			<header className="review-desktop-head">
 				<div className="review-desktop-titles">
 					<span className="review-crumb">
-						<Link to="/admin/relecture">Relecture</Link> ·{" "}
+						<Link to="/admin/review">Relecture</Link> ·{" "}
 						{trackLabels[unit.track]} · Unité {unit.position} · {unit.title}
 					</span>
 					<div className="review-desktop-title-row">
@@ -65,7 +65,7 @@ export function ReviewDesktop({ data, actions, error }: ViewProps) {
 							{data.siblings.map((sibling) => (
 								<li key={sibling.id}>
 									<Link
-										to="/admin/relecture/lecons/$lessonId"
+										to="/admin/review/lessons/$lessonId"
 										params={{ lessonId: sibling.id }}
 										className="review-side-lesson"
 									>
@@ -186,7 +186,7 @@ function LessonLink({
 	}
 	return (
 		<Link
-			to="/admin/relecture/lecons/$lessonId"
+			to="/admin/review/lessons/$lessonId"
 			params={{ lessonId: id }}
 			className="button-secondary review-lesson-link"
 		>

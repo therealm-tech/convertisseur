@@ -99,7 +99,7 @@ describe("home", () => {
 		await renderAt("/");
 
 		const arabic = await screen.findByRole("link", { name: /^Arabe/ });
-		expect(arabic).toHaveAttribute("href", "/parcours/arabe");
+		expect(arabic).toHaveAttribute("href", "/tracks/arabe");
 		expect(arabic).toHaveTextContent("Unité 1 · L'alphabet");
 		expect(arabic).toHaveTextContent("1 unité · 2 leçons");
 		const islam = screen.getByRole("link", { name: /^Islam/ });
@@ -148,7 +148,7 @@ describe("home", () => {
 
 		expect(
 			await screen.findByRole("link", { name: "Administration" }),
-		).toHaveAttribute("href", "/admin/contenu");
+		).toHaveAttribute("href", "/admin/content");
 	});
 
 	it("opens a track's lesson map", async () => {
@@ -160,7 +160,7 @@ describe("home", () => {
 		expect(
 			await screen.findByRole("heading", { name: "Parcours Arabe" }),
 		).toBeInTheDocument();
-		expect(router.state.location.pathname).toBe("/parcours/arabe");
+		expect(router.state.location.pathname).toBe("/tracks/arabe");
 	});
 });
 
@@ -168,7 +168,7 @@ describe("lesson map", () => {
 	it("lists the validated units and lessons in order", async () => {
 		seedTracks(loggedIn());
 
-		await renderAt("/parcours/arabe");
+		await renderAt("/tracks/arabe");
 
 		const units = await screen.findAllByRole("region");
 		expect(units).toHaveLength(1);
@@ -182,7 +182,7 @@ describe("lesson map", () => {
 		]);
 		expect(lessons[0]).toHaveAttribute(
 			"href",
-			"/parcours/arabe/lecons/l-letters",
+			"/tracks/arabe/lessons/l-letters",
 		);
 		expect(screen.queryByText("Brouillon")).not.toBeInTheDocument();
 		expect(screen.queryByText("Salutations")).not.toBeInTheDocument();
@@ -192,7 +192,7 @@ describe("lesson map", () => {
 	it("says when a unit has no lesson yet", async () => {
 		seedTracks(loggedIn());
 
-		await renderAt("/parcours/islam");
+		await renderAt("/tracks/islam");
 
 		expect(
 			await screen.findByRole("heading", { name: "La prière" }),
@@ -205,7 +205,7 @@ describe("lesson map", () => {
 	it("says when the track has nothing validated", async () => {
 		loggedIn();
 
-		await renderAt("/parcours/islam");
+		await renderAt("/tracks/islam");
 
 		expect(
 			await screen.findByText("Pas encore de leçon ici"),
@@ -218,7 +218,7 @@ describe("lesson map", () => {
 	it("does not know other tracks", async () => {
 		loggedIn();
 
-		await renderAt("/parcours/histoire");
+		await renderAt("/tracks/histoire");
 
 		expect(
 			await screen.findByRole("heading", { name: "Page introuvable" }),
@@ -230,7 +230,7 @@ describe("lesson", () => {
 	it("shows the cards one at a time, the Arabic in Amiri", async () => {
 		seedTracks(loggedIn());
 
-		await renderAt("/parcours/arabe/lecons/l-letters");
+		await renderAt("/tracks/arabe/lessons/l-letters");
 
 		expect(
 			await screen.findByRole("heading", { name: "Les lettres" }),
@@ -248,7 +248,7 @@ describe("lesson", () => {
 
 	it("reveals the transliteration and the meaning on demand", async () => {
 		seedTracks(loggedIn());
-		await renderAt("/parcours/arabe/lecons/l-letters");
+		await renderAt("/tracks/arabe/lessons/l-letters");
 		const face = await screen.findByRole("button", {
 			name: /Voir la traduction/,
 		});
@@ -267,7 +267,7 @@ describe("lesson", () => {
 
 	it("moves between cards, then ends the lesson", async () => {
 		seedTracks(loggedIn());
-		await renderAt("/parcours/arabe/lecons/l-letters");
+		await renderAt("/tracks/arabe/lessons/l-letters");
 		const previous = await screen.findByRole("button", { name: "Précédente" });
 		expect(previous).toBeDisabled();
 		await userEvent.click(screen.getByRole("button", { name: /Voir la/ }));
@@ -291,7 +291,7 @@ describe("lesson", () => {
 		expect(screen.getByText(/Tu as parcouru les 2 cartes/)).toBeInTheDocument();
 		expect(
 			screen.getByRole("link", { name: "Retour au parcours" }),
-		).toHaveAttribute("href", "/parcours/arabe");
+		).toHaveAttribute("href", "/tracks/arabe");
 
 		await userEvent.click(
 			screen.getByRole("button", { name: "Revoir les cartes" }),
@@ -302,7 +302,7 @@ describe("lesson", () => {
 
 	it("follows the arrow keys", async () => {
 		seedTracks(loggedIn());
-		await renderAt("/parcours/arabe/lecons/l-letters");
+		await renderAt("/tracks/arabe/lessons/l-letters");
 		await screen.findByText("بَ");
 
 		await userEvent.keyboard("{ArrowRight}");
@@ -314,7 +314,7 @@ describe("lesson", () => {
 
 	it("plays a card's recording when it has one", async () => {
 		seedTracks(loggedIn());
-		await renderAt("/parcours/arabe/lecons/l-letters");
+		await renderAt("/tracks/arabe/lessons/l-letters");
 		const play = await screen.findByRole("button", { name: "Écouter" });
 		const audio = document.querySelector("audio");
 		expect(audio).toHaveAttribute("src", "/api/v1/audio/a-1");
@@ -341,7 +341,7 @@ describe("lesson", () => {
 			lesson.audio = { ...recording, id: "a-lesson" };
 		}
 
-		await renderAt("/parcours/arabe/lecons/l-letters");
+		await renderAt("/tracks/arabe/lessons/l-letters");
 
 		await userEvent.click(
 			await screen.findByRole("button", { name: "Écouter la leçon" }),
@@ -355,7 +355,7 @@ describe("lesson", () => {
 	it("says when the lesson has no card yet", async () => {
 		seedTracks(loggedIn());
 
-		await renderAt("/parcours/arabe/lecons/l-shapes");
+		await renderAt("/tracks/arabe/lessons/l-shapes");
 
 		expect(await screen.findByText("Pas encore de carte")).toBeInTheDocument();
 		expect(
@@ -366,7 +366,7 @@ describe("lesson", () => {
 	it("does not open a lesson learners do not see", async () => {
 		seedTracks(loggedIn());
 
-		await renderAt("/parcours/arabe/lecons/l-darija");
+		await renderAt("/tracks/arabe/lessons/l-darija");
 
 		expect(
 			await screen.findByRole("heading", { name: "Leçon introuvable" }),

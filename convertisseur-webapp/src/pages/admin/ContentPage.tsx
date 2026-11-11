@@ -51,12 +51,12 @@ function useDebounced<T>(value: T, delayMs: number): T {
 }
 
 export function ContentPage() {
-	const filters = useSearch({ from: "/_app/admin/contenu" });
-	const navigate = useNavigate({ from: "/admin/contenu" });
+	const filters = useSearch({ from: "/_app/admin/content" });
+	const navigate = useNavigate({ from: "/admin/content" });
 	const onFailure = useContentFailure();
-	const status = statusOf(filters.statut);
-	const track = filters.parcours;
-	const noted = filters.remarque === true;
+	const status = statusOf(filters.status);
+	const track = filters.track;
+	const noted = filters.note === true;
 	const q = filters.q ?? "";
 	const pageNumber = filters.page ?? 1;
 	const [search, setSearch] = useState(q);
@@ -114,7 +114,7 @@ export function ContentPage() {
 
 	function open(item: ContentItem) {
 		void navigate({
-			to: "/admin/contenu/$section/$itemId",
+			to: "/admin/content/$section/$itemId",
 			params: { section: sectionOf[item.kind], itemId: item.id },
 			state: { contentList: filters },
 		});
@@ -166,7 +166,7 @@ export function ContentPage() {
 					{createLinks.map((link) => (
 						<Link
 							key={link.kind}
-							to="/admin/contenu/$section/nouvelle"
+							to="/admin/content/$section/new"
 							params={{ section: sectionOf[link.kind] }}
 							state={{ contentList: filters }}
 							className={link.className}
@@ -186,7 +186,7 @@ export function ContentPage() {
 							type="button"
 							aria-pressed={(status ?? "") === option.value}
 							onClick={() =>
-								filter({ statut: statusParam(option.value || undefined) })
+								filter({ status: statusParam(option.value || undefined) })
 							}
 						>
 							{option.label}
@@ -198,7 +198,7 @@ export function ContentPage() {
 					type="button"
 					className="note-filter"
 					aria-pressed={noted}
-					onClick={() => filter({ remarque: noted ? undefined : true })}
+					onClick={() => filter({ note: noted ? undefined : true })}
 				>
 					<NoteIcon />
 					Avec remarque
@@ -216,7 +216,7 @@ export function ContentPage() {
 							const chosen = trackOptions.find(
 								(option) => option.value === event.target.value,
 							);
-							filter({ parcours: chosen?.value || undefined });
+							filter({ track: chosen?.value || undefined });
 						}}
 					>
 						{trackOptions.map((option) => (
@@ -323,7 +323,7 @@ function ContentTable({ items, filters, onOpen }: ContentTableProps) {
 						>
 							<th scope="row">
 								<Link
-									to="/admin/contenu/$section/$itemId"
+									to="/admin/content/$section/$itemId"
 									params={{ section: sectionOf[item.kind], itemId: item.id }}
 									state={{ contentList: filters }}
 									className="content-title-link"

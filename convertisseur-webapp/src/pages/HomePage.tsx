@@ -19,7 +19,7 @@ function TrackCard({ track }: { track: Track }) {
 	return (
 		<li>
 			<Link
-				to="/parcours/$track"
+				to="/tracks/$track"
 				params={{ track: track.id }}
 				className={`track-card track-card-${track.id}`}
 			>
@@ -52,7 +52,7 @@ export function HomePage() {
 		setFailed(false);
 		try {
 			await logout();
-			await navigate({ to: "/connexion" });
+			await navigate({ to: "/login" });
 		} catch (error) {
 			logger.warn("auth.logout_failed", { error });
 			setFailed(true);
@@ -98,11 +98,11 @@ export function HomePage() {
 				) : null}
 				<nav aria-label="Mon compte" className="home-links">
 					{isStaff(user.role) ? (
-						<Link to="/admin/contenu" className="home-link">
+						<Link to="/admin/content" className="home-link">
 							Administration
 						</Link>
 					) : null}
-					<Link to="/mot-de-passe" className="home-link">
+					<Link to="/password" className="home-link">
 						Changer mon mot de passe
 					</Link>
 				</nav>

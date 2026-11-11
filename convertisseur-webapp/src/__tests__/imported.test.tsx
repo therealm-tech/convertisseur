@@ -38,7 +38,7 @@ async function openContentPage() {
 	});
 	api.logIn("nour");
 	const user = userEvent.setup();
-	await renderAt("/admin/contenu");
+	await renderAt("/admin/content");
 	await screen.findByRole("table");
 	return { api, user };
 }

@@ -5,7 +5,7 @@ import { renderAt } from "./helpers";
 
 async function openAuthScreen(tab: "Connexion" | "Inscription" = "Connexion") {
 	const api = installFakeApi();
-	await renderAt("/connexion");
+	await renderAt("/login");
 	const user = userEvent.setup();
 	await user.click(await screen.findByRole("tab", { name: tab }));
 	return { api, user, form: screen.getByRole("tabpanel", { name: tab }) };
@@ -35,7 +35,7 @@ function posted(api: FakeApi, path: string) {
 describe("auth screen", () => {
 	it("shows the logo, the tabs and the login form first", async () => {
 		installFakeApi();
-		await renderAt("/connexion");
+		await renderAt("/login");
 
 		expect(
 			await screen.findByRole("img", { name: "Logo de Convertisseur" }),
@@ -54,7 +54,7 @@ describe("auth screen", () => {
 
 	it("switches tabs with the arrow keys", async () => {
 		installFakeApi();
-		await renderAt("/connexion");
+		await renderAt("/login");
 		const user = userEvent.setup();
 
 		await user.click(await screen.findByRole("tab", { name: "Connexion" }));

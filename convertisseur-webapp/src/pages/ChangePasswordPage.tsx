@@ -28,7 +28,7 @@ const emptyForm: PasswordChangeForm = {
  * the only page the account can reach, and asks for the temporary password.
  */
 export function ChangePasswordPage() {
-	const { session } = useRouteContext({ from: "/mot-de-passe" });
+	const { session } = useRouteContext({ from: "/password" });
 	const router = useRouter();
 	const navigate = useNavigate();
 	const forced = session.mustChangePassword;
@@ -84,7 +84,7 @@ export function ChangePasswordPage() {
 	async function onLogout() {
 		try {
 			await logout();
-			await navigate({ to: "/connexion" });
+			await navigate({ to: "/login" });
 		} catch (error) {
 			logger.warn("auth.logout_failed", { error });
 			setFormError("La déconnexion a échoué. Réessaie dans un moment.");

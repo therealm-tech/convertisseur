@@ -8,7 +8,7 @@ async function openUsersPage(username: string) {
 	const api = installFakeApi();
 	api.logIn(username);
 	const user = userEvent.setup();
-	const router = await renderAt("/admin/utilisateurs");
+	const router = await renderAt("/admin/users");
 	await screen.findByRole("heading", { name: "Utilisateurs et rôles" });
 	await screen.findByRole("table");
 	return { api, user, router };
@@ -29,16 +29,16 @@ describe("admin area guard", () => {
 	it("sends a visitor without a session to the auth screen", async () => {
 		installFakeApi();
 
-		const router = await renderAt("/admin/utilisateurs");
+		const router = await renderAt("/admin/users");
 
-		expect(router.state.location.pathname).toBe("/connexion");
+		expect(router.state.location.pathname).toBe("/login");
 	});
 
 	it("keeps a user out and hides the link", async () => {
 		const api = installFakeApi();
 		api.logIn("aicha");
 
-		const router = await renderAt("/admin/utilisateurs");
+		const router = await renderAt("/admin/users");
 
 		expect(
 			await screen.findByRole("heading", { name: "Salam, aicha" }),
@@ -61,7 +61,7 @@ describe("admin area guard", () => {
 		expect(
 			await screen.findByRole("heading", { name: "Contenu" }),
 		).toBeInTheDocument();
-		expect(router.state.location.pathname).toBe("/admin/contenu");
+		expect(router.state.location.pathname).toBe("/admin/content");
 		expect(screen.getByRole("link", { name: "Contenu" })).toHaveAttribute(
 			"aria-current",
 			"page",
@@ -74,13 +74,13 @@ describe("admin area guard", () => {
 		expect(
 			await screen.findByRole("heading", { name: "Utilisateurs et rôles" }),
 		).toBeInTheDocument();
-		expect(router.state.location.pathname).toBe("/admin/utilisateurs");
+		expect(router.state.location.pathname).toBe("/admin/users");
 	});
 
 	it("says who is logged in and leads back to the app", async () => {
 		const api = installFakeApi();
 		api.logIn("chef");
-		const router = await renderAt("/admin/contenu");
+		const router = await renderAt("/admin/content");
 		await screen.findByRole("heading", { name: "Contenu" });
 
 		expect(screen.getByText("chef · super admin")).toBeVisible();
@@ -107,7 +107,7 @@ describe("admin area guard", () => {
 
 		const router = await renderAt("/admin");
 
-		expect(router.state.location.pathname).toBe("/admin/contenu");
+		expect(router.state.location.pathname).toBe("/admin/content");
 	});
 });
 

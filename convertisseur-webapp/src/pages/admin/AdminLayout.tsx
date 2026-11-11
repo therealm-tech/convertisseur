@@ -92,7 +92,7 @@ function ReviewLink() {
 	const count = totals?.itemsToReview;
 	return (
 		<Link
-			to="/admin/relecture"
+			to="/admin/review"
 			className="admin-nav-link"
 			aria-label={count ? `Relecture, ${count} à relire` : undefined}
 		>
@@ -123,8 +123,7 @@ function AdminFrame() {
 	// On a phone, reviewing a lesson takes the whole screen; its close
 	// button leads back to the queue.
 	const fullScreen =
-		!desktop &&
-		Boolean(matchRoute({ to: "/admin/relecture/lecons/$lessonId" }));
+		!desktop && Boolean(matchRoute({ to: "/admin/review/lessons/$lessonId" }));
 	if (fullScreen) {
 		return (
 			<div className="admin">
@@ -146,12 +145,12 @@ function AdminFrame() {
 				</div>
 				<nav aria-label="Administration" className="admin-nav">
 					<ReviewLink />
-					<Link to="/admin/contenu" className="admin-nav-link">
+					<Link to="/admin/content" className="admin-nav-link">
 						<ContentIcon />
 						Contenu
 					</Link>
 					<Link
-						to="/admin/utilisateurs"
+						to="/admin/users"
 						className="admin-nav-link"
 						aria-label="Utilisateurs et rôles"
 					>

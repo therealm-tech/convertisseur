@@ -48,10 +48,10 @@ const appRoute = createRoute({
 	id: "_app",
 	beforeLoad: ({ context }) => {
 		if (!context.session) {
-			throw redirect({ to: "/connexion", replace: true });
+			throw redirect({ to: "/login", replace: true });
 		}
 		if (context.session.mustChangePassword) {
-			throw redirect({ to: "/mot-de-passe", replace: true });
+			throw redirect({ to: "/password", replace: true });
 		}
 		return { user: context.session.user };
 	},
@@ -67,14 +67,14 @@ const homeRoute = createRoute({
 
 const trackRoute = createRoute({
 	getParentRoute: () => appRoute,
-	path: "/parcours/$track",
+	path: "/tracks/$track",
 	loader: ({ params }) => fetchTrack(parseTrackId(params.track)),
 	component: TrackPage,
 });
 
 const lessonRoute = createRoute({
 	getParentRoute: () => appRoute,
-	path: "/parcours/$track/lecons/$lessonId",
+	path: "/tracks/$track/lessons/$lessonId",
 	loader: ({ params }) =>
 		fetchLesson(parseTrackId(params.track), params.lessonId),
 	component: LessonPage,
@@ -96,55 +96,55 @@ const adminIndexRoute = createRoute({
 	getParentRoute: () => adminRoute,
 	path: "/",
 	beforeLoad: () => {
-		throw redirect({ to: "/admin/contenu", replace: true });
+		throw redirect({ to: "/admin/content", replace: true });
 	},
 });
 
 const adminContentRoute = createRoute({
 	getParentRoute: () => adminRoute,
-	path: "/contenu",
+	path: "/content",
 	validateSearch: parseContentSearch,
 	component: ContentPage,
 });
 
 const adminContentItemRoute = createRoute({
 	getParentRoute: () => adminRoute,
-	path: "/contenu/$section/$itemId",
+	path: "/content/$section/$itemId",
 	beforeLoad: ({ params }) => ({ kind: parseSection(params.section) }),
 	component: ContentEditPage,
 });
 
 const adminContentNewRoute = createRoute({
 	getParentRoute: () => adminRoute,
-	path: "/contenu/$section/nouvelle",
+	path: "/content/$section/new",
 	beforeLoad: ({ params }) => ({ kind: parseSection(params.section) }),
 	component: ContentCreatePage,
 });
 
 const adminReviewRoute = createRoute({
 	getParentRoute: () => adminRoute,
-	path: "/relecture",
+	path: "/review",
 	component: ReviewQueuePage,
 });
 
 const adminReviewLessonRoute = createRoute({
 	getParentRoute: () => adminRoute,
-	path: "/relecture/lecons/$lessonId",
+	path: "/review/lessons/$lessonId",
 	component: ReviewLessonPage,
 });
 
 const adminUsersRoute = createRoute({
 	getParentRoute: () => adminRoute,
-	path: "/utilisateurs",
+	path: "/users",
 	component: UsersPage,
 });
 
 const passwordRoute = createRoute({
 	getParentRoute: () => rootRoute,
-	path: "/mot-de-passe",
+	path: "/password",
 	beforeLoad: ({ context }) => {
 		if (!context.session) {
-			throw redirect({ to: "/connexion", replace: true });
+			throw redirect({ to: "/login", replace: true });
 		}
 		return { session: context.session };
 	},
@@ -153,7 +153,7 @@ const passwordRoute = createRoute({
 
 const authRoute = createRoute({
 	getParentRoute: () => rootRoute,
-	path: "/connexion",
+	path: "/login",
 	beforeLoad: ({ context }) => {
 		if (context.session) {
 			throw redirect({ to: "/", replace: true });

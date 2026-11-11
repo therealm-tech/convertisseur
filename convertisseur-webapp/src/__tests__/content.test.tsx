@@ -44,7 +44,7 @@ function seedContent(api: FakeApi) {
 	});
 }
 
-async function openContentPage(path = "/admin/contenu") {
+async function openContentPage(path = "/admin/content") {
 	const api = installFakeApi();
 	seedContent(api);
 	api.logIn("nour");
@@ -255,9 +255,7 @@ describe("content page", () => {
 		const { api, user, router } = await openContentPage();
 
 		await user.click(screen.getByRole("link", { name: "Nouvelle leçon" }));
-		expect(router.state.location.pathname).toBe(
-			"/admin/contenu/lecons/nouvelle",
-		);
+		expect(router.state.location.pathname).toBe("/admin/content/lessons/new");
 		expect(
 			screen.getByRole("heading", { name: "Nouvelle leçon" }),
 		).toBeVisible();
@@ -280,7 +278,7 @@ describe("content page", () => {
 			body: { unitId: "u-piliers", title: "La prière" },
 		});
 		expect(router.state.location.pathname).toMatch(
-			/^\/admin\/contenu\/lecons\/(?!nouvelle$)[^/]+$/,
+			/^\/admin\/content\/lessons\/(?!new$)[^/]+$/,
 		);
 		expect(
 			screen.getByRole("button", { name: "Marquer comme validé" }),
@@ -324,7 +322,7 @@ describe("content page", () => {
 		await user.click(within(dialog).getByRole("button", { name: "Supprimer" }));
 
 		await screen.findByRole("table");
-		expect(router.state.location.pathname).toBe("/admin/contenu");
+		expect(router.state.location.pathname).toBe("/admin/content");
 		expect(api.content.row("l-shahada")).toBeUndefined();
 		await waitFor(() => expect(titles()).not.toContain("La shahada"));
 	});
@@ -344,7 +342,7 @@ describe("content edit pages", () => {
 			await screen.findByRole("heading", { name: "شُكْرًا · shukran" }),
 		).toBeVisible();
 		expect(router.state.location.pathname).toBe(
-			"/admin/contenu/cartes/c-shukran",
+			"/admin/content/cards/c-shukran",
 		);
 	});
 
@@ -357,13 +355,13 @@ describe("content edit pages", () => {
 		await user.click(screen.getByRole("link", { name: "L'alphabet" }));
 		await screen.findByRole("textbox", { name: "Titre" });
 		expect(router.state.location.pathname).toBe(
-			"/admin/contenu/unites/u-alphabet",
+			"/admin/content/units/u-alphabet",
 		);
 
 		await user.click(screen.getByRole("link", { name: "Retour à la liste" }));
 
 		await waitFor(() => expect(titles()).toEqual(["L'alphabet"]));
-		expect(router.state.location.search).toEqual({ statut: "valide" });
+		expect(router.state.location.search).toEqual({ status: "validated" });
 		expect(router.history.length).toBe(historyLength + 1);
 		expect(screen.getByRole("button", { name: "Validé · 1" })).toHaveAttribute(
 			"aria-pressed",
@@ -372,7 +370,7 @@ describe("content edit pages", () => {
 	});
 
 	it("reads the list's filters from its URL", async () => {
-		await openContentPage("/admin/contenu?parcours=islam&q=piliers");
+		await openContentPage("/admin/content?track=islam&q=piliers");
 
 		await waitFor(() => expect(titles()).toEqual(["Les piliers"]));
 		expect(screen.getByRole("combobox", { name: "Parcours" })).toHaveValue(
@@ -387,21 +385,21 @@ describe("content edit pages", () => {
 		const api = installFakeApi();
 		seedContent(api);
 		api.logIn("nour");
-		await renderAt("/admin/contenu/lecons/l-shahada");
+		await renderAt("/admin/content/lessons/l-shahada");
 
 		expect(
 			await screen.findByRole("heading", { name: "La shahada" }),
 		).toBeVisible();
 		expect(
 			screen.getByRole("link", { name: "Retour à la liste" }),
-		).toHaveAttribute("href", "/admin/contenu");
+		).toHaveAttribute("href", "/admin/content");
 	});
 
 	it("says an item does not exist", async () => {
 		const api = installFakeApi();
 		seedContent(api);
 		api.logIn("nour");
-		await renderAt("/admin/contenu/cartes/c-disparue");
+		await renderAt("/admin/content/cards/c-disparue");
 
 		expect(await screen.findByRole("alert")).toHaveTextContent(
 			"Carte introuvable.",
@@ -411,7 +409,7 @@ describe("content edit pages", () => {
 	it("answers page not found for a kind it does not know", async () => {
 		const api = installFakeApi();
 		api.logIn("nour");
-		await renderAt("/admin/contenu/chapitres/u-alphabet");
+		await renderAt("/admin/content/chapters/u-alphabet");
 
 		expect(
 			await screen.findByRole("heading", { name: "Page introuvable" }),

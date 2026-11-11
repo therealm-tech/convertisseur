@@ -12,7 +12,7 @@ describe("route guard", () => {
 		expect(
 			await screen.findByRole("tab", { name: "Connexion", selected: true }),
 		).toBeInTheDocument();
-		expect(router.state.location.pathname).toBe("/connexion");
+		expect(router.state.location.pathname).toBe("/login");
 	});
 
 	it("greets a logged-in user on the home page", async () => {
@@ -30,7 +30,7 @@ describe("route guard", () => {
 		const api = installFakeApi();
 		api.logIn("aicha");
 
-		const router = await renderAt("/connexion");
+		const router = await renderAt("/login");
 
 		expect(
 			await screen.findByRole("heading", { name: "Salam, aicha" }),
