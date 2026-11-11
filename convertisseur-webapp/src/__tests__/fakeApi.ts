@@ -200,6 +200,10 @@ export function installFakeApi(): FakeApi {
 			const [, id = "", sub = ""] = memberMatch;
 			return member(method, byId(decodeURIComponent(id)), sub, body);
 		}
+		if (url.pathname.startsWith("/api/v1/tracks") && method === "GET") {
+			const actor = guard("user");
+			return actor instanceof Response ? actor : content.study(url);
+		}
 		if (contentPath.test(url.pathname)) {
 			const actor = guard("admin");
 			if (actor instanceof Response) {

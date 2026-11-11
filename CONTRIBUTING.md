@@ -114,7 +114,7 @@ npm test --prefix convertisseur-webapp
 ```
 
 ```sh
-npm test --prefix convertisseur-webapp -- src/__tests__/landing.test.tsx
+npm test --prefix convertisseur-webapp -- src/__tests__/learning.test.tsx
 ```
 
 New behaviour comes with tests, and a fix with a test that fails without it.

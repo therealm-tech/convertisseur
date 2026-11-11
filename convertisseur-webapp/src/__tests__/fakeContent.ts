@@ -30,6 +30,15 @@ const collections: Record<string, Kind> = {
 const memberPath =
 	/^\/api\/v1\/(units|lessons|cards)(?:\/([^/]+))?(\/status|\/audio)?$/;
 
+const trackPath = /^\/api\/v1\/tracks(?:\/([^/]+))?(?:\/lessons\/([^/]+))?$/;
+
+const trackIds: Track[] = ["arabe", "islam"];
+
+const playback = (audio: Audio | null) =>
+	audio
+		? { url: `/api/v1/audio/${audio.id}`, durationMs: audio.durationMs }
+		: null;
+
 const author = (user: User | null) =>
 	user ? { id: user.id, username: user.username } : null;
 
@@ -247,6 +256,85 @@ export class FakeContent {
 		return row.audio && method === "PUT"
 			? json(200, row.audio)
 			: new Response(null, { status: 204 });
+	}
+
+	/** Whether learners see the row: it and every row above it are validated. */
+	private visible(row: Row | undefined): boolean {
+		if (row?.status !== "validated") {
+			return false;
+		}
+		return row.parentId === null || this.visible(this.row(row.parentId));
+	}
+
+	private children(parentId: string, kind: Kind): Row[] {
+		return this.rows
+			.filter(
+				(row) =>
+					row.kind === kind && row.parentId === parentId && this.visible(row),
+			)
+			.sort((a, b) => a.position - b.position);
+	}
+
+	private outline(track: Track) {
+		return {
+			id: track,
+			units: this.rows
+				.filter(
+					(row) =>
+						row.kind === "unit" && row.track === track && this.visible(row),
+				)
+				.sort((a, b) => a.position - b.position)
+				.map((unit) => ({
+					id: unit.id,
+					title: unit.title,
+					lessons: this.children(unit.id, "lesson").map((lesson) => ({
+						id: lesson.id,
+						title: lesson.title,
+						cardCount: this.children(lesson.id, "card").length,
+					})),
+				})),
+		};
+	}
+
+	/** The learners' endpoints under `/api/v1/tracks`. */
+	study(url: URL): Response {
+		const match = url.pathname.match(trackPath);
+		if (!match) {
+			return problem(404, "not-found");
+		}
+		const [, track, lessonId] = match;
+		if (track === undefined) {
+			return json(200, { items: trackIds.map((id) => this.outline(id)) });
+		}
+		if (!trackIds.includes(track as Track)) {
+			return problem(404, "not-found");
+		}
+		if (lessonId === undefined) {
+			return json(200, this.outline(track as Track));
+		}
+		const lesson = this.row(decodeURIComponent(lessonId));
+		const unit = lesson?.parentId ? this.row(lesson.parentId) : undefined;
+		if (!lesson || !unit || lesson.kind !== "lesson" || unit.track !== track) {
+			return problem(404, "not-found");
+		}
+		if (!this.visible(lesson)) {
+			return problem(404, "not-found");
+		}
+		return json(200, {
+			id: lesson.id,
+			track,
+			unit: { id: unit.id, title: unit.title },
+			title: lesson.title,
+			audio: playback(lesson.audio),
+			cards: this.children(lesson.id, "card").map((card) => ({
+				id: card.id,
+				arabic: card.arabic,
+				transliteration: card.transliteration,
+				meaningFr: card.meaningFr,
+				variety: card.variety,
+				audio: playback(card.audio),
+			})),
+		});
 	}
 
 	handle(method: string, url: URL, body: unknown, actor: User): Response {
