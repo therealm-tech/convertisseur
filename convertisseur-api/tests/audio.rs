@@ -71,6 +71,7 @@ struct Fixture {
     server: Server,
     store: MemoryStore,
     admin: String,
+    unit: String,
     card: String,
     lesson: String,
 }
@@ -113,6 +114,7 @@ impl Fixture {
             server,
             store,
             admin,
+            unit: format!("/api/v1/units/{}", unit.body["id"].as_str().unwrap()),
             card: format!("/api/v1/cards/{}", card.body["id"].as_str().unwrap()),
             lesson: format!("/api/v1/lessons/{}", lesson.body["id"].as_str().unwrap()),
         }
@@ -371,7 +373,7 @@ async fn plays_the_whole_file_or_a_range(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn learners_play_validated_recordings_only(pool: PgPool) {
+async fn learners_play_only_recordings_of_visible_content(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
     let audio = fixture.upload(&fixture.card, &wav()).await.body;
     let id = audio["id"].as_str().unwrap();
@@ -386,6 +388,11 @@ async fn learners_play_validated_recordings_only(pool: PgPool) {
     assert_eq!(staff.status, StatusCode::OK);
 
     fixture.validate(&fixture.card).await;
+    fixture.validate(&fixture.lesson).await;
+    let unit_to_review = fixture.play(Some(&learner), id, None).await;
+    unit_to_review.assert_problem(StatusCode::NOT_FOUND, "not-found");
+
+    fixture.validate(&fixture.unit).await;
     let shown = fixture.play(Some(&learner), id, None).await;
     assert_eq!(shown.status, StatusCode::OK);
 

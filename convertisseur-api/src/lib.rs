@@ -16,6 +16,7 @@ mod rate_limit;
 mod router;
 mod sessions;
 pub mod storage;
+mod tracks;
 mod users;
 mod webapp;
 

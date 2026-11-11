@@ -2,6 +2,7 @@ mod content;
 mod extract;
 mod passwords;
 mod sessions;
+mod tracks;
 mod users;
 
 use std::sync::Arc;
@@ -51,6 +52,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(sessions::routes())
         .merge(users::routes())
         .merge(passwords::routes())
+        .merge(tracks::routes())
         .merge(content::routes())
         .finish_api_with(&mut api, |doc| {
             doc.tag(Tag {
@@ -61,6 +63,13 @@ pub fn routes(state: AppState) -> Router {
             .tag(Tag {
                 name: "Users".to_owned(),
                 description: Some("Accounts, their passwords and their roles".to_owned()),
+                ..Tag::default()
+            })
+            .tag(Tag {
+                name: tracks::TAG.to_owned(),
+                description: Some(
+                    "What learners study: the validated units, lessons and cards".to_owned(),
+                ),
                 ..Tag::default()
             })
             .tag(Tag {

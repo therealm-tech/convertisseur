@@ -26,7 +26,7 @@ use crate::{
         extract::{Admin, ApiMultipart, ApiPath, Authenticated, RequireRole},
     },
     audio::{self, Format},
-    content::{self, Status, Upload},
+    content::{self, Upload},
     db::{self, content::WithAudio},
     error::ApiError,
     router::AppState,
@@ -252,8 +252,8 @@ async fn play(
     let playable = db::audio::find_playable(&state.pool, path.audio_id)
         .await?
         .ok_or(ApiError::NotFound)?;
-    if user.role < Role::Admin && playable.status != Some(Status::Validated) {
-        tracing::debug!(user_id = %user.id, audio_id = %path.audio_id, "recording not validated");
+    if user.role < Role::Admin && !playable.visible {
+        tracing::debug!(user_id = %user.id, audio_id = %path.audio_id, "recording not visible");
         return Err(ApiError::NotFound);
     }
     let size = u64::try_from(playable.size_bytes).unwrap_or_default();
@@ -304,7 +304,8 @@ fn play_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .description(
             "Streams the file with its own `Content-Type`. Honours a single `Range: bytes=…`, \
              which `<audio>` seeking needs, with a 206. Any logged-in account plays the \
-             recordings of validated content; an `admin` plays them all. Others answer 404.",
+             recording of a card or lesson learners see: validated, with its lesson and unit. \
+             An `admin` plays them all. Others answer 404.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, (), _>(|r| r.description("The whole file, `audio/*`"))
