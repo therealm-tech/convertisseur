@@ -24,14 +24,14 @@ with the transliteration, the meaning and the recording on demand, and the
 initial, medial and final forms of each letter of the alphabet. Only what
 an admin has validated, together with everything above it, is shown. In the
 admin area, admins write and review the
-learning content at `/admin/contenu`: units, lessons and cards, with audio
+learning content at `/admin/content`: units, lessons and cards, with audio
 uploaded or recorded from the device's microphone, each "to review" until an
 admin validates it, and leave a review note on what needs a correction. The
 starter content is written in the repository and kept in step by the server;
 the admin area shows it read-only, apart from its review, its recording and
-its note. At `/admin/relecture`, a reviewer goes through the lessons left to
+its note. At `/admin/review`, a reviewer goes through the lessons left to
 review, card by card on a phone, and records the cards without audio. At
-`/admin/utilisateurs`, they search
+`/admin/users`, they search
 accounts, reset forgotten passwords and delete accounts, and the super admin
 also promotes users to admin and back.
 

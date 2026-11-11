@@ -119,7 +119,7 @@ export function ReviewQueuePage() {
 			{listing.state === "ready" && listing.lessons.length === 0 ? (
 				<div className="review-empty">
 					<p>{emptyMessages[filter]}</p>
-					<Link to="/admin/contenu" className="button-outline">
+					<Link to="/admin/content" className="button-outline">
 						Voir le contenu
 					</Link>
 				</div>
@@ -151,7 +151,7 @@ function UnitSection({ group }: { group: UnitGroup }) {
 				{lessons.map((lesson) => (
 					<li key={lesson.id}>
 						<Link
-							to="/admin/relecture/lecons/$lessonId"
+							to="/admin/review/lessons/$lessonId"
 							params={{ lessonId: lesson.id }}
 							className="review-lesson"
 						>

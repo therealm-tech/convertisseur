@@ -123,7 +123,7 @@ async function load(lessonId: string) {
 /** One lesson to review: card by card on a phone, as a list on a desktop. */
 export function ReviewLessonPage() {
 	const { lessonId } = useParams({
-		from: "/_app/admin/relecture/lecons/$lessonId",
+		from: "/_app/admin/review/lessons/$lessonId",
 	});
 	const desktop = useMediaQuery(DESKTOP_QUERY);
 	const { refresh } = useReviewTotals();
@@ -208,7 +208,7 @@ export function ReviewLessonPage() {
 						? "Cette leçon n'existe plus."
 						: "La leçon n'a pas pu être chargée. Réessaie dans un moment."}
 				</p>
-				<Link to="/admin/relecture" className="button-outline review-back-link">
+				<Link to="/admin/review" className="button-outline review-back-link">
 					Toutes les leçons
 				</Link>
 			</div>

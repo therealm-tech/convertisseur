@@ -95,7 +95,7 @@ describe("letter forms", () => {
 			...validated,
 		});
 
-		await renderAt("/parcours/arabe/lecons/l-letters");
+		await renderAt("/tracks/arabe/lessons/l-letters");
 
 		await screen.findByRole("heading", { name: "Les lettres" });
 		expect(shapes()[2]).toEqual(["Milieu", "ـبـ"]);
@@ -122,7 +122,7 @@ describe("letter forms", () => {
 		});
 		api.logIn("nour");
 		const user = userEvent.setup();
-		await renderAt("/admin/contenu");
+		await renderAt("/admin/content");
 		await screen.findByRole("table");
 
 		await user.click(screen.getByRole("link", { name: "د · dāl" }));

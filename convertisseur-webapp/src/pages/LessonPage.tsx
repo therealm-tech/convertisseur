@@ -88,7 +88,7 @@ function Finished({
 				Revoir les cartes
 			</button>
 			<Link
-				to="/parcours/$track"
+				to="/tracks/$track"
 				params={{ track: lesson.track }}
 				className="button-primary"
 			>
@@ -100,7 +100,7 @@ function Finished({
 
 export function LessonPage() {
 	const lesson = useLoaderData({
-		from: "/_app/parcours/$track/lecons/$lessonId",
+		from: "/_app/tracks/$track/lessons/$lessonId",
 	});
 	const [index, setIndex] = useState(0);
 	const [revealed, setRevealed] = useState(false);
@@ -136,7 +136,7 @@ export function LessonPage() {
 		<main className="lesson">
 			<header className="lesson-header">
 				<Link
-					to="/parcours/$track"
+					to="/tracks/$track"
 					params={{ track: lesson.track }}
 					className="icon-link"
 					aria-label="Quitter la leçon"
@@ -184,7 +184,7 @@ export function LessonPage() {
 						relues et validées.
 					</p>
 					<Link
-						to="/parcours/$track"
+						to="/tracks/$track"
 						params={{ track: lesson.track }}
 						className="button-primary"
 					>

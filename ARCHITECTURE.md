@@ -61,29 +61,29 @@ service worker that precaches the build, and the PWA icons.
 Every navigation first asks the API who is logged in
 (`GET /api/v1/sessions/current`): the session cookie is `HttpOnly`, so the
 server is the only one that knows, and the webapp keeps no copy of the session
-of its own. A visitor without a session lands on `/connexion`, the login and
+of its own. A visitor without a session lands on `/login`, the login and
 registration screen; a logged-in user is sent from there to `/`. An account
-whose password was reset by an admin can reach `/mot-de-passe` only, and the
+whose password was reset by an admin can reach `/password` only, and the
 admin area under `/admin` is open to `admin` and `super_admin` alone. These
 guards spare the user a page that would only fail: the server enforces the
-same rules on every request. The admin area opens on `/admin/contenu`, where
-staff write and review the learning content, beside `/admin/relecture`, the
+same rules on every request. The admin area opens on `/admin/content`, where
+staff write and review the learning content, beside `/admin/review`, the
 review queue (see [The review queue](#the-review-queue)), and
-`/admin/utilisateurs`.
+`/admin/users`.
 
-`/admin/contenu` lists the units, lessons and cards, and keeps its filters in
-its query string (`statut`, `parcours`, `remarque`, `q`, `page`), each change
+`/admin/content` lists the units, lessons and cards, and keeps its filters in
+its query string (`status`, `track`, `note`, `q`, `page`), each change
 replacing the history entry rather than adding one. Each item is edited on a
-page of its own, `/admin/contenu/{unites|lecons|cartes}/{id}`, and written at
-`/admin/contenu/{unites|lecons|cartes}/nouvelle`, which leads to the new
+page of its own, `/admin/content/{units|lessons|cards}/{id}`, and written at
+`/admin/content/{units|lessons|cards}/new`, which leads to the new
 item's page once it is created. A page opened from the list carries the list's
 filters in its history state, so that its way back, and deleting the item,
 return to the very entry it came from, filters and scroll included; opened
 from a link, it leads to the list unfiltered.
 
-Learners start on `/`, which shows both tracks; `/parcours/{track}` draws a
+Learners start on `/`, which shows both tracks; `/tracks/{track}` draws a
 track's units and their lessons as a path, and
-`/parcours/{track}/lecons/{lessonId}` shows a lesson's cards one at a time,
+`/tracks/{track}/lessons/{lessonId}` shows a lesson's cards one at a time,
 with the transliteration and the meaning hidden until asked for, and a letter's
 shapes in a row under it (see [The forms of a letter](#the-forms-of-a-letter)). These pages
 load their data in the router's loaders, so a lesson the API does not serve
@@ -255,8 +255,8 @@ tatweel, so `شكرا` finds `شُكْرًا`.
 
 ## The review queue
 
-`/admin/relecture` lists the lessons a reviewer has something to do in, by
-unit; `/admin/relecture/lecons/{lessonId}` reviews one of them: on a screen
+`/admin/review` lists the lessons a reviewer has something to do in, by
+unit; `/admin/review/lessons/{lessonId}` reviews one of them: on a screen
 under 1024px wide, card by card and full screen, without the admin bar, whose
 place the card needs; above, every card on one page, beside the admin
 sidebar. The endpoints,
@@ -595,7 +595,7 @@ sequenceDiagram
   the password change, the current session and logout takes the
   `Authenticated` extractor, which answers a `403` `password-change-required`
   problem; the session payload carries `mustChangePassword`, and the webapp
-  keeps the account on `/mot-de-passe`.
+  keeps the account on `/password`.
 - **The temporary password works until it is replaced.** It is the account's
   password in every respect but the flag, so a login with it can be repeated
   until the change succeeds; after that it matches nothing.

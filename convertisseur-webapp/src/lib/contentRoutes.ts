@@ -2,14 +2,14 @@ import { notFound } from "@tanstack/react-router";
 import { z } from "zod";
 import { type Kind, type Status, TrackSchema } from "@/lib/content";
 
-const StatusParamSchema = z.enum(["a-relire", "valide"]);
+const StatusParamSchema = z.enum(["to-review", "validated"]);
 type StatusParam = z.infer<typeof StatusParamSchema>;
 
 /** The filters of the content list, kept in its URL. */
 export const ContentSearchSchema = z.object({
-	statut: StatusParamSchema.optional().catch(undefined),
-	parcours: TrackSchema.optional().catch(undefined),
-	remarque: z.literal(true).optional().catch(undefined),
+	status: StatusParamSchema.optional().catch(undefined),
+	track: TrackSchema.optional().catch(undefined),
+	note: z.literal(true).optional().catch(undefined),
 	q: z.string().min(1).optional().catch(undefined),
 	page: z.number().int().min(2).optional().catch(undefined),
 });
@@ -22,13 +22,13 @@ export function parseContentSearch(
 }
 
 const statusOfParam: Record<StatusParam, Status> = {
-	"a-relire": "to_review",
-	valide: "validated",
+	"to-review": "to_review",
+	validated: "validated",
 };
 
 const paramOfStatus: Record<Status, StatusParam> = {
-	to_review: "a-relire",
-	validated: "valide",
+	to_review: "to-review",
+	validated: "validated",
 };
 
 export function statusOf(param: StatusParam | undefined): Status | undefined {
@@ -39,20 +39,20 @@ export function statusParam(status: Status | undefined) {
 	return status && paramOfStatus[status];
 }
 
-const SectionSchema = z.enum(["unites", "lecons", "cartes"]);
+const SectionSchema = z.enum(["units", "lessons", "cards"]);
 export type Section = z.infer<typeof SectionSchema>;
 
 const kindOfSection: Record<Section, Kind> = {
-	unites: "unit",
-	lecons: "lesson",
-	cartes: "card",
+	units: "unit",
+	lessons: "lesson",
+	cards: "card",
 };
 
-/** The path segment under `/admin/contenu` of each kind's pages. */
+/** The path segment under `/admin/content` of each kind's pages. */
 export const sectionOf: Record<Kind, Section> = {
-	unit: "unites",
-	lesson: "lecons",
-	card: "cartes",
+	unit: "units",
+	lesson: "lessons",
+	card: "cards",
 };
 
 export function parseSection(segment: string): Kind {

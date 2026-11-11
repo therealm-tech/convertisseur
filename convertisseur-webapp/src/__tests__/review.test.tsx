@@ -139,7 +139,7 @@ function calls(api: FakeApi, method: string, path: string) {
 
 describe("review queue", () => {
 	it("lists the lessons left to review by unit, with their counts", async () => {
-		await open("/admin/relecture");
+		await open("/admin/review");
 
 		await screen.findByRole("heading", { name: "Relecture", level: 1 });
 		expect(
@@ -155,17 +155,14 @@ describe("review queue", () => {
 			"Saluer1/3 validées · 1 à relire · 1 signalée · 2 sans audio",
 			"Politesse1/1 validées",
 		]);
-		expect(links[0]).toHaveAttribute(
-			"href",
-			"/admin/relecture/lecons/l-saluer",
-		);
+		expect(links[0]).toHaveAttribute("href", "/admin/review/lessons/l-saluer");
 		expect(
 			screen.queryByRole("region", { name: "L'alphabet" }),
 		).not.toBeInTheDocument();
 	});
 
 	it("filters the lessons with cards without audio, even validated", async () => {
-		const { user } = await open("/admin/relecture");
+		const { user } = await open("/admin/review");
 		await screen.findByRole("region", { name: "Salutations" });
 
 		await user.click(screen.getByRole("button", { name: "Sans audio" }));
@@ -185,7 +182,7 @@ describe("review queue", () => {
 	});
 
 	it("says when nothing is left to review", async () => {
-		const { api } = await open("/admin/relecture");
+		const { api } = await open("/admin/review");
 		await screen.findByRole("region", { name: "Salutations" });
 		for (const row of api.content.rows) {
 			row.status = "validated";
@@ -202,23 +199,23 @@ describe("review queue", () => {
 	});
 
 	it("comes first in the admin navigation, with the count to review", async () => {
-		await open("/admin/contenu");
+		await open("/admin/content");
 
 		const nav = screen.getByRole("navigation", { name: "Administration" });
 		const first = within(nav).getAllByRole("link")[0];
 		await waitFor(() =>
 			expect(first).toHaveAccessibleName("Relecture, 4 à relire"),
 		);
-		expect(first).toHaveAttribute("href", "/admin/relecture");
+		expect(first).toHaveAttribute("href", "/admin/review");
 		expect(
 			within(nav).getByRole("link", { name: "Utilisateurs et rôles" }),
-		).toHaveAttribute("href", "/admin/utilisateurs");
+		).toHaveAttribute("href", "/admin/users");
 	});
 });
 
 describe("reviewing on a phone", () => {
 	it("takes the whole screen, and its close button leads back to the queue", async () => {
-		const { user } = await open("/admin/relecture/lecons/l-saluer");
+		const { user } = await open("/admin/review/lessons/l-saluer");
 		await screen.findByRole("article", { name: "Carte 3" });
 
 		expect(
@@ -239,7 +236,7 @@ describe("reviewing on a phone", () => {
 	});
 
 	it("opens on the first card to review, with its audio to record", async () => {
-		await open("/admin/relecture/lecons/l-saluer");
+		await open("/admin/review/lessons/l-saluer");
 
 		const card = await screen.findByRole("article", { name: "Carte 3" });
 		expect(screen.getByText("3/3")).toHaveTextContent("Carte 3/3");
@@ -255,7 +252,7 @@ describe("reviewing on a phone", () => {
 	});
 
 	it("validates a card, then shows the end of the lesson", async () => {
-		const { api, user } = await open("/admin/relecture/lecons/l-saluer");
+		const { api, user } = await open("/admin/review/lessons/l-saluer");
 		await screen.findByRole("article", { name: "Carte 3" });
 
 		await user.click(screen.getByRole("button", { name: "Valider" }));
@@ -275,7 +272,7 @@ describe("reviewing on a phone", () => {
 	});
 
 	it("goes back, and passes over a validated card", async () => {
-		const { api, user } = await open("/admin/relecture/lecons/l-saluer");
+		const { api, user } = await open("/admin/review/lessons/l-saluer");
 		await screen.findByRole("article", { name: "Carte 3" });
 
 		await user.click(screen.getByRole("button", { name: "Carte précédente" }));
@@ -293,7 +290,7 @@ describe("reviewing on a phone", () => {
 	});
 
 	it("flags a card in a panel that holds the focus, then moves on", async () => {
-		const { api, user } = await open("/admin/relecture/lecons/l-saluer");
+		const { api, user } = await open("/admin/review/lessons/l-saluer");
 		await screen.findByRole("article", { name: "Carte 3" });
 		const flag = screen.getByRole("button", { name: "Signaler" });
 
@@ -328,7 +325,7 @@ describe("reviewing on a phone", () => {
 	});
 
 	it("validates a flagged card and clears its note", async () => {
-		const { api, user } = await open("/admin/relecture/lecons/l-saluer");
+		const { api, user } = await open("/admin/review/lessons/l-saluer");
 		await screen.findByRole("article", { name: "Carte 3" });
 		await user.click(screen.getByRole("button", { name: "Carte précédente" }));
 		const card = await screen.findByRole("article", { name: "Carte 2" });
@@ -343,7 +340,7 @@ describe("reviewing on a phone", () => {
 	});
 
 	it("validates the lesson and its unit from the end screen", async () => {
-		const { api, user } = await open("/admin/relecture/lecons/l-saluer");
+		const { api, user } = await open("/admin/review/lessons/l-saluer");
 		await screen.findByRole("article", { name: "Carte 3" });
 		await user.click(screen.getByRole("button", { name: "Valider" }));
 		await screen.findByRole("heading", { name: "Leçon relue" });
@@ -373,11 +370,11 @@ describe("reviewing on a phone", () => {
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("link", { name: "Toutes les leçons" }),
-		).toHaveAttribute("href", "/admin/relecture");
+		).toHaveAttribute("href", "/admin/review");
 	});
 
 	it("says when a lesson has no card", async () => {
-		const { api } = await open("/admin/relecture");
+		const { api } = await open("/admin/review");
 		api.content.seed("lesson", {
 			id: "l-vide",
 			parentId: "u-salutations",
@@ -403,7 +400,7 @@ describe("reviewing on a phone", () => {
 
 describe("reviewing on a desktop", () => {
 	it("keeps the admin navigation", async () => {
-		await open("/admin/relecture/lecons/l-saluer", true);
+		await open("/admin/review/lessons/l-saluer", true);
 		await screen.findByRole("region", { name: "Cartes de la leçon" });
 
 		expect(
@@ -412,7 +409,7 @@ describe("reviewing on a desktop", () => {
 	});
 
 	it("lists every card with its state, its audio and its note", async () => {
-		await open("/admin/relecture/lecons/l-saluer", true);
+		await open("/admin/review/lessons/l-saluer", true);
 
 		const cards = await screen.findByRole("region", {
 			name: "Cartes de la leçon",
@@ -443,7 +440,7 @@ describe("reviewing on a desktop", () => {
 	});
 
 	it("validates the cards left, the flagged one aside", async () => {
-		const { api, user } = await open("/admin/relecture/lecons/l-saluer", true);
+		const { api, user } = await open("/admin/review/lessons/l-saluer", true);
 		await screen.findByRole("region", { name: "Cartes de la leçon" });
 
 		await user.click(
@@ -463,7 +460,7 @@ describe("reviewing on a desktop", () => {
 	});
 
 	it("flags a card inline and gives the focus back", async () => {
-		const { api, user } = await open("/admin/relecture/lecons/l-saluer", true);
+		const { api, user } = await open("/admin/review/lessons/l-saluer", true);
 		const card = await screen.findByRole("article", { name: "Carte 3" });
 		const flag = within(card).getByRole("button", {
 			name: "Signaler la carte 3",
@@ -484,7 +481,7 @@ describe("reviewing on a desktop", () => {
 	});
 
 	it("shows the unit's lessons and leads to the next lesson to review", async () => {
-		await open("/admin/relecture/lecons/l-saluer", true);
+		await open("/admin/review/lessons/l-saluer", true);
 		const side = await screen.findByRole("region", {
 			name: "Leçons de l'unité",
 		});
@@ -503,7 +500,7 @@ describe("reviewing on a desktop", () => {
 		).toBeDisabled();
 		expect(
 			screen.getByRole("link", { name: "Leçon suivante" }),
-		).toHaveAttribute("href", "/admin/relecture/lecons/l-politesse");
+		).toHaveAttribute("href", "/admin/review/lessons/l-politesse");
 		expect(
 			screen.getByRole("region", { name: "Visible des apprenants ?" }),
 		).toHaveTextContent("Audio de la leçon (facultatif)");
@@ -512,7 +509,7 @@ describe("reviewing on a desktop", () => {
 
 describe("content page", () => {
 	it("leads from a lesson to its review", async () => {
-		const { user } = await open("/admin/contenu");
+		const { user } = await open("/admin/content");
 		await screen.findByRole("table");
 
 		await user.click(screen.getByRole("link", { name: "Saluer" }));

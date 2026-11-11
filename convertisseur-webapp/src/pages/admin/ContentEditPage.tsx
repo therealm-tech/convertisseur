@@ -176,7 +176,7 @@ function describeFailure(failure: unknown, kind: Kind): string {
 
 /** One unit, lesson or card to review and edit. */
 export function ContentEditPage() {
-	const from = "/_app/admin/contenu/$section/$itemId";
+	const from = "/_app/admin/content/$section/$itemId";
 	const { kind } = useRouteContext({ from });
 	const { itemId } = useParams({ from });
 	return <ContentEditor key={itemId} kind={kind} id={itemId} />;
@@ -185,7 +185,7 @@ export function ContentEditPage() {
 /** A new unit, lesson or card to write. */
 export function ContentCreatePage() {
 	const { kind } = useRouteContext({
-		from: "/_app/admin/contenu/$section/nouvelle",
+		from: "/_app/admin/content/$section/new",
 	});
 	return <ContentEditor key={kind} kind={kind} id={undefined} />;
 }
@@ -205,7 +205,7 @@ function useBackToList() {
 			if (filters) {
 				router.history.back();
 			} else {
-				void navigate({ to: "/admin/contenu", replace: true });
+				void navigate({ to: "/admin/content", replace: true });
 			}
 		},
 	};
@@ -215,7 +215,7 @@ function BackToList() {
 	const { filters, back } = useBackToList();
 	return (
 		<Link
-			to="/admin/contenu"
+			to="/admin/content"
 			search={filters ?? {}}
 			className="button-outline content-back-link"
 			onClick={(event) => {
@@ -340,7 +340,7 @@ function ContentEditor({ kind: pageKind, id }: ContentEditorProps) {
 			} else {
 				const created = await create(draft);
 				await navigate({
-					to: "/admin/contenu/$section/$itemId",
+					to: "/admin/content/$section/$itemId",
 					params: { section: sectionOf[kind], itemId: created.item.id },
 					replace: true,
 					state: true,
@@ -446,7 +446,7 @@ function ContentEditor({ kind: pageKind, id }: ContentEditorProps) {
 				</h1>
 				{loaded?.kind === "lesson" ? (
 					<Link
-						to="/admin/relecture/lecons/$lessonId"
+						to="/admin/review/lessons/$lessonId"
 						params={{ lessonId: loaded.item.id }}
 						className="button-outline content-review-link"
 					>

@@ -31,7 +31,7 @@ function UnitPath({
 					{unit.lessons.map((lesson, index) => (
 						<li key={lesson.id} className="path-step">
 							<Link
-								to="/parcours/$track/lecons/$lessonId"
+								to="/tracks/$track/lessons/$lessonId"
 								params={{ track, lessonId: lesson.id }}
 								className="path-link"
 							>
@@ -53,7 +53,7 @@ function UnitPath({
 }
 
 export function TrackPage() {
-	const track = useLoaderData({ from: "/_app/parcours/$track" });
+	const track = useLoaderData({ from: "/_app/tracks/$track" });
 	return (
 		<main className="track">
 			<header className="track-header">
