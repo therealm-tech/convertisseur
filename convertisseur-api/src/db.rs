@@ -4,4 +4,5 @@
 pub mod audio;
 pub mod content;
 pub mod sessions;
+pub mod tracks;
 pub mod users;

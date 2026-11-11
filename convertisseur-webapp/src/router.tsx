@@ -8,6 +8,12 @@ import {
 } from "@tanstack/react-router";
 import { fetchCurrentSession } from "@/lib/api";
 import { isStaff } from "@/lib/roles";
+import {
+	fetchLesson,
+	fetchTrack,
+	fetchTracks,
+	parseTrackId,
+} from "@/lib/tracks";
 import { AuthPage } from "@/pages/AuthPage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
 import { ContentPage } from "@/pages/admin/ContentPage";
@@ -15,7 +21,9 @@ import { UsersPage } from "@/pages/admin/UsersPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { ErrorPage } from "@/pages/ErrorPage";
 import { HomePage } from "@/pages/HomePage";
+import { LessonNotFound, LessonPage } from "@/pages/LessonPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { TrackPage } from "@/pages/TrackPage";
 
 // Every navigation asks the API who is logged in: the session cookie is
 // HttpOnly, so the server is the only one that knows.
@@ -46,7 +54,24 @@ const appRoute = createRoute({
 const homeRoute = createRoute({
 	getParentRoute: () => appRoute,
 	path: "/",
+	loader: fetchTracks,
 	component: HomePage,
+});
+
+const trackRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/parcours/$track",
+	loader: ({ params }) => fetchTrack(parseTrackId(params.track)),
+	component: TrackPage,
+});
+
+const lessonRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/parcours/$track/lecons/$lessonId",
+	loader: ({ params }) =>
+		fetchLesson(parseTrackId(params.track), params.lessonId),
+	component: LessonPage,
+	notFoundComponent: LessonNotFound,
 });
 
 const adminRoute = createRoute({
@@ -106,6 +131,8 @@ const authRoute = createRoute({
 const routeTree = rootRoute.addChildren([
 	appRoute.addChildren([
 		homeRoute,
+		trackRoute,
+		lessonRoute,
 		adminRoute.addChildren([
 			adminIndexRoute,
 			adminContentRoute,

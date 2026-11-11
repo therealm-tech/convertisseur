@@ -5,6 +5,16 @@ export const trackLabels: Record<Track, string> = {
 	islam: "Islam",
 };
 
+export const trackTaglines: Record<Track, string> = {
+	arabe: "Arabe classique et darija algérienne, pas à pas",
+	islam: "Les bases de l'islam sunnite, selon le rite malikite",
+};
+
+/** "1 carte", "3 cartes": French takes the singular for 0 and 1. */
+export function countOf(count: number, singular: string, plural: string) {
+	return `${count} ${count < 2 ? singular : plural}`;
+}
+
 export const kindLabels: Record<Kind, string> = {
 	unit: "Unité",
 	lesson: "Leçon",

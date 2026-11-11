@@ -143,14 +143,14 @@ impl AudioColumns {
     }
 }
 
-/// A recording as playback needs it, with the review status of the card or
-/// lesson holding it, `None` when nothing holds it.
+/// A recording as playback needs it, and whether learners see the card or
+/// lesson holding it: validated, with every row above it.
 #[derive(sqlx::FromRow)]
 pub struct Playable {
     pub object_key: String,
     pub content_type: String,
     pub size_bytes: i64,
-    pub status: Option<Status>,
+    pub visible: bool,
 }
 
 /// A recording to attach, already sniffed.
