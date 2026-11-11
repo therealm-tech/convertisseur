@@ -170,27 +170,29 @@ export function UsersPage() {
 						setPageNumber(1);
 					}}
 				/>
-				<label htmlFor="users-role" className="admin-filter-label">
-					Rôle
-				</label>
-				<select
-					id="users-role"
-					className="admin-select"
-					value={role}
-					onChange={(event) => {
-						const chosen = roleOptions.find(
-							(option) => option.value === event.target.value,
-						);
-						setRoleFilter(chosen?.value ?? "");
-						setPageNumber(1);
-					}}
-				>
-					{roleOptions.map((option) => (
-						<option key={option.value} value={option.value}>
-							{option.label}
-						</option>
-					))}
-				</select>
+				<div className="admin-filter">
+					<label htmlFor="users-role" className="admin-filter-label">
+						Rôle
+					</label>
+					<select
+						id="users-role"
+						className="admin-select"
+						value={role}
+						onChange={(event) => {
+							const chosen = roleOptions.find(
+								(option) => option.value === event.target.value,
+							);
+							setRoleFilter(chosen?.value ?? "");
+							setPageNumber(1);
+						}}
+					>
+						{roleOptions.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</select>
+				</div>
 			</div>
 
 			{toast ? (

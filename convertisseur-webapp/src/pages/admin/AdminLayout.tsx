@@ -57,7 +57,7 @@ function BackIcon() {
 	);
 }
 
-/** The admin area's frame: the sidebar, and the page beside it. */
+/** The admin area's frame: a top bar on a phone, a sidebar on a wide screen. */
 export function AdminLayout() {
 	const { user } = useRouteContext({ from: "/_app/admin" });
 	return (
@@ -79,15 +79,11 @@ export function AdminLayout() {
 						<UsersIcon />
 						Utilisateurs et rôles
 					</Link>
-					<Link
-						to="/"
-						className="admin-nav-link"
-						activeOptions={{ exact: true }}
-					>
-						<BackIcon />
-						Retour à l'app
-					</Link>
 				</nav>
+				<Link to="/" className="admin-back" activeOptions={{ exact: true }}>
+					<BackIcon />
+					Retour à l'app
+				</Link>
 				<div className="admin-whoami">
 					<span className="admin-whoami-label">Connecté en tant que</span>
 					<span className="admin-whoami-name">

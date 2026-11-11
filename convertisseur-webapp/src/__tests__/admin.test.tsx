@@ -77,6 +77,30 @@ describe("admin area guard", () => {
 		expect(router.state.location.pathname).toBe("/admin/utilisateurs");
 	});
 
+	it("says who is logged in and leads back to the app", async () => {
+		const api = installFakeApi();
+		api.logIn("chef");
+		const router = await renderAt("/admin/contenu");
+		await screen.findByRole("heading", { name: "Contenu" });
+
+		expect(screen.getByText("chef · super admin")).toBeVisible();
+		const sections = screen.getByRole("navigation", {
+			name: "Administration",
+		});
+		expect(
+			within(sections)
+				.getAllByRole("link")
+				.map((link) => link.textContent),
+		).toEqual(["Contenu", "Utilisateurs et rôles"]);
+
+		await userEvent.click(screen.getByRole("link", { name: "Retour à l'app" }));
+
+		expect(
+			await screen.findByRole("heading", { name: "Salam, chef" }),
+		).toBeInTheDocument();
+		expect(router.state.location.pathname).toBe("/");
+	});
+
 	it("sends /admin to the content page", async () => {
 		const api = installFakeApi();
 		api.logIn("nour");

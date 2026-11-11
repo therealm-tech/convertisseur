@@ -25,6 +25,7 @@
 	--color-on-sidebar: #ffffff;
 	--color-on-sidebar-muted: #d6eadf;
 	--color-backdrop: rgba(29, 42, 35, 0.5);
+	--color-scroll-shadow: rgba(29, 42, 35, 0.2);
 	--color-error: #b3261e;
 	--color-on-error: #ffffff;
 	--color-error-text: #b3261e;
@@ -63,6 +64,7 @@
 		--color-sidebar-raised: #0f2619;
 		--color-on-sidebar-muted: #b5c2b9;
 		--color-backdrop: rgba(0, 0, 0, 0.6);
+		--color-scroll-shadow: rgba(0, 0, 0, 0.7);
 		--color-error-text: #f2b8b5;
 		--shadow-logo: 0 12px 30px -16px rgba(0, 0, 0, 0.8);
 		--shadow-card: 0 16px 40px -28px rgba(0, 0, 0, 0.8);
@@ -354,32 +356,45 @@ button.button-primary {
 	flex-direction: column;
 }
 
+/* On a phone, the sidebar is a top bar: the brand and the way back on one
+   row, the sections as tabs below, and who is logged in on a slim line. */
 .admin-sidebar {
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-	padding: 16px;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"brand back"
+		"nav nav"
+		"whoami whoami";
+	align-items: center;
+	gap: 10px 12px;
+	padding: 12px 16px;
 	background: var(--color-sidebar);
 	color: var(--color-on-sidebar);
 }
 
 .admin-brand {
+	grid-area: brand;
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	min-width: 0;
 }
 
 .admin-brand img {
-	border-radius: var(--radius-small);
+	width: 32px;
+	height: 32px;
+	border-radius: 10px;
 }
 
 .admin-brand-text {
 	display: flex;
 	flex-direction: column;
+	min-width: 0;
+	line-height: 1.2;
 }
 
 .admin-brand-name {
-	font-size: 18px;
+	font-size: 16px;
 	font-weight: 900;
 }
 
@@ -391,22 +406,38 @@ button.button-primary {
 }
 
 .admin-nav {
+	grid-area: nav;
 	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
+	gap: 4px;
+	padding: 4px;
+	border-radius: 14px;
+	background: var(--color-sidebar-raised);
+}
+
+.admin-nav-link,
+.admin-back {
+	display: flex;
+	align-items: center;
+	color: var(--color-on-sidebar);
+	font-weight: 800;
+	text-decoration: none;
 }
 
 .admin-nav-link {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	min-height: 44px;
-	padding: 0 12px;
-	border-radius: 14px;
-	color: var(--color-on-sidebar);
-	font-size: 15px;
-	font-weight: 800;
-	text-decoration: none;
+	flex: 1 1 auto;
+	justify-content: center;
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 10px;
+	border-radius: 11px;
+	font-size: 14px;
+	white-space: nowrap;
+}
+
+/* Two tab labels and their icons do not fit side by side on a 320px phone. */
+.admin-nav-link svg {
+	display: none;
+	flex: none;
 }
 
 .admin-nav-link[aria-current="page"] {
@@ -415,17 +446,34 @@ button.button-primary {
 	font-weight: 900;
 }
 
-.admin-whoami {
-	display: flex;
-	flex-direction: column;
+.admin-back {
+	grid-area: back;
 	gap: 4px;
-	padding: 12px;
-	border-radius: 16px;
-	background: var(--color-sidebar-raised);
+	min-height: 40px;
+	padding: 0 12px 0 6px;
+	border: 1.5px solid var(--color-on-sidebar-muted);
+	border-radius: 999px;
+	font-size: 14px;
+	white-space: nowrap;
+}
+
+.admin-back svg {
+	width: 18px;
+	height: 18px;
+	flex: none;
+}
+
+.admin-whoami {
+	grid-area: whoami;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 6px;
+	min-width: 0;
 }
 
 .admin-whoami-name {
-	font-size: 15px;
+	font-size: 13px;
 	font-weight: 900;
 }
 
@@ -494,6 +542,12 @@ button.button-primary {
 	font-weight: 800;
 }
 
+.admin-filter {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
 .admin-filter-label {
 	font-size: 14px;
 	font-weight: 800;
@@ -531,9 +585,30 @@ button.button-primary {
 	color: var(--color-text-muted);
 }
 
-/* On a phone, the table scrolls sideways inside its card. */
+/* On a phone, the table scrolls sideways inside its card. Phones hide the
+   scrollbar, so a shadow marks each edge with more columns beyond it: the
+   surface-coloured covers scroll with the table and hide the shadow once
+   an edge is reached. */
 .admin-table-scroll {
 	overflow-x: auto;
+	border-radius: inherit;
+	background:
+		linear-gradient(to right, var(--color-surface) 40%, transparent) left center
+		/ 40px 100% no-repeat local,
+		linear-gradient(to left, var(--color-surface) 40%, transparent) right center
+		/ 40px 100% no-repeat local,
+		radial-gradient(
+			farthest-side at 0 50%,
+			var(--color-scroll-shadow),
+			transparent
+		)
+		left center / 14px 100% no-repeat scroll,
+		radial-gradient(
+			farthest-side at 100% 50%,
+			var(--color-scroll-shadow),
+			transparent
+		)
+		right center / 14px 100% no-repeat scroll;
 }
 
 .admin-table {
@@ -758,12 +833,6 @@ button.button-primary {
 	gap: 16px;
 }
 
-.admin-header-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 10px;
-}
-
 .button-outline,
 .button-solid,
 .button-review {
@@ -805,10 +874,28 @@ button.button-primary {
 	opacity: 0.7;
 }
 
+/* Two secondary actions side by side, the primary one full width below:
+   three equal columns do not fit on a 320px phone. */
+.admin-header-actions {
+	display: grid;
+	flex: 1 1 100%;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.admin-header-actions > button {
+	padding: 0 8px;
+}
+
+.admin-header-actions > .button-solid {
+	grid-column: 1 / -1;
+}
+
 .status-filter {
 	display: flex;
+	flex: 1 1 100%;
 	flex-wrap: wrap;
-	gap: 6px;
+	gap: 4px;
 	margin: 0;
 	padding: 4px;
 	border: 0;
@@ -817,8 +904,9 @@ button.button-primary {
 }
 
 .status-filter button {
+	flex: 1 1 auto;
 	min-height: 40px;
-	padding: 0 14px;
+	padding: 0 8px;
 	border: 0;
 	border-radius: var(--radius-small);
 	background: transparent;
@@ -1135,6 +1223,53 @@ button.button-primary {
 	min-height: 46px;
 }
 
+@media (min-width: 480px) {
+	.admin-nav-link svg {
+		display: block;
+	}
+}
+
+@media (min-width: 560px) {
+	.admin-header-actions {
+		flex: none;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.admin-header-actions > button {
+		padding: 0 18px;
+	}
+
+	.admin-header-actions > .button-solid {
+		grid-column: auto;
+	}
+}
+
+@media (min-width: 640px) {
+	.status-filter {
+		flex: none;
+	}
+
+	.status-filter button {
+		padding: 0 14px;
+	}
+
+	.admin-sidebar {
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		grid-template-areas:
+			"brand whoami back"
+			"nav nav nav";
+		padding: 14px 24px;
+	}
+
+	.admin-nav {
+		justify-self: start;
+	}
+
+	.admin-nav-link {
+		padding: 0 16px;
+	}
+}
+
 @media (min-width: 768px) {
 	.dialog-backdrop {
 		align-items: center;
@@ -1155,17 +1290,64 @@ button.button-primary {
 	}
 
 	.admin-sidebar {
+		display: flex;
 		flex: 0 0 260px;
-		gap: 24px;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 6px;
 		padding: 24px 18px;
+	}
+
+	.admin-brand {
+		margin-bottom: 18px;
+	}
+
+	.admin-brand img {
+		width: 40px;
+		height: 40px;
+		border-radius: var(--radius-small);
+	}
+
+	.admin-brand-name {
+		font-size: 18px;
 	}
 
 	.admin-nav {
 		flex-direction: column;
+		gap: 6px;
+		padding: 0;
+		background: none;
+	}
+
+	.admin-nav-link,
+	.admin-back {
+		flex: none;
+		justify-content: flex-start;
+		gap: 10px;
+		min-height: 44px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 14px;
+		font-size: 15px;
+	}
+
+	.admin-back svg {
+		width: 20px;
+		height: 20px;
 	}
 
 	.admin-whoami {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 4px;
 		margin-top: auto;
+		padding: 12px;
+		border-radius: 16px;
+		background: var(--color-sidebar-raised);
+	}
+
+	.admin-whoami-name {
+		font-size: 15px;
 	}
 
 	.admin-columns {
