@@ -29,7 +29,9 @@ uploaded or recorded from the device's microphone, each "to review" until an
 admin validates it, and leave a review note on what needs a correction. The
 starter content is written in the repository and kept in step by the server;
 the admin area shows it read-only, apart from its review, its recording and
-its note. At `/admin/utilisateurs`, they search
+its note. At `/admin/relecture`, a reviewer goes through the lessons left to
+review, card by card on a phone, and records the cards without audio. At
+`/admin/utilisateurs`, they search
 accounts, reset forgotten passwords and delete accounts, and the super admin
 also promotes users to admin and back.
 

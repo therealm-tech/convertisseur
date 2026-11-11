@@ -1,3 +1,4 @@
+-- The cards among $1, in their lessons' order.
 SELECT
     cards.id,
     cards.lesson_id,
@@ -29,4 +30,5 @@ FROM cards
 INNER JOIN lessons ON cards.lesson_id = lessons.id
 INNER JOIN units ON lessons.unit_id = units.id
 LEFT JOIN audio ON cards.audio_id = audio.id
-WHERE cards.id = $1;
+WHERE cards.id = any($1)
+ORDER BY cards.position ASC;

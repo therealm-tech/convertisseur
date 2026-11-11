@@ -17,6 +17,8 @@ import {
 import { AuthPage } from "@/pages/AuthPage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
 import { ContentPage } from "@/pages/admin/ContentPage";
+import { ReviewLessonPage } from "@/pages/admin/ReviewLessonPage";
+import { ReviewQueuePage } from "@/pages/admin/ReviewQueuePage";
 import { UsersPage } from "@/pages/admin/UsersPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { ErrorPage } from "@/pages/ErrorPage";
@@ -99,6 +101,18 @@ const adminContentRoute = createRoute({
 	component: ContentPage,
 });
 
+const adminReviewRoute = createRoute({
+	getParentRoute: () => adminRoute,
+	path: "/relecture",
+	component: ReviewQueuePage,
+});
+
+const adminReviewLessonRoute = createRoute({
+	getParentRoute: () => adminRoute,
+	path: "/relecture/lecons/$lessonId",
+	component: ReviewLessonPage,
+});
+
 const adminUsersRoute = createRoute({
 	getParentRoute: () => adminRoute,
 	path: "/utilisateurs",
@@ -135,6 +149,8 @@ const routeTree = rootRoute.addChildren([
 		lessonRoute,
 		adminRoute.addChildren([
 			adminIndexRoute,
+			adminReviewRoute,
+			adminReviewLessonRoute,
 			adminContentRoute,
 			adminUsersRoute,
 		]),

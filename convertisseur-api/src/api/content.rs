@@ -5,6 +5,7 @@
 mod audio;
 mod cards;
 mod lessons;
+mod review;
 mod units;
 
 use std::collections::HashMap;
@@ -58,6 +59,7 @@ pub fn routes() -> ApiRouter<AppState> {
         .merge(units::routes())
         .merge(lessons::routes())
         .merge(cards::routes())
+        .merge(review::routes())
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize, JsonSchema)]
@@ -278,22 +280,23 @@ pub struct ReviewResponse {
 
 impl ReviewResponse {
     async fn of(state: &AppState, review: Review) -> Result<Self, ApiError> {
-        let usernames = content::usernames(
-            &state.pool,
-            [review.created_by, review.updated_by, review.validated_by],
-        )
-        .await?;
-        Ok(Self {
+        let usernames = content::usernames(&state.pool, review.authors()).await?;
+        Ok(Self::with(&usernames, review))
+    }
+
+    /// The review, its authors named from `usernames`.
+    fn with(usernames: &HashMap<Uuid, String>, review: Review) -> Self {
+        Self {
             status: review.status.into(),
             created_at: review.created_at,
-            created_by: author(&usernames, review.created_by),
+            created_by: author(usernames, review.created_by),
             updated_at: review.updated_at,
-            updated_by: author(&usernames, review.updated_by),
+            updated_by: author(usernames, review.updated_by),
             validated_at: review.validated_at,
-            validated_by: author(&usernames, review.validated_by),
+            validated_by: author(usernames, review.validated_by),
             import_key: review.import_key,
             review_note: review.note,
-        })
+        }
     }
 }
 
@@ -306,6 +309,9 @@ impl From<ContentRefusal> for ApiError {
             )),
             ContentRefusal::NotEmpty => Self::NotEmpty,
             ContentRefusal::Imported => Self::Imported,
+            ContentRefusal::NotInParent => Self::Internal(anyhow::anyhow!(
+                "a row was not in its parent where the request names none"
+            )),
             ContentRefusal::Failed(error) => Self::Internal(error),
         }
     }

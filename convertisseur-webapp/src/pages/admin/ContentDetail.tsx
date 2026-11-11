@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
 import { Dialog } from "@/components/Dialog";
 import { LetterFormsRow } from "@/components/LetterFormsRow";
@@ -371,6 +372,15 @@ export function ContentDetail({
 				<h2 className="content-detail-title">
 					<LoadedTitle loaded={loaded} />
 				</h2>
+			) : null}
+			{loaded?.kind === "lesson" ? (
+				<Link
+					to="/admin/relecture/lecons/$lessonId"
+					params={{ lessonId: loaded.item.id }}
+					className="button-outline content-review-link"
+				>
+					Relire cette leçon
+				</Link>
 			) : null}
 			{imported ? (
 				<p className="content-locked">

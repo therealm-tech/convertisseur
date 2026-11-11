@@ -67,7 +67,9 @@ whose password was reset by an admin can reach `/mot-de-passe` only, and the
 admin area under `/admin` is open to `admin` and `super_admin` alone. These
 guards spare the user a page that would only fail: the server enforces the
 same rules on every request. The admin area opens on `/admin/contenu`, where
-staff write and review the learning content, beside `/admin/utilisateurs`.
+staff write and review the learning content, beside `/admin/relecture`, the
+review queue (see [The review queue](#the-review-queue)), and
+`/admin/utilisateurs`.
 
 Learners start on `/`, which shows both tracks; `/parcours/{track}` draws a
 track's units and their lessons as a path, and
@@ -240,6 +242,42 @@ item carries its `importKey` and its `reviewNote`, so that the list of notes
 is also the list of entries of `content/` to correct. The text search compares through `content_search_key`, a SQL function
 that lowercases and strips the Arabic short vowels, other diacritics and the
 tatweel, so `شكرا` finds `شُكْرًا`.
+
+## The review queue
+
+`/admin/relecture` lists the lessons a reviewer has something to do in, by
+unit; `/admin/relecture/lecons/{lessonId}` reviews one of them: on a screen
+under 1024px wide, card by card and full screen, without the admin bar, whose
+place the card needs; above, every card on one page, beside the admin
+sidebar. The endpoints,
+in [`api/content/review.rs`](convertisseur-api/src/api/content/review.rs),
+take `RequireRole<Admin>` like the rest of the content:
+
+- **`GET /api/v1/lessons` lists lesson summaries in the order of the
+  tracks**: units by track and position, lessons by position. Each carries
+  its unit and how its cards stand: validated, flagged, to review and
+  without a recording. `pendingReview=true` keeps the lessons where the
+  lesson, its unit or a card is to review; `missingAudio=true` the lessons
+  with a card without a recording, whatever their status; `unitId` the
+  lessons of one unit. Every page also gives `itemsToReview`, the units,
+  lessons and cards to review, flagged or not, and `cardsWithoutAudio`, for
+  the queue's header and the navigation's badge.
+- **A flagged card is a card to review with a review note**, not a status of
+  its own. Flagging writes the note and sends a validated card back to
+  review; validating a flagged card clears its note.
+- **A lesson's recording is optional**: learners are offered it only when it
+  exists. "Without audio" counts cards alone; the review page still lets the
+  reviewer record the lesson's.
+- **`GET /api/v1/lessons/{lessonId}/cards` lists a lesson's cards** in order,
+  whatever their status, in the shape of `GET /api/v1/cards/{cardId}`.
+- **`POST /api/v1/lessons/{lessonId}/card-validations` validates the cards it
+  names** that are to review without a note, in one transaction under the
+  content lock. Flagged cards stay to review and validated ones keep their
+  first validation. An id that is not a card of the lesson answers `422`
+  `card_not_in_lesson` and validates nothing.
+- **"Previous" and "next" lesson move among the lessons left to review**, in
+  the order of the tracks, so that a reviewer goes from one task to the next
+  without passing lessons with nothing to do.
 
 ## What learners see
 
@@ -776,6 +814,13 @@ every creation or deletion in the files shifts them.
 **Icons are generated, not committed.** The build rasterises `logo.svg` into
 the favicon, the PWA icons and the Apple touch icon, so there is one logo file
 and no raster that can drift from it.
+
+**A validation in bulk names its cards.** The reviewer validates the cards
+the page shows, not whatever the lesson holds when the request lands: a
+card the content sync or another admin adds or rewrites meanwhile stays to
+review, and the count on the button is the count validated. Naming the cards
+is also what makes an unknown one an error, which refuses the whole request
+rather than a part of it.
 
 ## Invariants and constraints
 

@@ -14,8 +14,9 @@ use validator::Validate;
 use super::{
     AudioResponse, Resource, ReviewResponse, TAG, TrackJson,
     audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
-    created, delete, delete_docs, refused, set_review_note, set_review_note_docs, set_status,
-    set_status_docs, validate_title,
+    created, delete, delete_docs, refused,
+    review::{list_lessons, list_lessons_docs},
+    set_review_note, set_review_note_docs, set_status, set_status_docs, validate_title,
 };
 use crate::{
     api::{
@@ -32,7 +33,7 @@ pub fn routes() -> ApiRouter<AppState> {
     ApiRouter::new()
         .api_route(
             "/api/v1/lessons",
-            post_with(create_lesson, create_lesson_docs),
+            post_with(create_lesson, create_lesson_docs).get_with(list_lessons, list_lessons_docs),
         )
         .api_route(
             "/api/v1/lessons/{lessonId}",
@@ -83,7 +84,7 @@ impl Resource for LessonResource {
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LessonPath {
-    lesson_id: Uuid,
+    pub(super) lesson_id: Uuid,
 }
 
 impl From<LessonPath> for Uuid {

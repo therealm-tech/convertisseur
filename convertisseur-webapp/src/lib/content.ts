@@ -2,10 +2,10 @@ import { z } from "zod";
 import { expectOk, send, sendForm } from "@/lib/api";
 import { LetterFormsSchema } from "@/lib/letterForms";
 
-const TrackSchema = z.enum(["arabe", "islam"]);
+export const TrackSchema = z.enum(["arabe", "islam"]);
 export type Track = z.infer<typeof TrackSchema>;
 
-const StatusSchema = z.enum(["to_review", "validated"]);
+export const StatusSchema = z.enum(["to_review", "validated"]);
 export type Status = z.infer<typeof StatusSchema>;
 
 const VarietySchema = z.enum(["classique", "darija"]);
@@ -60,7 +60,7 @@ const LessonSchema = ReviewSchema.extend({
 });
 export type Lesson = z.infer<typeof LessonSchema>;
 
-const CardSchema = ReviewSchema.extend({
+export const CardSchema = ReviewSchema.extend({
 	id: z.string(),
 	lesson: z.object({ id: z.string(), title: z.string() }),
 	track: TrackSchema,
