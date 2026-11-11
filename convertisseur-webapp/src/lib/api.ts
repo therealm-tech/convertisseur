@@ -43,6 +43,7 @@ const ProblemSchema = z.object({
 
 export const problemTypes = {
 	forbidden: "urn:convertisseur:problem:forbidden",
+	importedContent: "urn:convertisseur:problem:imported-content",
 	notEmpty: "urn:convertisseur:problem:not-empty",
 	invalidCredentials: "urn:convertisseur:problem:invalid-credentials",
 	passwordChangeRequired: "urn:convertisseur:problem:password-change-required",

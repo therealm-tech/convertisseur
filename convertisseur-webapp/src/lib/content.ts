@@ -26,6 +26,9 @@ const ReviewSchema = z.object({
 	updatedBy: AuthorSchema.nullable(),
 	validatedAt: timestamp.nullable(),
 	validatedBy: AuthorSchema.nullable(),
+	/** The content file entry it comes from; `null` when written here. */
+	importKey: z.string().nullable(),
+	reviewNote: z.string().nullable(),
 });
 export type Review = z.infer<typeof ReviewSchema>;
 
@@ -78,6 +81,8 @@ const ContentItemSchema = z.object({
 	parentTitle: z.string().nullable(),
 	status: StatusSchema,
 	updatedAt: timestamp,
+	importKey: z.string().nullable(),
+	reviewNote: z.string().nullable(),
 });
 export type ContentItem = z.infer<typeof ContentItemSchema>;
 
@@ -87,6 +92,7 @@ const ContentPageSchema = z.object({
 	perPage: z.number(),
 	total: z.number(),
 	statusCounts: z.object({ toReview: z.number(), validated: z.number() }),
+	reviewNoteCount: z.number(),
 });
 export type ContentPage = z.infer<typeof ContentPageSchema>;
 
@@ -104,6 +110,7 @@ export interface ContentQuery {
 	track?: Track | undefined;
 	kind?: Kind | undefined;
 	q?: string | undefined;
+	hasReviewNote?: boolean | undefined;
 }
 
 export interface UnitFields {
@@ -175,6 +182,9 @@ export async function listContent(query: ContentQuery): Promise<ContentPage> {
 	if (q) {
 		params.set("q", q);
 	}
+	if (query.hasReviewNote !== undefined) {
+		params.set("hasReviewNote", String(query.hasReviewNote));
+	}
 	const response = await send("GET", `/api/v1/content-items?${params}`);
 	await expectOk(response);
 	return ContentPageSchema.parse(await response.json());
@@ -218,6 +228,21 @@ export async function setStatus(
 	});
 	await expectOk(response);
 	return StatusChangeSchema.parse(await response.json());
+}
+
+const ReviewNoteSchema = z.object({ text: z.string().nullable() });
+
+/** Keeps a review note on an item; a blank text clears it. */
+export async function setReviewNote(
+	kind: Kind,
+	id: string,
+	text: string,
+): Promise<string | null> {
+	const response = await send("PUT", `${itemPath(kind, id)}/review-note`, {
+		text,
+	});
+	await expectOk(response);
+	return ReviewNoteSchema.parse(await response.json()).text;
 }
 
 /** The address an `<audio>` element plays a recording from. */
