@@ -11,7 +11,8 @@ use aide::{OperationInput, generate::GenContext, openapi::Operation};
 use axum::{
     Json,
     extract::{
-        ConnectInfo, FromRequest, FromRequestParts, Path, Query, Request, rejection::JsonRejection,
+        ConnectInfo, FromRequest, FromRequestParts, Multipart, Path, Query, Request,
+        rejection::JsonRejection,
     },
     http::{HeaderMap, HeaderName, request::Parts},
 };
@@ -56,6 +57,30 @@ where
 impl<T: JsonSchema> OperationInput for ValidJson<T> {
     fn operation_input(ctx: &mut GenContext, operation: &mut Operation) {
         Json::<T>::operation_input(ctx, operation);
+    }
+}
+
+/// A `multipart/form-data` body. Any other content type is refused with a
+/// 415 problem.
+pub struct ApiMultipart(pub Multipart);
+
+impl<S: Send + Sync> FromRequest<S> for ApiMultipart {
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let multipart = Multipart::from_request(req, state)
+            .await
+            .map_err(|rejection| {
+                tracing::debug!(%rejection, "multipart body refused");
+                ApiError::MultipartRequired
+            })?;
+        Ok(Self(multipart))
+    }
+}
+
+impl OperationInput for ApiMultipart {
+    fn operation_input(ctx: &mut GenContext, operation: &mut Operation) {
+        Multipart::operation_input(ctx, operation);
     }
 }
 

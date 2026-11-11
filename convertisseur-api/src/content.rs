@@ -4,12 +4,20 @@
 
 use std::collections::HashMap;
 
+use anyhow::Context;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgExecutor, PgPool};
 use uuid::Uuid;
 
 use crate::{
-    db::{self, content::Ordered},
+    audio,
+    db::{
+        self,
+        audio::NewAudio,
+        content::{Ordered, WithAudio},
+    },
+    storage::{ObjectStore, Storage},
     users::User,
 };
 
@@ -75,6 +83,8 @@ pub struct Lesson {
     pub position: i32,
     pub title: String,
     #[sqlx(flatten)]
+    pub audio: AudioColumns,
+    #[sqlx(flatten)]
     pub review: Review,
 }
 
@@ -89,13 +99,64 @@ pub struct Card {
     pub transliteration: Option<String>,
     pub meaning_fr: Option<String>,
     pub variety: Variety,
-    pub audio_id: Option<Uuid>,
-    pub audio_content_type: Option<String>,
-    pub audio_size_bytes: Option<i64>,
-    pub audio_duration_ms: Option<i32>,
-    pub audio_created_at: Option<DateTime<Utc>>,
+    #[sqlx(flatten)]
+    pub audio: AudioColumns,
     #[sqlx(flatten)]
     pub review: Review,
+}
+
+/// A stored recording.
+#[derive(sqlx::FromRow)]
+pub struct Audio {
+    pub id: Uuid,
+    pub content_type: String,
+    pub size_bytes: i64,
+    pub duration_ms: Option<i32>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// The recording a card or lesson holds, all `NULL` when it holds none.
+#[derive(sqlx::FromRow)]
+pub struct AudioColumns {
+    #[sqlx(rename = "audio_id")]
+    pub id: Option<Uuid>,
+    #[sqlx(rename = "audio_content_type")]
+    pub content_type: Option<String>,
+    #[sqlx(rename = "audio_size_bytes")]
+    pub size_bytes: Option<i64>,
+    #[sqlx(rename = "audio_duration_ms")]
+    pub duration_ms: Option<i32>,
+    #[sqlx(rename = "audio_created_at")]
+    pub created_at: Option<DateTime<Utc>>,
+}
+
+impl AudioColumns {
+    #[must_use]
+    pub fn into_audio(self) -> Option<Audio> {
+        Some(Audio {
+            id: self.id?,
+            content_type: self.content_type?,
+            size_bytes: self.size_bytes?,
+            duration_ms: self.duration_ms,
+            created_at: self.created_at?,
+        })
+    }
+}
+
+/// A recording as playback needs it, with the review status of the card or
+/// lesson holding it, `None` when nothing holds it.
+#[derive(sqlx::FromRow)]
+pub struct Playable {
+    pub object_key: String,
+    pub content_type: String,
+    pub size_bytes: i64,
+    pub status: Option<Status>,
+}
+
+/// A recording to attach, already sniffed.
+pub struct Upload {
+    pub format: audio::Format,
+    pub bytes: Bytes,
 }
 
 /// What an author writes in a unit; its position is set apart.
@@ -246,10 +307,12 @@ pub async fn update<O: Ordered>(
     Ok(())
 }
 
-/// Deletes a row and closes the gap it leaves; succeeds when it is already
-/// gone. A unit with lessons or a lesson with cards stays.
+/// Deletes a row, its recording with it, and closes the gap it leaves;
+/// succeeds when it is already gone. A unit with lessons or a lesson with
+/// cards stays.
 pub async fn delete<O: Ordered>(
     pool: &PgPool,
+    storage: &Storage,
     actor: &User,
     id: Uuid,
 ) -> Result<(), ContentRefusal> {
@@ -259,20 +322,141 @@ pub async fn delete<O: Ordered>(
         tracing::debug!(kind = ?O::KIND, %id, "deletion refused: not empty");
         return Err(ContentRefusal::NotEmpty);
     }
-    let Some(placement) = db::content::delete::<O>(&mut *tx, id).await? else {
+    let Some(deleted) = db::content::delete::<O>(&mut *tx, id).await? else {
         tracing::debug!(kind = ?O::KIND, %id, "already deleted");
         return Ok(());
     };
     db::content::shift::<O>(
         &mut *tx,
-        placement.parent,
-        placement.position.saturating_add(1),
+        deleted.parent,
+        deleted.position.saturating_add(1),
         -1,
         None,
     )
     .await?;
+    let key = match deleted.audio_id {
+        Some(audio_id) => db::audio::delete(&mut *tx, audio_id).await?,
+        None => None,
+    };
     tx.commit().await?;
     tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, "content deleted");
+    if let Some(key) = key {
+        delete_object(storage, &key).await;
+    }
+    Ok(())
+}
+
+/// Deletes an object whose row is gone. A failure leaves an orphan, which
+/// takes no space anyone reads: it is logged, not raised.
+async fn delete_object(storage: &Storage, key: &str) {
+    if let Err(error) = storage.delete(key).await {
+        tracing::warn!(
+            key,
+            error = format!("{error:#}"),
+            "orphaned object left in the store"
+        );
+    }
+}
+
+/// Stores a recording and attaches it to the row in place of the one it
+/// had, which is deleted, row and object. The row goes back to review.
+///
+/// The object is written before the row that points at it, and the old
+/// object deleted after the row stops pointing at it, so that a failure
+/// leaves at worst an orphaned object, never a row without its object.
+pub async fn attach_audio<O: WithAudio>(
+    pool: &PgPool,
+    storage: &Storage,
+    actor: &User,
+    id: Uuid,
+    upload: Upload,
+) -> Result<Audio, ContentRefusal> {
+    if db::content::lock_audio::<O>(pool, id).await?.is_none() {
+        return Err(ContentRefusal::NotFound);
+    }
+    let audio_id = Uuid::new_v4();
+    let key = format!("audio/{audio_id}");
+    let content_type = upload.format.content_type();
+    let size = upload.bytes.len();
+    let duration_ms = upload
+        .format
+        .duration_ms(&upload.bytes)
+        .and_then(|ms| i32::try_from(ms).ok());
+    storage
+        .put(&key, content_type, upload.bytes)
+        .await
+        .context("failed to store the recording")?;
+
+    let attached = async {
+        let mut tx = pool.begin().await?;
+        db::content::lock(&mut *tx).await?;
+        let Some(previous) = db::content::lock_audio::<O>(&mut *tx, id).await? else {
+            return Err(ContentRefusal::NotFound);
+        };
+        let audio = db::audio::insert(
+            &mut *tx,
+            &NewAudio {
+                id: audio_id,
+                object_key: &key,
+                content_type,
+                size_bytes: i64::try_from(size).unwrap_or(i64::MAX),
+                duration_ms,
+                created_by: actor.id,
+            },
+        )
+        .await?;
+        db::content::set_audio::<O>(&mut *tx, id, Some(audio_id), actor.id).await?;
+        let replaced = match previous {
+            Some(previous) => db::audio::delete(&mut *tx, previous).await?,
+            None => None,
+        };
+        tx.commit().await?;
+        Ok((audio, replaced))
+    }
+    .await;
+
+    match attached {
+        Ok((audio, replaced)) => {
+            tracing::info!(
+                kind = ?O::KIND, %id, actor_id = %actor.id, %audio_id, content_type, size,
+                "recording attached, back to review"
+            );
+            if let Some(replaced) = replaced {
+                delete_object(storage, &replaced).await;
+            }
+            Ok(audio)
+        }
+        Err(refusal) => {
+            delete_object(storage, &key).await;
+            Err(refusal)
+        }
+    }
+}
+
+/// Removes the row's recording, row and object; the row goes back to
+/// review. Succeeds when it has none.
+pub async fn detach_audio<O: WithAudio>(
+    pool: &PgPool,
+    storage: &Storage,
+    actor: &User,
+    id: Uuid,
+) -> Result<(), ContentRefusal> {
+    let mut tx = pool.begin().await?;
+    db::content::lock(&mut *tx).await?;
+    let Some(previous) = db::content::lock_audio::<O>(&mut *tx, id).await? else {
+        return Err(ContentRefusal::NotFound);
+    };
+    let Some(previous) = previous else {
+        tracing::debug!(kind = ?O::KIND, %id, "no recording to remove");
+        return Ok(());
+    };
+    db::content::set_audio::<O>(&mut *tx, id, None, actor.id).await?;
+    let key = db::audio::delete(&mut *tx, previous).await?;
+    tx.commit().await?;
+    tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, "recording removed, back to review");
+    if let Some(key) = key {
+        delete_object(storage, &key).await;
+    }
     Ok(())
 }
 

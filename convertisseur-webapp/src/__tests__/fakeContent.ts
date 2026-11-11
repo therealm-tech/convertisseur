@@ -28,7 +28,7 @@ const collections: Record<string, Kind> = {
 };
 
 const memberPath =
-	/^\/api\/v1\/(units|lessons|cards)(?:\/([^/]+))?(\/status)?$/;
+	/^\/api\/v1\/(units|lessons|cards)(?:\/([^/]+))?(\/status|\/audio)?$/;
 
 const author = (user: User | null) =>
 	user ? { id: user.id, username: user.username } : null;
@@ -114,6 +114,7 @@ export class FakeContent {
 					track: row.track,
 					position: row.position,
 					title: row.title,
+					audio: row.audio,
 				};
 			case "card":
 				return {
@@ -197,6 +198,41 @@ export class FakeContent {
 		}
 	}
 
+	private audio(
+		row: Row,
+		method: string,
+		body: unknown,
+		actor: User,
+	): Response {
+		const before = row.audio;
+		if (method === "DELETE") {
+			row.audio = null;
+		} else {
+			const file = body instanceof FormData ? body.get("file") : null;
+			if (!(file instanceof Blob)) {
+				return problem(422, "validation", {}, [
+					{ field: "file", code: "file_missing" },
+				]);
+			}
+			row.audio = {
+				id: `a-${this.rows.length}-${this.clock}`,
+				contentType: file.type.split(";")[0] || "audio/mpeg",
+				sizeBytes: file.size,
+				durationMs: null,
+				createdAt: this.tick(),
+			};
+		}
+		if (before !== row.audio) {
+			row.status = "to_review";
+			row.validatedBy = null;
+			row.validatedAt = null;
+			row.createdBy = row.createdBy ?? actor;
+		}
+		return row.audio && method === "PUT"
+			? json(200, row.audio)
+			: new Response(null, { status: 204 });
+	}
+
 	handle(method: string, url: URL, body: unknown, actor: User): Response {
 		if (url.pathname === "/api/v1/content-items" && method === "GET") {
 			return this.list(url);
@@ -205,7 +241,7 @@ export class FakeContent {
 		if (!match) {
 			return problem(404, "not-found");
 		}
-		const [, collection = "", id, status] = match;
+		const [, collection = "", id, sub] = match;
 		const kind = collections[collection] ?? "unit";
 		const fields = (body ?? {}) as Record<string, unknown>;
 		if (!id && method === "POST") {
@@ -220,6 +256,9 @@ export class FakeContent {
 			return json(201, this.body(row));
 		}
 		const row = id ? this.row(decodeURIComponent(id)) : undefined;
+		if (row && sub === "/audio") {
+			return this.audio(row, method, body, actor);
+		}
 		if (method === "DELETE") {
 			if (row) {
 				this.rows.splice(this.rows.indexOf(row), 1);
@@ -229,7 +268,7 @@ export class FakeContent {
 		if (!row || row.kind !== kind) {
 			return problem(404, "not-found");
 		}
-		if (status && method === "PUT") {
+		if (sub === "/status" && method === "PUT") {
 			const next = fields.status as Status;
 			if (row.status !== next) {
 				row.status = next;

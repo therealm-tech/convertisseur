@@ -184,7 +184,7 @@ export function installFakeApi(): FakeApi {
 		const path = String(input);
 		const method = init?.method ?? "GET";
 		const body: unknown =
-			typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+			typeof init?.body === "string" ? JSON.parse(init.body) : init?.body;
 		calls.push({ method, path, body });
 		if (offline) {
 			throw new TypeError("Failed to fetch");

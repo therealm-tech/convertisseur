@@ -143,9 +143,7 @@ describe("content page", () => {
 				"Validé par bilal. Toute modification le repasse « à relire ».",
 			),
 		).toBeVisible();
-		expect(
-			within(panel).getByText("Aucun audio pour cette carte."),
-		).toBeVisible();
+		expect(within(panel).getByText("Téléverser un fichier")).toBeVisible();
 
 		await user.type(
 			within(panel).getByRole("textbox", { name: "Translittération" }),

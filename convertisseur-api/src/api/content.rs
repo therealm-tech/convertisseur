@@ -2,6 +2,7 @@
 //! that spans all three. Every one of them is for an `admin` or the
 //! `super_admin`.
 
+mod audio;
 mod cards;
 mod lessons;
 mod units;
@@ -30,8 +31,8 @@ use super::{
 };
 use crate::{
     content::{
-        self, ContentItem, ContentKind, ContentQuery, ContentRefusal, Review, Status, StatusChange,
-        Track, Variety,
+        self, Audio, ContentItem, ContentKind, ContentQuery, ContentRefusal, Review, Status,
+        StatusChange, Track, Variety,
     },
     db::{self, content::Ordered},
     error::ApiError,
@@ -51,6 +52,7 @@ pub fn routes() -> ApiRouter<AppState> {
             "/api/v1/content-items",
             get_with(list_items, list_items_docs),
         )
+        .merge(audio::routes())
         .merge(units::routes())
         .merge(lessons::routes())
         .merge(cards::routes())
@@ -157,6 +159,32 @@ impl From<ContentKind> for KindJson {
             ContentKind::Unit => Self::Unit,
             ContentKind::Lesson => Self::Lesson,
             ContentKind::Card => Self::Card,
+        }
+    }
+}
+
+/// A recording a card or lesson holds. Play it from
+/// `GET /api/v1/audio/{audioId}`.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioResponse {
+    id: Uuid,
+    /// The type the server recognised in the file, e.g. `audio/mpeg`.
+    content_type: String,
+    size_bytes: u64,
+    /// `null` when the file does not give it cheaply: only WAV and Ogg do.
+    duration_ms: Option<u32>,
+    created_at: DateTime<Utc>,
+}
+
+impl From<Audio> for AudioResponse {
+    fn from(audio: Audio) -> Self {
+        Self {
+            id: audio.id,
+            content_type: audio.content_type,
+            size_bytes: u64::try_from(audio.size_bytes).unwrap_or_default(),
+            duration_ms: audio.duration_ms.and_then(|ms| u32::try_from(ms).ok()),
+            created_at: audio.created_at,
         }
     }
 }
@@ -345,7 +373,7 @@ async fn delete<R: Resource>(
     RequireRole { user: actor, .. }: RequireRole<Admin>,
     ApiPath(path): ApiPath<R::Path>,
 ) -> Result<NoContent, ApiError> {
-    content::delete::<R::Rows>(&state.pool, &actor, path.into()).await?;
+    content::delete::<R::Rows>(&state.pool, &state.storage, &actor, path.into()).await?;
     Ok(NoContent)
 }
 

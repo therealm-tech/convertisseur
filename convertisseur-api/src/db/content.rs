@@ -76,6 +76,22 @@ impl Ordered for Lessons {
 
 pub struct Cards;
 
+/// A content table whose rows can hold a recording.
+pub trait WithAudio: Ordered {
+    const LOCK_AUDIO: &'static str;
+    const SET_AUDIO: &'static str;
+}
+
+impl WithAudio for Lessons {
+    const LOCK_AUDIO: &'static str = include_str!("../../queries/lessons/lock_audio.sql");
+    const SET_AUDIO: &'static str = include_str!("../../queries/lessons/set_audio.sql");
+}
+
+impl WithAudio for Cards {
+    const LOCK_AUDIO: &'static str = include_str!("../../queries/cards/lock_audio.sql");
+    const SET_AUDIO: &'static str = include_str!("../../queries/cards/set_audio.sql");
+}
+
 impl Ordered for Cards {
     type Parent = Uuid;
     const KIND: ContentKind = ContentKind::Card;
@@ -136,11 +152,19 @@ pub async fn lock_row<O: Ordered>(
     sqlx::query_as(O::LOCK).bind(id).fetch_optional(exec).await
 }
 
-/// Deletes the row; returns where it sat, or `None` when it did not exist.
+/// A deleted row: where it sat, and the recording it held.
+#[derive(sqlx::FromRow)]
+pub struct Deleted<P> {
+    pub parent: P,
+    pub position: i32,
+    pub audio_id: Option<Uuid>,
+}
+
+/// Deletes the row; returns what it was, or `None` when it did not exist.
 pub async fn delete<O: Ordered>(
     exec: impl PgExecutor<'_>,
     id: Uuid,
-) -> sqlx::Result<Option<Placement<O::Parent>>> {
+) -> sqlx::Result<Option<Deleted<O::Parent>>> {
     sqlx::query_as(O::DELETE)
         .bind(id)
         .fetch_optional(exec)
@@ -178,6 +202,35 @@ pub async fn set_status<O: Ordered>(
         .bind(validator)
         .fetch_optional(exec)
         .await
+}
+
+/// The recording the row holds, the row locked until the end of the
+/// transaction; `None` when the row does not exist.
+pub async fn lock_audio<O: WithAudio>(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+) -> sqlx::Result<Option<Option<Uuid>>> {
+    sqlx::query_scalar(O::LOCK_AUDIO)
+        .bind(id)
+        .fetch_optional(exec)
+        .await
+}
+
+/// Points the row at another recording, or none, which sends it back to
+/// review.
+pub async fn set_audio<O: WithAudio>(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    audio_id: Option<Uuid>,
+    editor: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query(O::SET_AUDIO)
+        .bind(id)
+        .bind(audio_id)
+        .bind(editor)
+        .execute(exec)
+        .await?;
+    Ok(())
 }
 
 pub async fn insert_unit(

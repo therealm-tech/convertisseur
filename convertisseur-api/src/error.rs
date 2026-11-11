@@ -25,6 +25,10 @@ pub enum ApiError {
     MalformedBody,
     MalformedQuery,
     UnsupportedMediaType,
+    MultipartRequired,
+    TooLarge,
+    UnsupportedAudio,
+    RangeNotSatisfiable { size: u64 },
     Validation(ValidationErrors),
     Unauthenticated,
     PasswordChangeRequired,
@@ -98,6 +102,8 @@ impl From<Refusal> for ApiError {
 }
 
 impl ApiError {
+    // One arm per kind of problem: the catalogue reads best in one place.
+    #[allow(clippy::too_many_lines)]
     fn describe(&self) -> (StatusCode, &'static str, &'static str, &'static str) {
         match self {
             Self::NotFound => (
@@ -123,6 +129,30 @@ impl ApiError {
                 "urn:convertisseur:problem:unsupported-media-type",
                 "Unsupported media type",
                 "the body must be sent as application/json",
+            ),
+            Self::MultipartRequired => (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "urn:convertisseur:problem:unsupported-media-type",
+                "Unsupported media type",
+                "the body must be sent as multipart/form-data",
+            ),
+            Self::TooLarge => (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "urn:convertisseur:problem:too-large",
+                "Too large",
+                "the file is larger than 10 MB",
+            ),
+            Self::UnsupportedAudio => (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "urn:convertisseur:problem:unsupported-audio",
+                "Unsupported audio",
+                "the file is not MP3, MP4 audio, Ogg, WebM or WAV",
+            ),
+            Self::RangeNotSatisfiable { .. } => (
+                StatusCode::RANGE_NOT_SATISFIABLE,
+                "urn:convertisseur:problem:range-not-satisfiable",
+                "Range not satisfiable",
+                "the requested range starts past the end of the file",
             ),
             Self::Validation(_) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -187,6 +217,7 @@ impl IntoResponse for ApiError {
         let (status, kind, title, detail) = self.describe();
         let mut errors = Vec::new();
         let mut retry_after = None;
+        let mut content_range = None;
         match self {
             Self::Internal(error) => {
                 tracing::error!(error = format!("{error:#}"), "request failed");
@@ -202,6 +233,9 @@ impl IntoResponse for ApiError {
             Self::RateLimited { retry_after: wait } => {
                 retry_after = Some(wait.as_secs() + u64::from(wait.subsec_nanos() > 0));
             }
+            Self::RangeNotSatisfiable { size } => {
+                content_range = HeaderValue::try_from(format!("bytes */{size}")).ok();
+            }
             _ => {}
         }
         let body = ProblemResponse {
@@ -216,6 +250,9 @@ impl IntoResponse for ApiError {
         headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(PROBLEM_JSON));
         if let Some(seconds) = retry_after {
             headers.insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        if let Some(range) = content_range {
+            headers.insert(header::CONTENT_RANGE, range);
         }
         response
     }

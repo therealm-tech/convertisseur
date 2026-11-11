@@ -123,6 +123,7 @@ erDiagram
     units ||--o{ lessons : "unit_id"
     lessons ||--o{ cards : "lesson_id"
     cards |o--o| audio : "audio_id"
+    lessons |o--o| audio : "audio_id"
     units {
         content_track track "arabe or islam"
         integer position
@@ -154,8 +155,10 @@ erDiagram
   the lessons of a unit, the cards of a lesson. A `UNIQUE (parent, position)`
   constraint, deferred to the end of the transaction, lets an insertion, a
   move or a deletion shift the siblings it passes.
-- **A card's recording is an `audio` row**, which holds the key of the object
-  in the object store, its content type and size, and who uploaded it.
+- **A recording is an `audio` row**, held by one card or one lesson through
+  its `audio_id`. The row holds the key of the object in the object store,
+  `audio/<the row's id>`, its content type, its size, its length when known,
+  and who uploaded it.
 - **`content_items` is a view** over the three tables, in the shape of the
   review list: kind, track, title, parent title, status, last edit.
 
@@ -180,8 +183,9 @@ Staff write units, lessons and cards in the admin area; a reviewer, any
 - **A unit with lessons or a lesson with cards is not deleted**: the request
   answers `409` `not-empty`, and its children have to be moved or deleted
   first. A deletion never takes more than the row named.
-- **The review status is stored, and only the admin area reads content.**
-  Every content endpoint takes `RequireRole<Admin>`.
+- **The admin area is the only reader of content but recordings.** Every
+  content endpoint takes `RequireRole<Admin>`; playing a recording is open to
+  any logged-in account, for validated content only (see below).
 
 The review list (`GET /api/v1/content-items`) spans the three kinds, the most
 recently edited first, filtered by status, track, kind and text. Its
@@ -189,6 +193,66 @@ recently edited first, filtered by status, track, kind and text. Its
 badges. The text search compares through `content_search_key`, a SQL function
 that lowercases and strips the Arabic short vowels, other diacritics and the
 tatweel, so `شكرا` finds `شُكْرًا`.
+
+## Recordings
+
+A card or a lesson holds at most one recording, uploaded as a file or
+recorded with the device's microphone in the admin area, and played back
+through the API.
+
+```mermaid
+sequenceDiagram
+    participant B as Admin's browser
+    participant S as convertisseur-api
+    participant O as Object store
+    participant P as PostgreSQL
+    B->>S: PUT /api/v1/cards/{cardId}/audio, multipart file
+    S->>S: read at most 10 MB, sniff the first bytes
+    S->>O: PUT audio/{new id}
+    S->>P: BEGIN, lock the card, insert the audio row
+    S->>P: point the card at it, back to to_review
+    S->>P: delete the previous audio row, COMMIT
+    S->>O: DELETE the previous object
+    S-->>B: 200 {id, contentType, sizeBytes, durationMs}
+    B->>S: GET /api/v1/audio/{audioId}, Range: bytes=0-
+    S->>P: the row, and the status of what holds it
+    S->>O: GET audio/{id}, the same range
+    S-->>B: 206, Content-Range, the bytes streamed
+```
+
+- **No transcoding: the file is stored as the browser made it.** Safari
+  records MP4 with AAC, Chrome WebM with Opus and Firefox Ogg with Opus, and
+  every current browser plays all three, as well as MP3 and WAV uploads. The
+  server keeps the bytes, so it needs no media toolchain and loses no quality.
+- **The type comes from the file, never from the client.** The first bytes
+  must be those of MP3, MP4, Ogg, WebM or WAV (see
+  [`audio.rs`](convertisseur-api/src/audio.rs)), and that type is the one
+  stored and served; anything else is a `415` `unsupported-audio`. The length
+  is read when the file gives it cheaply, from a WAV header or the last Ogg
+  page; it is `null` for the others.
+- **10 MB at most**, set by a body limit on the upload routes alone, a little
+  above the file limit to leave room for the multipart framing, then checked
+  on the file itself; past it, a `413` `too-large`.
+- **No object without a purpose is left behind, and no row without its
+  object.** The new object is written before the row that points at it and
+  deleted again if the transaction fails; the previous object is deleted only
+  after the commit that stops pointing at it. Removing a recording, or
+  deleting the card or lesson that holds it, deletes the row and then the
+  object. A failed object deletion leaves an orphan that nothing references
+  and logs a warning; it never fails the request.
+- **A new or removed recording is an edit**: the card or lesson goes back to
+  `to_review`.
+- **Playback goes through the API** (`GET /api/v1/audio/{audioId}`), which
+  streams the object from the store. Any logged-in account plays the
+  recording of validated content, an `admin` plays any; anything else is a
+  `404`, which says nothing of what exists. It honours a single
+  `Range: bytes=…` with a `206`, which Safari needs to seek in an `<audio>`
+  element, answers `Cache-Control: private`, and sends the stored type with
+  `X-Content-Type-Options: nosniff`.
+- **The microphone needs a secure context.** Browsers open it only on HTTPS
+  pages, and on `http://localhost`. On anything else the admin area says so
+  and offers the file upload; the same goes for a browser without
+  `MediaRecorder` or a refused permission.
 
 ## Accounts and sessions
 
@@ -386,7 +450,8 @@ bodies, without tokens.** A `Lax` cookie is not sent on a cross-site `POST`,
 `PUT` or `DELETE`, and every endpoint with a body refuses any content type but
 `application/json` with a `415`, which an HTML form cannot send and a
 cross-origin `fetch` cannot send without a CORS preflight that the server never
-grants. The endpoints without a body, logout, account deletion and password
+grants. The one exception, the recording upload, takes `multipart/form-data`,
+which a form can send, but only with `PUT`, which a form cannot. The endpoints without a body, logout, account deletion and password
 reset, rest on `SameSite=Lax` alone: an HTML form cannot send a `DELETE`, and
 the browser keeps the cookie off a cross-site form `POST`. A `GET` changes nothing but the expiry of the caller's own session, so
 the top-level navigations `Lax` still lets the cookie through on are harmless.
@@ -496,3 +561,5 @@ and no raster that can drift from it.
   has no theme setting of its own.
 - The content forms offer the 100 most recently edited units, or lessons, as
   the parent of a new lesson or card.
+- A recording's length is known for WAV and Ogg files only; the others would
+  need their whole stream parsed.

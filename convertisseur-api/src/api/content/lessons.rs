@@ -12,8 +12,9 @@ use uuid::Uuid;
 use validator::Validate;
 
 use super::{
-    Resource, ReviewResponse, TAG, TrackJson, created, delete, delete_docs, refused, set_status,
-    set_status_docs, validate_title,
+    AudioResponse, Resource, ReviewResponse, TAG, TrackJson,
+    audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
+    created, delete, delete_docs, refused, set_status, set_status_docs, validate_title,
 };
 use crate::{
     api::{
@@ -37,6 +38,18 @@ pub fn routes() -> ApiRouter<AppState> {
             get_with(get_lesson, get_lesson_docs)
                 .put_with(update_lesson, update_lesson_docs)
                 .delete_with(delete::<LessonResource>, delete_docs::<LessonResource>),
+        )
+        .api_route(
+            "/api/v1/lessons/{lessonId}/audio",
+            put_with(
+                put_audio::<LessonResource>,
+                put_audio_docs::<LessonResource>,
+            )
+            .delete_with(
+                delete_audio::<LessonResource>,
+                delete_audio_docs::<LessonResource>,
+            )
+            .layer(upload_limit()),
         )
         .api_route(
             "/api/v1/lessons/{lessonId}/status",
@@ -127,6 +140,8 @@ pub struct LessonResponse {
     /// 1-based place among the unit's lessons.
     position: i32,
     title: String,
+    /// `null` when the lesson has no recording.
+    audio: Option<AudioResponse>,
     #[serde(flatten)]
     review: ReviewResponse,
 }
@@ -143,6 +158,7 @@ impl LessonResponse {
             track: lesson.track.into(),
             position: lesson.position,
             title: lesson.title,
+            audio: lesson.audio.into_audio().map(Into::into),
             review: ReviewResponse::of(state, lesson.review).await?,
         })
     }

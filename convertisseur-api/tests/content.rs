@@ -561,6 +561,9 @@ async fn documents_the_content_endpoints(pool: PgPool) {
         ("/api/v1/lessons/{lessonId}", "delete"),
         ("/api/v1/cards/{cardId}", "get"),
         ("/api/v1/cards/{cardId}/status", "put"),
+        ("/api/v1/cards/{cardId}/audio", "put"),
+        ("/api/v1/lessons/{lessonId}/audio", "delete"),
+        ("/api/v1/audio/{audioId}", "get"),
     ] {
         let operation = &document.body["paths"][path][method];
         assert_eq!(operation["tags"], json!(["Content"]), "{method} {path}");

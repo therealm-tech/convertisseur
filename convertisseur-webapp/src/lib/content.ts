@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { expectOk, send } from "@/lib/api";
+import { expectOk, send, sendForm } from "@/lib/api";
 
 const TrackSchema = z.enum(["arabe", "islam"]);
 export type Track = z.infer<typeof TrackSchema>;
@@ -37,15 +37,6 @@ const UnitSchema = ReviewSchema.extend({
 });
 export type Unit = z.infer<typeof UnitSchema>;
 
-const LessonSchema = ReviewSchema.extend({
-	id: z.string(),
-	unit: z.object({ id: z.string(), position: z.number(), title: z.string() }),
-	track: TrackSchema,
-	position: z.number(),
-	title: z.string(),
-});
-export type Lesson = z.infer<typeof LessonSchema>;
-
 const AudioSchema = z.object({
 	id: z.string(),
 	contentType: z.string(),
@@ -54,6 +45,16 @@ const AudioSchema = z.object({
 	createdAt: timestamp,
 });
 export type Audio = z.infer<typeof AudioSchema>;
+
+const LessonSchema = ReviewSchema.extend({
+	id: z.string(),
+	unit: z.object({ id: z.string(), position: z.number(), title: z.string() }),
+	track: TrackSchema,
+	position: z.number(),
+	title: z.string(),
+	audio: AudioSchema.nullable(),
+});
+export type Lesson = z.infer<typeof LessonSchema>;
 
 const CardSchema = ReviewSchema.extend({
 	id: z.string(),
@@ -217,6 +218,32 @@ export async function setStatus(
 	});
 	await expectOk(response);
 	return StatusChangeSchema.parse(await response.json());
+}
+
+/** The address an `<audio>` element plays a recording from. */
+export function audioUrl(audioId: string): string {
+	return `/api/v1/audio/${encodeURIComponent(audioId)}`;
+}
+
+/** Uploads a recording for a card or a lesson, in place of its own. */
+export async function uploadAudio(
+	kind: "card" | "lesson",
+	id: string,
+	file: Blob,
+	filename: string,
+): Promise<Audio> {
+	const body = new FormData();
+	body.append("file", file, filename);
+	const response = await sendForm("PUT", `${itemPath(kind, id)}/audio`, body);
+	await expectOk(response);
+	return AudioSchema.parse(await response.json());
+}
+
+export async function deleteAudio(
+	kind: "card" | "lesson",
+	id: string,
+): Promise<void> {
+	await expectOk(await send("DELETE", `${itemPath(kind, id)}/audio`));
 }
 
 export async function deleteItem(kind: Kind, id: string): Promise<void> {

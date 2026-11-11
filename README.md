@@ -19,8 +19,9 @@ Registration is open on the Internet: an account is a username and a password,
 with no email address. Accounts have one of three roles: `user`, `admin` or
 `super_admin`. There is always exactly one super admin, the account named in
 the server's configuration. In the admin area, admins write and review the
-learning content at `/admin/contenu`: units, lessons and cards, each "to
-review" until an admin validates it. At `/admin/utilisateurs`, they search
+learning content at `/admin/contenu`: units, lessons and cards, with audio
+uploaded or recorded from the device's microphone, each "to review" until an
+admin validates it. At `/admin/utilisateurs`, they search
 accounts, reset forgotten passwords and delete accounts, and the super admin
 also promotes users to admin and back.
 
@@ -87,7 +88,10 @@ Then open <http://localhost:3000>, and register or log in. The local super
 admin is `admin`, with the password set in
 [docker-compose.yaml](docker-compose.yaml), which also turns off the `Secure`
 cookie flag so that the session works over plain HTTP, and holds the
-development-only credentials of SeaweedFS.
+development-only credentials of SeaweedFS. The microphone works there because
+browsers treat `http://localhost` as secure; from another device on the
+network, over plain HTTP, the admin area can upload audio files but not
+record.
 
 | Path | What answers |
 | --- | --- |
@@ -129,7 +133,8 @@ Back up the database and the bucket together: rows point at objects, and a
 restore of one without the other leaves broken references or orphaned files.
 
 Serve it over HTTPS: the session cookie is `Secure`, so browsers do not send it
-back over plain HTTP. Behind a reverse proxy, set `CLIENT_IP_HEADER` to the
+back over plain HTTP, and browsers open the microphone, which the admin area
+records audio with, only on HTTPS pages. Behind a reverse proxy, set `CLIENT_IP_HEADER` to the
 header the proxy writes the client's address into, or every client shares the
 proxy's rate limits.
 
