@@ -30,9 +30,9 @@ export function ReviewTotalsProvider({ children }: { children: ReactNode }) {
 	const [reloads, setReloads] = useState(0);
 	const refresh = useCallback(() => setReloads((n) => n + 1), []);
 
-	// Each navigation and each refresh fetches the counts again.
 	useEffect(() => {
 		let current = true;
+		logger.debug("admin.review_totals_fetch", { pathname, reloads });
 		fetchReviewTotals().then(
 			(next) => {
 				if (current) {

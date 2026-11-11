@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { Arabic } from "@/components/Arabic";
 import { Dialog } from "@/components/Dialog";
 import type { Card } from "@/lib/content";
@@ -16,6 +16,14 @@ import {
 	LessonAudio,
 	VisibilityPanel,
 } from "@/pages/admin/reviewParts";
+
+/**
+ * A new card's heading, or the end screen's, takes the focus as it
+ * appears, so that a screen reader reads it next.
+ */
+function focusOnMount(node: HTMLHeadingElement | null) {
+	node?.focus();
+}
 
 interface ViewProps {
 	data: ReviewData;
@@ -36,14 +44,7 @@ export function ReviewPhone({ data, actions, error }: ViewProps) {
 	const [index, setIndex] = useState(() => firstToReview(cards));
 	const [done, setDone] = useState(cards.length === 0);
 	const [flagging, setFlagging] = useState(false);
-	const heading = useRef<HTMLHeadingElement>(null);
 	const card = cards[index];
-
-	// A new card, or the end screen, takes the focus, so that a screen
-	// reader reads it next.
-	useEffect(() => {
-		heading.current?.focus();
-	}, [index, done]);
 
 	function advance() {
 		if (index + 1 < cards.length) {
@@ -59,7 +60,7 @@ export function ReviewPhone({ data, actions, error }: ViewProps) {
 				data={data}
 				actions={actions}
 				error={error}
-				headingRef={heading}
+				headingRef={focusOnMount}
 				onRestart={() => {
 					setIndex(0);
 					setDone(false);
@@ -96,7 +97,12 @@ export function ReviewPhone({ data, actions, error }: ViewProps) {
 					<span className="review-crumb">
 						{trackLabels[data.unit.track]} · {data.unit.title}
 					</span>
-					<h1 ref={heading} tabIndex={-1} className="review-phone-title">
+					<h1
+						key={card.id}
+						ref={focusOnMount}
+						tabIndex={-1}
+						className="review-phone-title"
+					>
 						{data.lesson.title}
 					</h1>
 				</div>
@@ -258,7 +264,7 @@ function FlagDialog({ initial, busy, onCancel, onSubmit }: FlagDialogProps) {
 }
 
 interface DoneScreenProps extends ViewProps {
-	headingRef: React.RefObject<HTMLHeadingElement | null>;
+	headingRef: (node: HTMLHeadingElement | null) => void;
 	onRestart: () => void;
 }
 
