@@ -108,8 +108,8 @@ async function openCard(withAudio: boolean) {
 	api.logIn("nour");
 	const user = userEvent.setup();
 	await renderAt("/admin/contenu");
-	await user.click(await screen.findByRole("button", { name: "واش راك؟" }));
-	const panel = screen.getByRole("region", { name: "Détail" });
+	await user.click(await screen.findByRole("link", { name: "واش راك؟" }));
+	const panel = screen.getByRole("main");
 	await within(panel).findByRole("textbox", {
 		name: "Recto (arabe, avec voyelles)",
 	});

@@ -600,13 +600,9 @@ button.button-primary {
 	gap: 20px;
 }
 
-/* The narrowest each table lays out in on a wide screen without clipping a
-   cell, measured with the longest role badge and both action buttons on one
-   line. */
-.content-columns {
-	--table-fit: 440px;
-}
-
+/* The narrowest the users table lays out in on a wide screen without
+   clipping a cell, measured with the longest role badge and both action
+   buttons on one line. */
 .users-columns {
 	--table-fit: 910px;
 }
@@ -924,7 +920,7 @@ button.button-primary {
 	gap: 10px;
 }
 
-.admin-header-actions > button {
+.admin-header-actions > a {
 	padding: 0 8px;
 }
 
@@ -1043,25 +1039,32 @@ button.button-primary {
 	font-weight: 900;
 }
 
-.content-row-selected {
-	background: var(--color-primary-soft);
-}
-
-.content-title-button {
-	min-height: 44px;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	color: var(--color-text);
-	font: inherit;
-	font-size: 15px;
-	font-weight: 900;
-	text-align: start;
+.content-row {
 	cursor: pointer;
 }
 
-.content-title-button :lang(ar) {
+@media (hover: hover) {
+	.content-row:hover {
+		background: var(--color-primary-soft);
+	}
+}
+
+.content-title-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	color: var(--color-text);
+	font-size: 15px;
+	font-weight: 900;
+	text-decoration: none;
+}
+
+.content-title-link :lang(ar) {
 	font-size: 20px;
+}
+
+.content-edit {
+	max-width: 720px;
 }
 
 .content-parent {
@@ -1357,7 +1360,7 @@ button.button-primary {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 
-	.admin-header-actions > button {
+	.admin-header-actions > a {
 		padding: 0 18px;
 	}
 
@@ -1427,10 +1430,6 @@ button.button-primary {
 
 	.admin-help {
 		flex: 1 1 300px;
-	}
-
-	.content-detail {
-		flex: 1 1 360px;
 	}
 }
 
@@ -2366,7 +2365,9 @@ button.button-primary {
 }
 
 .review-empty .button-outline,
+.admin-header-actions > a,
 .content-review-link,
+.content-back-link,
 .review-back-link,
 .review-lesson-link {
 	display: inline-flex;
@@ -2377,8 +2378,13 @@ button.button-primary {
 }
 
 .content-review-link,
+.content-back-link,
 .review-back-link {
 	align-self: flex-start;
+}
+
+.content-back-link {
+	padding-inline-start: 10px;
 }
 
 .admin-main-full {

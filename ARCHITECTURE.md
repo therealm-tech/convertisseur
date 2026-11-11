@@ -71,6 +71,16 @@ staff write and review the learning content, beside `/admin/relecture`, the
 review queue (see [The review queue](#the-review-queue)), and
 `/admin/utilisateurs`.
 
+`/admin/contenu` lists the units, lessons and cards, and keeps its filters in
+its query string (`statut`, `parcours`, `remarque`, `q`, `page`), each change
+replacing the history entry rather than adding one. Each item is edited on a
+page of its own, `/admin/contenu/{unites|lecons|cartes}/{id}`, and written at
+`/admin/contenu/{unites|lecons|cartes}/nouvelle`, which leads to the new
+item's page once it is created. A page opened from the list carries the list's
+filters in its history state, so that its way back, and deleting the item,
+return to the very entry it came from, filters and scroll included; opened
+from a link, it leads to the list unfiltered.
+
 Learners start on `/`, which shows both tracks; `/parcours/{track}` draws a
 track's units and their lessons as a path, and
 `/parcours/{track}/lecons/{lessonId}` shows a lesson's cards one at a time,
