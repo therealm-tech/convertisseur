@@ -1,12 +1,25 @@
-import { Link, useLoaderData } from "@tanstack/react-router";
+import {
+	type ErrorComponentProps,
+	Link,
+	useLoaderData,
+	useParams,
+} from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Arabic } from "@/components/Arabic";
 import { BackIcon, CloseIcon } from "@/components/icons";
 import { LetterFormsRow } from "@/components/LetterFormsRow";
 import { PlayButton } from "@/components/PlayButton";
+import { ApiError, problemTypes } from "@/lib/api";
 import { countOf, varietyLabels } from "@/lib/contentLabels";
-import { hasQuiz } from "@/lib/quiz";
-import type { StudyCard, StudyLesson } from "@/lib/tracks";
+import { recordCardView } from "@/lib/progress";
+import { hasQuiz, PASS_PERCENT } from "@/lib/quiz";
+import {
+	type ExerciseResult,
+	isPassed,
+	type StudyCard,
+	type StudyLesson,
+} from "@/lib/tracks";
+import { ErrorPage } from "@/pages/ErrorPage";
 
 function Answer({ card }: { card: StudyCard }) {
 	if (card.transliteration === null && card.meaningFr === null) {
@@ -87,6 +100,18 @@ function ExerciseLink({
 	);
 }
 
+function ExerciseChip({ exercise }: { exercise: ExerciseResult | null }) {
+	if (!exercise) {
+		return null;
+	}
+	const score = `${exercise.best.firstTry}/${exercise.best.total}`;
+	return isPassed(exercise) ? (
+		<span className="chip chip-passed">Réussi · {score}</span>
+	) : (
+		<span className="chip">Meilleur score · {score}</span>
+	);
+}
+
 function Finished({
 	lesson,
 	quiz,
@@ -105,6 +130,12 @@ function Finished({
 				Tu as parcouru les {countOf(lesson.cards.length, "carte", "cartes")} de
 				« {lesson.title} ».
 			</p>
+			{quiz && !isPassed(lesson.exercise) ? (
+				<p className="lesson-end-text">
+					Réussis l'exercice à {PASS_PERCENT}&#8239;% pour ouvrir la leçon
+					suivante.
+				</p>
+			) : null}
 			{quiz ? (
 				<ExerciseLink lesson={lesson} className="button-primary" />
 			) : null}
@@ -126,14 +157,32 @@ export function LessonPage() {
 	const lesson = useLoaderData({
 		from: "/_app/tracks/$track/lessons/$lessonId",
 	});
-	const [index, setIndex] = useState(0);
+	const quiz = useMemo(() => hasQuiz(lesson.cards), [lesson.cards]);
+	const [resumeAt] = useState(() => {
+		const unseen = lesson.cards.findIndex((card) => !card.seen);
+		return Math.max(unseen, 0);
+	});
+	const [index, setIndex] = useState(resumeAt);
+	const [resumed, setResumed] = useState(resumeAt > 0);
+	const [seen, setSeen] = useState<ReadonlySet<string>>(
+		() => new Set(lesson.cards.filter((c) => c.seen).map((c) => c.id)),
+	);
 	const [revealed, setRevealed] = useState(false);
 	const [finished, setFinished] = useState(false);
-	const quiz = useMemo(() => hasQuiz(lesson.cards), [lesson.cards]);
 	const total = lesson.cards.length;
 	const card = lesson.cards[index];
+	const shownId = finished ? undefined : card?.id;
+
+	useEffect(() => {
+		if (shownId === undefined) {
+			return;
+		}
+		recordCardView(shownId);
+		setSeen((ids) => (ids.has(shownId) ? ids : new Set(ids).add(shownId)));
+	}, [shownId]);
 
 	function goTo(next: number) {
+		setResumed(false);
 		if (next >= total) {
 			setFinished(true);
 			return;
@@ -196,12 +245,18 @@ export function LessonPage() {
 			<div className="lesson-intro">
 				<p className="lesson-unit">{lesson.unit.title}</p>
 				<h1 className="lesson-title">{lesson.title}</h1>
-				{lesson.audio || (quiz && !finished) ? (
-					<div className="lesson-actions">
-						{lesson.audio ? (
-							<PlayButton url={lesson.audio.url} label="Écouter la leçon" />
-						) : null}
-						{quiz && !finished ? (
+				{lesson.audio ? (
+					<PlayButton url={lesson.audio.url} label="Écouter la leçon" />
+				) : null}
+				{total > 0 && !finished ? (
+					<div className="lesson-status">
+						<span className="chip">
+							{seen.size >= total
+								? "Terminée"
+								: `${seen.size}/${total} cartes vues`}
+						</span>
+						<ExerciseChip exercise={lesson.exercise} />
+						{quiz ? (
 							<ExerciseLink
 								lesson={lesson}
 								className="button-secondary lesson-exercise"
@@ -210,6 +265,15 @@ export function LessonPage() {
 					</div>
 				) : null}
 			</div>
+			{resumed ? (
+				<p className="resume-note">
+					On reprend à la carte {resumeAt + 1}, la première que tu n'as pas
+					encore vue.{" "}
+					<button type="button" className="link-button" onClick={() => goTo(0)}>
+						Recommencer au début
+					</button>
+				</p>
+			) : null}
 
 			{total === 0 ? (
 				<div className="empty-state">
@@ -279,6 +343,29 @@ export function LessonNotFound() {
 			</p>
 			<Link to="/" className="button-primary">
 				Retour à l'accueil
+			</Link>
+		</main>
+	);
+}
+
+/** A lesson, or its exercise, the learner has not opened yet. */
+export function LessonError({ error }: ErrorComponentProps) {
+	const { track } = useParams({ strict: false });
+	if (
+		!(error instanceof ApiError) ||
+		error.type !== problemTypes.lessonLocked ||
+		track === undefined
+	) {
+		return <ErrorPage />;
+	}
+	return (
+		<main className="landing">
+			<h1 className="landing-title">Leçon verrouillée</h1>
+			<p className="landing-tagline">
+				Réussis l'exercice de la leçon d'avant pour l'ouvrir.
+			</p>
+			<Link to="/tracks/$track" params={{ track }} className="button-primary">
+				Retour au parcours
 			</Link>
 		</main>
 	);

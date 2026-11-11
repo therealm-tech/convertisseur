@@ -209,14 +209,6 @@ export function buildQuiz(
 	return interleave(chosen, random);
 }
 
-/**
- * Whether a lesson of this many cards may have an exercise: fewer cards
- * cannot make a question of three choices.
- */
-export function mayHaveQuiz(cardCount: number): boolean {
-	return cardCount >= MIN_CHOICES;
-}
-
 /** Whether the cards make at least one question, whatever the draw. */
 export function hasQuiz(cards: readonly StudyCard[]): boolean {
 	return buildQuiz(cards).length > 0;

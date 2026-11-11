@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Arabic } from "@/components/Arabic";
 import { CloseIcon } from "@/components/icons";
 import { PlayButton } from "@/components/PlayButton";
+import { recordAttempt } from "@/lib/progress";
 import {
 	buildQuiz,
 	type Grade,
@@ -12,7 +13,7 @@ import {
 	type QuestionKind,
 	requeue,
 } from "@/lib/quiz";
-import type { StudyLesson } from "@/lib/tracks";
+import { type Attempt, isPassed, type StudyLesson } from "@/lib/tracks";
 
 const instructions: Record<QuestionKind, string> = {
 	meaning: "Quel est le sens ?",
@@ -163,6 +164,20 @@ function Finished({
 	total: number;
 	onRestart: () => void;
 }) {
+	const wasPassed = isPassed(lesson.exercise);
+	const [saved, setSaved] = useState<Attempt | null | undefined>(undefined);
+	const sent = useRef(false);
+
+	useEffect(() => {
+		if (sent.current) {
+			return;
+		}
+		sent.current = true;
+		void recordAttempt(lesson.id, firstTry, total).then(setSaved);
+	}, [lesson.id, firstTry, total]);
+
+	const best = saved?.exercise.best;
+	const next = saved?.nextLesson;
 	return (
 		<section className="lesson-end" aria-labelledby="quiz-end-title">
 			<h2 id="quiz-end-title" className="lesson-end-title">
@@ -177,6 +192,24 @@ function Finished({
 					Il faut {PASS_PERCENT}&#8239;% pour réussir.
 				</p>
 			)}
+			<div aria-live="polite" className="quiz-saved">
+				{saved === null ? (
+					<p className="lesson-end-text">
+						Ton score n'est pas encore enregistré : il le sera dès que la
+						connexion reviendra.
+					</p>
+				) : null}
+				{next && !wasPassed && grade.passed ? (
+					<span className="chip chip-passed">
+						Leçon suivante ouverte : « {next.title} »
+					</span>
+				) : null}
+				{best && (best.firstTry !== firstTry || best.total !== total) ? (
+					<span className="chip">
+						Ton meilleur score : {best.firstTry}/{best.total}
+					</span>
+				) : null}
+			</div>
 			<button
 				type="button"
 				className={grade.passed ? "button-secondary" : "button-primary"}
@@ -184,10 +217,21 @@ function Finished({
 			>
 				Recommencer
 			</button>
+			{next ? (
+				<Link
+					to="/tracks/$track/lessons/$lessonId"
+					params={{ track: lesson.track, lessonId: next.id }}
+					className={grade.passed ? "button-primary" : "button-secondary"}
+				>
+					Leçon suivante
+				</Link>
+			) : null}
 			<Link
 				to="/tracks/$track"
 				params={{ track: lesson.track }}
-				className={grade.passed ? "button-primary" : "button-secondary"}
+				className={
+					grade.passed && !next ? "button-primary" : "button-secondary"
+				}
 			>
 				Retour au parcours
 			</Link>

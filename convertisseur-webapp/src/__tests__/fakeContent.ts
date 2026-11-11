@@ -1,6 +1,8 @@
 import type { User } from "@/lib/api";
 import type { Audio, Kind, Status, Track, Variety } from "@/lib/content";
 import type { LetterForms } from "@/lib/letterForms";
+import { gradeQuiz, hasQuiz } from "@/lib/quiz";
+import type { StudyCard } from "@/lib/tracks";
 import { json, problem } from "./responses";
 
 interface Row {
@@ -41,6 +43,22 @@ const trackPath = /^\/api\/v1\/tracks(?:\/([^/]+))?(?:\/lessons\/([^/]+))?$/;
 
 const trackIds: Track[] = ["arabe", "islam"];
 
+const cardViewPath = /^\/api\/v1\/card-views\/([^/]+)$/;
+
+interface ExerciseResult {
+	best: { firstTry: number; total: number; at: string };
+	passedAt: string | null;
+	lastAttemptAt: string;
+}
+
+interface LessonState {
+	hasExercise: boolean;
+	locked: boolean;
+	seenCardCount: number;
+	lastSeenAt: string | null;
+	exercise: ExerciseResult | null;
+}
+
 const playback = (audio: Audio | null) =>
 	audio
 		? { url: `/api/v1/audio/${audio.id}`, durationMs: audio.durationMs }
@@ -54,6 +72,10 @@ const nobody: User = { id: "u-seed", username: "seed", role: "admin" };
 /** An in-memory stand-in for the content endpoints. */
 export class FakeContent {
 	rows: Row[] = [];
+	/** Per account, the cards it has seen and when it last saw each. */
+	private views = new Map<string, Map<string, string>>();
+	/** Per account, its exercise result in each lesson. */
+	private results = new Map<string, Map<string, ExerciseResult>>();
 	private clock = Date.parse("2026-11-01T09:00:00Z");
 
 	private tick(): string {
@@ -302,7 +324,146 @@ export class FakeContent {
 			.sort((a, b) => a.position - b.position);
 	}
 
-	private outline(track: Track) {
+	/** Records that the account saw the cards, as a test's starting point. */
+	see(userId: string, cardIds: readonly string[]) {
+		const seen = this.viewsOf(userId);
+		for (const cardId of cardIds) {
+			seen.set(cardId, this.tick());
+		}
+	}
+
+	/** Records an exercise attempt of the account, as a test's starting point. */
+	attempt(userId: string, lessonId: string, firstTry = 12, total = 12) {
+		const results = this.resultsOf(userId);
+		const previous = results.get(lessonId);
+		const at = this.tick();
+		const better =
+			!previous ||
+			firstTry * previous.best.total > previous.best.firstTry * total;
+		const result: ExerciseResult = {
+			best: better || !previous ? { firstTry, total, at } : previous.best,
+			passedAt:
+				previous?.passedAt ?? (gradeQuiz(total, firstTry).passed ? at : null),
+			lastAttemptAt: at,
+		};
+		results.set(lessonId, result);
+		return result;
+	}
+
+	private viewsOf(userId: string): Map<string, string> {
+		const views = this.views.get(userId) ?? new Map<string, string>();
+		this.views.set(userId, views);
+		return views;
+	}
+
+	private resultsOf(userId: string): Map<string, ExerciseResult> {
+		const results =
+			this.results.get(userId) ?? new Map<string, ExerciseResult>();
+		this.results.set(userId, results);
+		return results;
+	}
+
+	private studyCard(card: Row, seen: ReadonlyMap<string, string>) {
+		return {
+			id: card.id,
+			arabic: card.arabic,
+			transliteration: card.transliteration,
+			meaningFr: card.meaningFr,
+			variety: card.variety,
+			forms: card.forms,
+			audio: playback(card.audio),
+			seen: seen.has(card.id),
+		} satisfies StudyCard;
+	}
+
+	/** The visible lessons of the track, in order, across its units. */
+	private path(track: Track): Row[] {
+		return this.rows
+			.filter(
+				(row) =>
+					row.kind === "unit" && row.track === track && this.visible(row),
+			)
+			.sort((a, b) => a.position - b.position)
+			.flatMap((unit) => this.children(unit.id, "lesson"));
+	}
+
+	private states(track: Track, userId: string): Map<string, LessonState> {
+		const seen = this.viewsOf(userId);
+		const results = this.resultsOf(userId);
+		const states = new Map<string, LessonState>();
+		let wayOpen = true;
+		for (const lesson of this.path(track)) {
+			const cards = this.children(lesson.id, "card");
+			const hasExercise = hasQuiz(
+				cards.map((card) => this.studyCard(card, seen)),
+			);
+			const allCards = this.rows.filter(
+				(row) => row.kind === "card" && row.parentId === lesson.id,
+			);
+			const seenTimes = allCards.flatMap((card) => {
+				const at = seen.get(card.id);
+				return at ? [at] : [];
+			});
+			const exercise = results.get(lesson.id) ?? null;
+			const started = seenTimes.length > 0 || exercise !== null;
+			const locked: boolean = !(wayOpen || started);
+			wayOpen = !locked && (exercise?.passedAt != null || !hasExercise);
+			states.set(lesson.id, {
+				hasExercise,
+				locked,
+				seenCardCount: cards.filter((card) => seen.has(card.id)).length,
+				lastSeenAt: seenTimes.sort().at(-1) ?? null,
+				exercise,
+			});
+		}
+		return states;
+	}
+
+	/** `PUT /api/v1/card-views/{cardId}` and `POST /api/v1/exercise-attempts`. */
+	record(method: string, url: URL, body: unknown, user: User): Response {
+		const view = url.pathname.match(cardViewPath);
+		if (method === "PUT" && view) {
+			const card = this.row(decodeURIComponent(view[1] ?? ""));
+			const lesson = card?.parentId ? this.row(card.parentId) : undefined;
+			if (card?.kind !== "card" || !lesson || !this.visible(card)) {
+				return problem(404, "not-found");
+			}
+			if (this.states(card.track, user.id).get(lesson.id)?.locked) {
+				return problem(403, "lesson-locked");
+			}
+			this.see(user.id, [card.id]);
+			return new Response(null, { status: 204 });
+		}
+		if (method === "POST" && url.pathname === "/api/v1/exercise-attempts") {
+			const { lessonId, firstTry, total } = body as {
+				lessonId: string;
+				firstTry: number;
+				total: number;
+			};
+			const lesson = this.row(lessonId);
+			if (lesson?.kind !== "lesson" || !this.visible(lesson)) {
+				return problem(422, "validation", {}, [
+					{ field: "lessonId", code: "lesson_not_found" },
+				]);
+			}
+			if (this.states(lesson.track, user.id).get(lesson.id)?.locked) {
+				return problem(403, "lesson-locked");
+			}
+			const exercise = this.attempt(user.id, lesson.id, firstTry, total);
+			const path = this.path(lesson.track);
+			const next = path[path.findIndex((row) => row.id === lesson.id) + 1];
+			const open =
+				next && !this.states(lesson.track, user.id).get(next.id)?.locked;
+			return json(200, {
+				exercise,
+				nextLesson: open ? { id: next.id, title: next.title } : null,
+			});
+		}
+		return problem(404, "not-found");
+	}
+
+	private outline(track: Track, userId: string) {
+		const states = this.states(track, userId);
 		return {
 			id: track,
 			units: this.rows
@@ -314,30 +475,42 @@ export class FakeContent {
 				.map((unit) => ({
 					id: unit.id,
 					title: unit.title,
-					lessons: this.children(unit.id, "lesson").map((lesson) => ({
-						id: lesson.id,
-						title: lesson.title,
-						cardCount: this.children(lesson.id, "card").length,
-					})),
+					lessons: this.children(unit.id, "lesson").map((lesson) => {
+						const state = states.get(lesson.id);
+						return {
+							id: lesson.id,
+							title: lesson.title,
+							cardCount: this.children(lesson.id, "card").length,
+							hasExercise: state?.hasExercise ?? false,
+							locked: state?.locked ?? false,
+							progress: {
+								seenCardCount: state?.seenCardCount ?? 0,
+								lastSeenAt: state?.lastSeenAt ?? null,
+								exercise: state?.exercise ?? null,
+							},
+						};
+					}),
 				})),
 		};
 	}
 
 	/** The learners' endpoints under `/api/v1/tracks`. */
-	study(url: URL): Response {
+	study(url: URL, user: User): Response {
 		const match = url.pathname.match(trackPath);
 		if (!match) {
 			return problem(404, "not-found");
 		}
 		const [, track, lessonId] = match;
 		if (track === undefined) {
-			return json(200, { items: trackIds.map((id) => this.outline(id)) });
+			return json(200, {
+				items: trackIds.map((id) => this.outline(id, user.id)),
+			});
 		}
 		if (!trackIds.includes(track as Track)) {
 			return problem(404, "not-found");
 		}
 		if (lessonId === undefined) {
-			return json(200, this.outline(track as Track));
+			return json(200, this.outline(track as Track, user.id));
 		}
 		const lesson = this.row(decodeURIComponent(lessonId));
 		const unit = lesson?.parentId ? this.row(lesson.parentId) : undefined;
@@ -347,21 +520,21 @@ export class FakeContent {
 		if (!this.visible(lesson)) {
 			return problem(404, "not-found");
 		}
+		const state = this.states(track as Track, user.id).get(lesson.id);
+		if (state?.locked) {
+			return problem(403, "lesson-locked");
+		}
+		const seen = this.viewsOf(user.id);
 		return json(200, {
 			id: lesson.id,
 			track,
 			unit: { id: unit.id, title: unit.title },
 			title: lesson.title,
 			audio: playback(lesson.audio),
-			cards: this.children(lesson.id, "card").map((card) => ({
-				id: card.id,
-				arabic: card.arabic,
-				transliteration: card.transliteration,
-				meaningFr: card.meaningFr,
-				variety: card.variety,
-				forms: card.forms,
-				audio: playback(card.audio),
-			})),
+			cards: this.children(lesson.id, "card").map((card) =>
+				this.studyCard(card, seen),
+			),
+			exercise: state?.exercise ?? null,
 		});
 	}
 

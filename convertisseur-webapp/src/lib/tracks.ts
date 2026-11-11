@@ -12,10 +12,24 @@ const PlaybackSchema = z.object({
 });
 export type Playback = z.infer<typeof PlaybackSchema>;
 
+const ExerciseResultSchema = z.object({
+	best: z.object({ firstTry: z.number(), total: z.number(), at: z.string() }),
+	passedAt: z.string().nullable(),
+	lastAttemptAt: z.string(),
+});
+export type ExerciseResult = z.infer<typeof ExerciseResultSchema>;
+
 const TrackLessonSchema = z.object({
 	id: z.string(),
 	title: z.string(),
 	cardCount: z.number(),
+	hasExercise: z.boolean(),
+	locked: z.boolean(),
+	progress: z.object({
+		seenCardCount: z.number(),
+		lastSeenAt: z.string().nullable(),
+		exercise: ExerciseResultSchema.nullable(),
+	}),
 });
 export type TrackLesson = z.infer<typeof TrackLessonSchema>;
 
@@ -42,6 +56,7 @@ const StudyCardSchema = z.object({
 	variety: z.enum(["classique", "darija"]),
 	forms: LetterFormsSchema.nullable(),
 	audio: PlaybackSchema.nullable(),
+	seen: z.boolean(),
 });
 export type StudyCard = z.infer<typeof StudyCardSchema>;
 
@@ -52,6 +67,7 @@ const StudyLessonSchema = z.object({
 	title: z.string(),
 	audio: PlaybackSchema.nullable(),
 	cards: z.array(StudyCardSchema),
+	exercise: ExerciseResultSchema.nullable(),
 });
 export type StudyLesson = z.infer<typeof StudyLessonSchema>;
 
@@ -63,6 +79,12 @@ export function parseTrackId(segment: string): TrackId {
 	}
 	return parsed.data;
 }
+
+const AttemptSchema = z.object({
+	exercise: ExerciseResultSchema,
+	nextLesson: z.object({ id: z.string(), title: z.string() }).nullable(),
+});
+export type Attempt = z.infer<typeof AttemptSchema>;
 
 /** Turns the API's 404 into the router's page not found. */
 async function expectFound(response: Response): Promise<void> {
@@ -98,6 +120,39 @@ export async function fetchLesson(
 	);
 	await expectFound(response);
 	return StudyLessonSchema.parse(await response.json());
+}
+
+export async function sendCardView(cardId: string): Promise<void> {
+	const response = await send(
+		"PUT",
+		`/api/v1/card-views/${encodeURIComponent(cardId)}`,
+	);
+	await expectOk(response);
+}
+
+export async function sendAttempt(
+	lessonId: string,
+	firstTry: number,
+	total: number,
+): Promise<Attempt> {
+	const response = await send("POST", "/api/v1/exercise-attempts", {
+		lessonId,
+		firstTry,
+		total,
+	});
+	await expectOk(response);
+	return AttemptSchema.parse(await response.json());
+}
+
+/** Whether every card of the lesson has been seen. */
+export function isComplete(lesson: TrackLesson): boolean {
+	return (
+		lesson.cardCount > 0 && lesson.progress.seenCardCount >= lesson.cardCount
+	);
+}
+
+export function isPassed(exercise: ExerciseResult | null): boolean {
+	return exercise?.passedAt != null;
 }
 
 export function lessonCount(track: Track): number {

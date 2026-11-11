@@ -3,6 +3,7 @@
 
 pub mod audio;
 pub mod content;
+pub mod progress;
 pub mod review;
 pub mod sessions;
 pub mod sync;

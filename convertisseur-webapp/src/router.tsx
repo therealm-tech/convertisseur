@@ -28,7 +28,7 @@ import { UsersPage } from "@/pages/admin/UsersPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { ErrorPage } from "@/pages/ErrorPage";
 import { HomePage } from "@/pages/HomePage";
-import { LessonNotFound, LessonPage } from "@/pages/LessonPage";
+import { LessonError, LessonNotFound, LessonPage } from "@/pages/LessonPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { QuizPage } from "@/pages/QuizPage";
 import { TrackPage } from "@/pages/TrackPage";
@@ -80,6 +80,7 @@ const lessonRoute = createRoute({
 		fetchLesson(parseTrackId(params.track), params.lessonId),
 	component: LessonPage,
 	notFoundComponent: LessonNotFound,
+	errorComponent: LessonError,
 });
 
 const quizRoute = createRoute({
@@ -89,6 +90,7 @@ const quizRoute = createRoute({
 		fetchLesson(parseTrackId(params.track), params.lessonId),
 	component: QuizPage,
 	notFoundComponent: LessonNotFound,
+	errorComponent: LessonError,
 });
 
 const adminRoute = createRoute({

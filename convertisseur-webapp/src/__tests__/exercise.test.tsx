@@ -66,10 +66,13 @@ function seed(api: FakeApi) {
 	});
 }
 
+/** Aicha, who has passed "Saluer", so that the lessons after it are open. */
 function loggedIn() {
 	const api = installFakeApi();
 	api.logIn("aicha");
 	seed(api);
+	const aicha = api.account("aicha")?.user.id ?? "";
+	api.content.attempt(aicha, "l-greetings");
 	return api;
 }
 
@@ -98,6 +101,17 @@ async function answer(right: boolean) {
 		throw new Error("no such choice");
 	}
 	await userEvent.click(choice);
+}
+
+/** Answers every question right until the end screen. */
+async function answerAllRight() {
+	await screen.findByRole("heading", { level: 2 });
+	while (!screen.queryByRole("heading", { name: /^Exercice / })) {
+		await answer(true);
+		await userEvent.click(
+			screen.getByRole("button", { name: /^(Continuer|Terminer)$/ }),
+		);
+	}
 }
 
 describe("exercise", () => {
@@ -137,12 +151,12 @@ describe("exercise", () => {
 		);
 	});
 
-	it("is offered on the track's map, under lessons of three cards or more", async () => {
+	it("is offered on the track's map, under lessons that have one", async () => {
 		loggedIn();
 		const router = await renderAt("/tracks/arabe");
 
 		await userEvent.click(
-			await screen.findByRole("link", { name: "S'entraîner : Saluer" }),
+			await screen.findByRole("link", { name: /: Saluer$/ }),
 		);
 
 		expect(await screen.findByText("Exercice")).toBeInTheDocument();
@@ -151,7 +165,7 @@ describe("exercise", () => {
 		);
 	});
 
-	it("is not offered on the map under three cards", async () => {
+	it("is not offered on the map under a lesson without one", async () => {
 		loggedIn();
 		await renderAt("/tracks/arabe");
 
@@ -159,7 +173,7 @@ describe("exercise", () => {
 			await screen.findByRole("link", { name: /Remercier/ }),
 		).toBeInTheDocument();
 		expect(
-			screen.queryByRole("link", { name: "S'entraîner : Remercier" }),
+			screen.queryByRole("link", { name: /: Remercier$/ }),
 		).not.toBeInTheDocument();
 	});
 
@@ -369,6 +383,47 @@ describe("exercise", () => {
 
 		expect(
 			await screen.findByRole("heading", { name: "Leçon introuvable" }),
+		).toBeInTheDocument();
+	});
+
+	it("counts a passed attempt and opens the next lesson", async () => {
+		const api = installFakeApi();
+		api.logIn("aicha");
+		seed(api);
+		await renderAt("/tracks/arabe/lessons/l-greetings/exercise");
+
+		await answerAllRight();
+
+		expect(
+			await screen.findByText("Leçon suivante ouverte : « Remercier »"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "Leçon suivante" }),
+		).toHaveAttribute("href", "/tracks/arabe/lessons/l-short");
+		expect(
+			api.calls.filter((call) => call.path === "/api/v1/exercise-attempts"),
+		).toEqual([
+			{
+				method: "POST",
+				path: "/api/v1/exercise-attempts",
+				body: { lessonId: "l-greetings", firstTry: 6, total: 6 },
+			},
+		]);
+	});
+
+	it("says when the score could not be saved yet", async () => {
+		const api = loggedIn();
+		api.failNext(
+			"POST",
+			"/api/v1/exercise-attempts",
+			new Response(null, { status: 503 }),
+		);
+		await renderAt("/tracks/arabe/lessons/l-greetings/exercise");
+
+		await answerAllRight();
+
+		expect(
+			await screen.findByText(/Ton score n'est pas encore enregistré/),
 		).toBeInTheDocument();
 	});
 });

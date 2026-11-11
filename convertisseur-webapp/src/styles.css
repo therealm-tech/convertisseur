@@ -1664,6 +1664,69 @@ button.button-primary {
 	background: var(--color-surface-muted);
 }
 
+.meter {
+	display: block;
+	height: 8px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: var(--color-surface-muted);
+}
+
+.meter > span {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background: var(--color-primary);
+}
+
+.track-card .meter {
+	background: var(--color-surface);
+}
+
+.resume-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 16px;
+	border: 1.5px solid var(--color-border);
+	border-radius: 22px;
+	background: var(--color-surface);
+	box-shadow: var(--shadow-card);
+}
+
+.resume-label {
+	font-size: 12px;
+	font-weight: 900;
+	letter-spacing: 0.6px;
+	text-transform: uppercase;
+	color: var(--color-primary-text);
+}
+
+.resume-where {
+	font-size: 13px;
+	font-weight: 800;
+	color: var(--color-text-subtle);
+}
+
+.resume-title {
+	margin: 0;
+	font-size: 19px;
+	font-weight: 900;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+}
+
+.resume-meta {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--color-text-muted);
+}
+
+.resume-card .button-primary {
+	min-height: 48px;
+	margin-top: 6px;
+}
+
 .home-account {
 	display: flex;
 	flex-direction: column;
@@ -1793,6 +1856,41 @@ button.button-primary {
 	font-weight: 900;
 }
 
+.lesson-star-done polygon {
+	fill: var(--color-accent);
+	stroke: var(--color-on-accent-soft);
+}
+
+.lesson-star-new polygon,
+.lesson-star-locked polygon {
+	fill: var(--color-surface-muted);
+	stroke: var(--color-input-border);
+}
+
+.lesson-star-new text {
+	fill: var(--color-text-subtle);
+}
+
+.lesson-star-mark {
+	fill: none;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.lesson-star-done .lesson-star-mark {
+	stroke: var(--color-on-accent-soft);
+	stroke-width: 9;
+}
+
+.lesson-star-locked .lesson-star-mark {
+	stroke: var(--color-text-subtle);
+	stroke-width: 6;
+}
+
+.lesson-star-locked rect {
+	fill: var(--color-text-subtle);
+}
+
 .path-text {
 	display: flex;
 	flex-direction: column;
@@ -1813,8 +1911,33 @@ button.button-primary {
 	overflow-wrap: anywhere;
 }
 
-.path-link:hover .path-title {
+.path-link-locked .path-title {
+	color: var(--color-text-muted);
+}
+
+a.path-link:hover .path-title {
 	text-decoration: underline;
+}
+
+.path-status {
+	font-size: 12px;
+	font-weight: 800;
+	color: var(--color-text-subtle);
+}
+
+.path-status-done {
+	color: var(--color-on-accent-soft);
+}
+
+.path-status-current {
+	color: var(--color-primary-text);
+}
+
+.path-text .meter {
+	width: 120px;
+	max-width: 100%;
+	height: 6px;
+	margin-top: 4px;
 }
 
 /* Lined up under the lesson's title: the star is 64px wide, after 4px of
@@ -1836,6 +1959,12 @@ button.button-primary {
 
 .path-exercise:hover {
 	border-color: var(--color-primary);
+}
+
+.path-exercise-passed {
+	border-color: transparent;
+	background: var(--color-accent-soft);
+	color: var(--color-on-accent-soft);
 }
 
 .empty-state {
@@ -1911,16 +2040,58 @@ button.button-primary {
 	overflow-wrap: anywhere;
 }
 
-.lesson-actions {
+.lesson-status {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
+	width: 100%;
+	margin-top: 4px;
 }
 
-.lesson-actions .lesson-exercise {
-	min-height: 44px;
-	margin-top: 0;
+.chip {
+	display: inline-flex;
+	align-items: center;
+	min-height: 28px;
+	padding: 0 10px;
+	border-radius: 999px;
+	background: var(--color-surface-muted);
+	color: var(--color-text-muted);
+	font-size: 13px;
+	font-weight: 800;
+}
+
+.chip-passed {
+	background: var(--color-accent-soft);
+	color: var(--color-on-accent-soft);
+}
+
+.lesson-status .lesson-exercise {
+	min-height: 40px;
+	margin: 0 0 0 auto;
+	padding: 0 14px;
+	font-size: 14px;
+}
+
+.resume-note {
+	margin: 0;
+	padding: 10px 14px;
+	border-radius: var(--radius-medium);
+	background: var(--color-primary-soft);
+	color: var(--color-on-primary-soft);
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.link-button {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	font-weight: 900;
+	text-decoration: underline;
+	cursor: pointer;
 }
 
 .play {
@@ -2184,6 +2355,17 @@ a.button-secondary {
 	font-weight: 900;
 	line-height: 1.1;
 	font-variant-numeric: tabular-nums;
+}
+
+.quiz-saved {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+}
+
+.quiz-saved:empty {
+	display: none;
 }
 
 .quiz-feedback-slot {
