@@ -34,6 +34,9 @@ const collections: Record<string, Kind> = {
 const memberPath =
 	/^\/api\/v1\/(units|lessons|cards)(?:\/([^/]+))?(\/status|\/audio|\/review-note)?$/;
 
+const lessonCardsPath =
+	/^\/api\/v1\/lessons\/([^/]+)\/(cards|card-validations)$/;
+
 const trackPath = /^\/api\/v1\/tracks(?:\/([^/]+))?(?:\/lessons\/([^/]+))?$/;
 
 const trackIds: Track[] = ["arabe", "islam"];
@@ -362,9 +365,156 @@ export class FakeContent {
 		});
 	}
 
+	/** A lesson as the review queue lists it. */
+	private summary(lesson: Row) {
+		const unit = this.row(lesson.parentId ?? "") as Row;
+		const cards = this.rows.filter(
+			(row) => row.kind === "card" && row.parentId === lesson.id,
+		);
+		const flagged = (row: Row) =>
+			row.status === "to_review" && row.reviewNote !== null;
+		return {
+			id: lesson.id,
+			position: lesson.position,
+			title: lesson.title,
+			status: lesson.status,
+			reviewNote: lesson.reviewNote,
+			hasAudio: lesson.audio !== null,
+			unit: {
+				id: unit.id,
+				track: unit.track,
+				position: unit.position,
+				title: unit.title,
+				status: unit.status,
+				reviewNote: unit.reviewNote,
+			},
+			cardCounts: {
+				validated: cards.filter((card) => card.status === "validated").length,
+				flagged: cards.filter(flagged).length,
+				toReview: cards.filter(
+					(card) => card.status === "to_review" && !flagged(card),
+				).length,
+				withoutAudio: cards.filter((card) => card.audio === null).length,
+			},
+		};
+	}
+
+	/** `GET /api/v1/lessons`: the review queue. */
+	private lessons(url: URL): Response {
+		const params = url.searchParams;
+		const page = Number(params.get("page") ?? 1);
+		const perPage = Number(params.get("perPage") ?? 50);
+		const cardsOf = (lesson: Row) =>
+			this.rows.filter(
+				(row) => row.kind === "card" && row.parentId === lesson.id,
+			);
+		const unitOf = (lesson: Row) => this.row(lesson.parentId ?? "") as Row;
+		const matching = this.rows
+			.filter((row) => row.kind === "lesson")
+			.filter(
+				(lesson) =>
+					!params.get("unitId") || lesson.parentId === params.get("unitId"),
+			)
+			.filter(
+				(lesson) =>
+					params.get("pendingReview") !== "true" ||
+					lesson.status === "to_review" ||
+					unitOf(lesson).status === "to_review" ||
+					cardsOf(lesson).some((card) => card.status === "to_review"),
+			)
+			.filter(
+				(lesson) =>
+					params.get("missingAudio") !== "true" ||
+					cardsOf(lesson).some((card) => card.audio === null),
+			)
+			.sort(
+				(a, b) =>
+					unitOf(a).track.localeCompare(unitOf(b).track) ||
+					unitOf(a).position - unitOf(b).position ||
+					a.position - b.position,
+			);
+		return json(200, {
+			items: matching
+				.slice((page - 1) * perPage, page * perPage)
+				.map((lesson) => this.summary(lesson)),
+			page,
+			perPage,
+			total: matching.length,
+			itemsToReview: this.rows.filter((row) => row.status === "to_review")
+				.length,
+			cardsWithoutAudio: this.rows.filter(
+				(row) => row.kind === "card" && row.audio === null,
+			).length,
+		});
+	}
+
+	/** A lesson's cards, and their validation in bulk. */
+	private lessonCards(
+		method: string,
+		lesson: Row | undefined,
+		sub: string,
+		body: unknown,
+		actor: User,
+	): Response {
+		if (lesson?.kind !== "lesson") {
+			return problem(404, "not-found");
+		}
+		const cards = this.rows
+			.filter((row) => row.kind === "card" && row.parentId === lesson.id)
+			.sort((a, b) => a.position - b.position);
+		if (method === "GET" && sub === "cards") {
+			return json(200, {
+				items: cards.map((card) => this.body(card)),
+				page: 1,
+				perPage: 100,
+				total: cards.length,
+			});
+		}
+		if (method === "POST" && sub === "card-validations") {
+			const { cardIds } = body as { cardIds: string[] };
+			const named = cards.filter((card) => cardIds.includes(card.id));
+			if (cardIds.length === 0 || new Set(cardIds).size !== named.length) {
+				return problem(422, "validation", {}, [
+					{ field: "cardIds", code: "card_not_in_lesson" },
+				]);
+			}
+			for (const card of named) {
+				if (card.status === "to_review" && card.reviewNote === null) {
+					card.status = "validated";
+					card.validatedBy = actor;
+					card.validatedAt = this.tick();
+				}
+			}
+			return json(200, {
+				cards: named.map((card) => ({
+					id: card.id,
+					status: card.status,
+					validatedAt: card.validatedAt,
+					validatedBy: author(card.validatedBy),
+					reviewNote: card.reviewNote,
+				})),
+			});
+		}
+		return problem(404, "not-found");
+	}
+
 	handle(method: string, url: URL, body: unknown, actor: User): Response {
 		if (url.pathname === "/api/v1/content-items" && method === "GET") {
 			return this.list(url);
+		}
+		if (url.pathname === "/api/v1/lessons" && method === "GET") {
+			return this.lessons(url);
+		}
+		const lessonCards = url.pathname.match(lessonCardsPath);
+		if (lessonCards) {
+			const [, lessonId = "", sub = ""] = lessonCards;
+			return this.lessonCards(
+				method,
+				this.row(decodeURIComponent(lessonId)),
+				sub,
+				body,
+				actor,
+			);
 		}
 		const match = url.pathname.match(memberPath);
 		if (!match) {

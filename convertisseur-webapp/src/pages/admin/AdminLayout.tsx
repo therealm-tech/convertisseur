@@ -1,5 +1,28 @@
 import { Link, Outlet, useRouteContext } from "@tanstack/react-router";
 import { roleLabels } from "@/lib/roles";
+import {
+	ReviewTotalsProvider,
+	useReviewTotals,
+} from "@/pages/admin/reviewTotals";
+
+function ReviewIcon() {
+	return (
+		<svg
+			width="20"
+			height="20"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M9 11.5 11.5 14 16 9.5" />
+			<rect x="4" y="4" width="16" height="16" rx="3" />
+		</svg>
+	);
+}
 
 function ContentIcon() {
 	return (
@@ -57,8 +80,37 @@ function BackIcon() {
 	);
 }
 
+/** The review entry, with how many items wait for a reviewer. */
+function ReviewLink() {
+	const { totals } = useReviewTotals();
+	const count = totals?.itemsToReview;
+	return (
+		<Link
+			to="/admin/relecture"
+			className="admin-nav-link"
+			aria-label={count ? `Relecture, ${count} à relire` : undefined}
+		>
+			<ReviewIcon />
+			Relecture
+			{count ? (
+				<span className="admin-nav-count" aria-hidden="true">
+					{count}
+				</span>
+			) : null}
+		</Link>
+	);
+}
+
 /** The admin area's frame: a top bar on a phone, a sidebar on a wide screen. */
 export function AdminLayout() {
+	return (
+		<ReviewTotalsProvider>
+			<AdminFrame />
+		</ReviewTotalsProvider>
+	);
+}
+
+function AdminFrame() {
 	const { user } = useRouteContext({ from: "/_app/admin" });
 	return (
 		<div className="admin">
@@ -71,6 +123,7 @@ export function AdminLayout() {
 					</div>
 				</div>
 				<nav aria-label="Administration" className="admin-nav">
+					<ReviewLink />
 					<Link to="/admin/contenu" className="admin-nav-link">
 						<ContentIcon />
 						Contenu

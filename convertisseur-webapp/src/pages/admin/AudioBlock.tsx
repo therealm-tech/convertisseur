@@ -31,6 +31,12 @@ interface AudioBlockProps {
 		durationMs: number | undefined,
 	) => Promise<void>;
 	onRemove: () => Promise<void>;
+	/** "Audio" by default. */
+	label?: string;
+	/** The microphone button's label, "Enregistrer" by default. */
+	recordLabel?: string;
+	/** Leaves out the formats hint and the upload date, for a list. */
+	compact?: boolean;
 }
 
 type Mode =
@@ -71,7 +77,14 @@ function describeUploadFailure(failure: unknown): string {
  * The recording of a card or a lesson: play it, replace it with a file or
  * with the device's microphone, or remove it.
  */
-export function AudioBlock({ audio, onUpload, onRemove }: AudioBlockProps) {
+export function AudioBlock({
+	audio,
+	onUpload,
+	onRemove,
+	label = "Audio",
+	recordLabel = "Enregistrer",
+	compact = false,
+}: AudioBlockProps) {
 	const [state, setState] = useState<Mode>({ mode: "idle" });
 	const [error, setError] = useState<string | undefined>();
 	const [playing, setPlaying] = useState(false);
@@ -181,8 +194,8 @@ export function AudioBlock({ audio, onUpload, onRemove }: AudioBlockProps) {
 		state.mode === "choosing" || (audio === null && state.mode === "idle");
 
 	return (
-		<div className="field">
-			<span className="field-label">Audio</span>
+		<div className={compact ? "field audio-block-compact" : "field"}>
+			<span className="field-label">{label}</span>
 
 			{showFile ? (
 				<div className="audio-file">
@@ -196,9 +209,11 @@ export function AudioBlock({ audio, onUpload, onRemove }: AudioBlockProps) {
 					</button>
 					<div className="audio-file-text">
 						<span className="audio-file-name">{describeAudio(audio)}</span>
-						<span className="audio-file-meta">
-							Ajouté le {formatDay(audio.createdAt)}
-						</span>
+						{compact ? null : (
+							<span className="audio-file-meta">
+								Ajouté le {formatDay(audio.createdAt)}
+							</span>
+						)}
 					</div>
 					<button
 						type="button"
@@ -273,7 +288,7 @@ export function AudioBlock({ audio, onUpload, onRemove }: AudioBlockProps) {
 							onClick={() => void record()}
 						>
 							<MicIcon />
-							Enregistrer
+							{recordLabel}
 						</button>
 						{audio !== null ? (
 							<button
@@ -288,11 +303,13 @@ export function AudioBlock({ audio, onUpload, onRemove }: AudioBlockProps) {
 							</button>
 						) : null}
 					</div>
-					<span className="field-hint">
-						Un fichier MP3, M4A, OGG, WebM ou WAV de 10 Mo au plus, ou un
-						enregistrement direct avec le micro de l'appareil, téléphone
-						compris.
-					</span>
+					{compact ? null : (
+						<span className="field-hint">
+							Un fichier MP3, M4A, OGG, WebM ou WAV de 10 Mo au plus, ou un
+							enregistrement direct avec le micro de l'appareil, téléphone
+							compris.
+						</span>
+					)}
 				</div>
 			) : null}
 
