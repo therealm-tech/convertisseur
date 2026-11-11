@@ -357,8 +357,14 @@ export function ContentDetail({
 				{loaded && loaded.kind !== "unit" ? (
 					<AudioBlock
 						audio={loaded.item.audio}
-						onUpload={async (file, filename) => {
-							await uploadAudio(loaded.kind, loaded.item.id, file, filename);
+						onUpload={async (file, filename, durationMs) => {
+							await uploadAudio(
+								loaded.kind,
+								loaded.item.id,
+								file,
+								filename,
+								durationMs,
+							);
 							await refresh(loaded, "Audio enregistré : à relire.");
 						}}
 						onRemove={async () => {

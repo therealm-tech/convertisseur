@@ -42,6 +42,31 @@ fn multipart(part: &str, content_type: &str, file: &[u8]) -> Vec<u8> {
     body
 }
 
+/// A `durationMs` text part, to append to a body from [`multipart`] or to
+/// put ahead of it.
+fn duration_part(value: &str) -> Vec<u8> {
+    format!(
+        "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"durationMs\"\r\n\r\n{value}\r\n"
+    )
+    .into_bytes()
+}
+
+/// `file` followed by a `durationMs` part.
+fn multipart_with_duration(file: &[u8], duration: &str) -> Vec<u8> {
+    let mut body = multipart("file", "audio/wav", file);
+    body.truncate(body.len() - format!("--{BOUNDARY}--\r\n").len());
+    body.extend(duration_part(duration));
+    body.extend_from_slice(format!("--{BOUNDARY}--\r\n").as_bytes());
+    body
+}
+
+/// A minimal MP4 audio file, whose length the server cannot read.
+fn mp4() -> Vec<u8> {
+    let mut bytes = b"\0\0\0\x18ftypM4A \0\0\0\0M4A mp42".to_vec();
+    bytes.extend_from_slice(&[0; 64]);
+    bytes
+}
+
 struct Fixture {
     server: Server,
     store: MemoryStore,
@@ -392,4 +417,94 @@ async fn uploads_to_an_unknown_item_store_nothing(pool: PgPool) {
         .await
         .assert_problem(StatusCode::NOT_FOUND, "not-found");
     assert_eq!(fixture.store.keys(), Vec::<String>::new());
+}
+
+#[sqlx::test]
+async fn stores_the_length_the_client_measured_for_formats_the_server_cannot_read(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let multipart_type = format!("multipart/form-data; boundary={BOUNDARY}");
+
+    let answer = fixture
+        .upload_as(
+            &fixture.admin,
+            &fixture.card,
+            &multipart_type,
+            multipart_with_duration(&mp4(), "4200"),
+        )
+        .await;
+
+    assert_eq!(answer.status, StatusCode::OK, "{}", answer.body);
+    assert_eq!(answer.body["contentType"], "audio/mp4");
+    assert_eq!(answer.body["durationMs"], 4_200);
+    assert_eq!(fixture.get(&fixture.card).await["audio"], answer.body);
+
+    let mut ahead = duration_part("1500");
+    ahead.extend(multipart("file", "audio/mp4", &mp4()));
+    let answer = fixture
+        .upload_as(&fixture.admin, &fixture.lesson, &multipart_type, ahead)
+        .await;
+    assert_eq!(answer.body["durationMs"], 1_500, "{}", answer.body);
+}
+
+#[sqlx::test]
+async fn the_length_the_server_reads_wins_over_the_claimed_one(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+
+    let answer = fixture
+        .upload_as(
+            &fixture.admin,
+            &fixture.card,
+            &format!("multipart/form-data; boundary={BOUNDARY}"),
+            multipart_with_duration(&wav(), "9000"),
+        )
+        .await;
+
+    assert_eq!(answer.status, StatusCode::OK, "{}", answer.body);
+    assert_eq!(answer.body["durationMs"], 1_000);
+}
+
+#[sqlx::test]
+async fn leaves_the_length_empty_when_nobody_knows_it(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+
+    let answer = fixture
+        .upload_as(
+            &fixture.admin,
+            &fixture.card,
+            &format!("multipart/form-data; boundary={BOUNDARY}"),
+            multipart("file", "audio/mp4", &mp4()),
+        )
+        .await;
+
+    assert_eq!(answer.status, StatusCode::OK, "{}", answer.body);
+    assert_eq!(answer.body["durationMs"], Value::Null);
+}
+
+#[sqlx::test]
+async fn refuses_a_claimed_length_that_makes_no_sense(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let multipart_type = format!("multipart/form-data; boundary={BOUNDARY}");
+
+    for value in ["0", "-5", "600001", "4294967296", "abc", "", "1.5", "NaN"] {
+        fixture
+            .upload_as(
+                &fixture.admin,
+                &fixture.card,
+                &multipart_type,
+                multipart_with_duration(&mp4(), value),
+            )
+            .await
+            .assert_invalid("durationMs", "duration_invalid");
+    }
+    let at_limit = fixture
+        .upload_as(
+            &fixture.admin,
+            &fixture.card,
+            &multipart_type,
+            multipart_with_duration(&mp4(), "600000"),
+        )
+        .await;
+    assert_eq!(at_limit.body["durationMs"], 600_000, "{}", at_limit.body);
+    assert_eq!(fixture.store.keys().len(), 1);
+    assert_eq!(audio_rows(&pool).await, 1);
 }

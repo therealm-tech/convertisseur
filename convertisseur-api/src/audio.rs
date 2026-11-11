@@ -5,6 +5,9 @@
 /// The largest file accepted, 10 MB.
 pub const MAX_BYTES: usize = 10 * 1024 * 1024;
 
+/// The longest length a client may state, 10 minutes.
+pub const MAX_CLAIMED_DURATION_MS: u32 = 10 * 60 * 1000;
+
 /// A container every current browser plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Format {

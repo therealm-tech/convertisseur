@@ -1,9 +1,12 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
+import { readDuration } from "@/lib/mediaDuration";
 import { type FakeApi, installFakeApi } from "./fakeApi";
 import { renderAt } from "./helpers";
 import { problem } from "./responses";
+
+vi.mock("@/lib/mediaDuration", () => ({ readDuration: vi.fn() }));
 
 /** A MediaRecorder that records "opus" as soon as it is stopped. */
 class FakeRecorder extends EventTarget {
@@ -51,6 +54,7 @@ function setSecure(secure: boolean) {
 }
 
 beforeEach(() => {
+	vi.mocked(readDuration).mockResolvedValue(null);
 	setSecure(true);
 	vi.stubGlobal("MediaRecorder", FakeRecorder);
 	giveMicrophone(async () => ({ getTracks: () => [track] }));
@@ -126,6 +130,12 @@ function uploadedFile(api: FakeApi): File {
 	return file;
 }
 
+/** The `durationMs` field the first audio call sent, if any. */
+function uploadedDuration(api: FakeApi): FormDataEntryValue | null {
+	const body = audioCalls(api)[0]?.body;
+	return body instanceof FormData ? body.get("durationMs") : null;
+}
+
 describe("audio block", () => {
 	it("offers a file or the microphone when there is no audio", async () => {
 		const { panel } = await openCard(false);
@@ -184,6 +194,64 @@ describe("audio block", () => {
 		expect(file.name).toBe("enregistrement.webm");
 		expect(file.type).toBe("audio/webm;codecs=opus");
 		expect(track.stop).toHaveBeenCalled();
+	});
+
+	it("sends the length of a chosen file as the browser decodes it", async () => {
+		vi.mocked(readDuration).mockResolvedValue(3_200);
+		const { api, user, panel } = await openCard(false);
+
+		await user.upload(
+			within(panel).getByLabelText("Téléverser un fichier"),
+			new File([new Uint8Array(2_500)], "shukran.m4a", { type: "audio/mp4" }),
+		);
+
+		expect(await within(panel).findByText("M4A · 3 ko · 0:03")).toBeVisible();
+		expect(uploadedDuration(api)).toBe("3200");
+	});
+
+	it("sends no length when the browser cannot tell one", async () => {
+		const { api, user, panel } = await openCard(false);
+
+		await user.upload(
+			within(panel).getByLabelText("Téléverser un fichier"),
+			new File([new Uint8Array(2_500)], "shukran.mp3", { type: "audio/mpeg" }),
+		);
+
+		await within(panel).findByText("MP3 · 3 ko");
+		expect(uploadedDuration(api)).toBeNull();
+	});
+
+	it("sends the decoded length of a recording", async () => {
+		vi.mocked(readDuration).mockResolvedValue(2_500);
+		const { api, user, panel } = await openCard(false);
+
+		await user.click(
+			within(panel).getByRole("button", { name: "Enregistrer" }),
+		);
+		await user.click(within(panel).getByRole("button", { name: "Arrêter" }));
+
+		await within(panel).findByText(/^WebM · 1 ko · 0:03/);
+		expect(uploadedDuration(api)).toBe("2500");
+	});
+
+	it("falls back to the recording time when the blob has no length", async () => {
+		const { api, user, panel } = await openCard(false);
+
+		await user.click(
+			within(panel).getByRole("button", { name: "Enregistrer" }),
+		);
+		await within(panel).findByText(
+			"Enregistrement en cours · 0:01",
+			{},
+			{ timeout: 2_000 },
+		);
+		await user.click(within(panel).getByRole("button", { name: "Arrêter" }));
+
+		await within(panel).findByText(/^WebM · 1 ko/);
+		const sent = Number(uploadedDuration(api));
+		expect(Number.isInteger(sent)).toBe(true);
+		expect(sent).toBeGreaterThanOrEqual(1_000);
+		expect(sent).toBeLessThan(4_000);
 	});
 
 	it("plays and pauses the audio, replaces it or deletes it", async () => {

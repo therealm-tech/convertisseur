@@ -206,7 +206,7 @@ sequenceDiagram
     participant S as convertisseur-api
     participant O as Object store
     participant P as PostgreSQL
-    B->>S: PUT /api/v1/cards/{cardId}/audio, multipart file
+    B->>S: PUT /api/v1/cards/{cardId}/audio, multipart file and durationMs
     S->>S: read at most 10 MB, sniff the first bytes
     S->>O: PUT audio/{new id}
     S->>P: BEGIN, lock the card, insert the audio row
@@ -227,9 +227,17 @@ sequenceDiagram
 - **The type comes from the file, never from the client.** The first bytes
   must be those of MP3, MP4, Ogg, WebM or WAV (see
   [`audio.rs`](convertisseur-api/src/audio.rs)), and that type is the one
-  stored and served; anything else is a `415` `unsupported-audio`. The length
-  is read when the file gives it cheaply, from a WAV header or the last Ogg
-  page; it is `null` for the others.
+  stored and served; anything else is a `415` `unsupported-audio`.
+- **The length is the server's when the file gives it cheaply, the browser's
+  otherwise.** The server reads it from a WAV header or the last Ogg page.
+  MP3, MP4 and WebM would take parsing the whole stream, so the browser sends
+  the length it measured as an optional `durationMs` multipart part: the
+  decoded length of the file, or for a recording the time between start and
+  stop when the browser reports none (Chrome's `MediaRecorder` WebM decodes
+  to `Infinity`). The server stores it only when it cannot read the length
+  itself, a length it reads wins, and a value that is not a whole number
+  from 1 ms to 10 minutes is a `422` `duration_invalid`. Without either, the
+  length is `null`.
 - **10 MB at most**, set by a body limit on the upload routes alone, a little
   above the file limit to leave room for the multipart framing, then checked
   on the file itself; past it, a `413` `too-large`.

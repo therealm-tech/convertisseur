@@ -214,11 +214,14 @@ export class FakeContent {
 					{ field: "file", code: "file_missing" },
 				]);
 			}
+			const claimed = Number(
+				body instanceof FormData && body.get("durationMs"),
+			);
 			row.audio = {
 				id: `a-${this.rows.length}-${this.clock}`,
 				contentType: file.type.split(";")[0] || "audio/mpeg",
 				sizeBytes: file.size,
-				durationMs: null,
+				durationMs: claimed > 0 ? claimed : null,
 				createdAt: this.tick(),
 			};
 		}
