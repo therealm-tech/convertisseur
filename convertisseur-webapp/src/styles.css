@@ -2085,3 +2085,69 @@ button.button-primary {
 		min-height: 300px;
 	}
 }
+
+.letter-forms {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0;
+}
+
+.letter-forms-row {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 6px;
+	margin: 0;
+}
+
+.letter-form {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+	padding: 8px 4px;
+	border-radius: var(--radius-small);
+	background: var(--color-surface-muted);
+}
+
+.letter-form-label {
+	font-size: 13px;
+	font-weight: 800;
+	color: var(--color-text-muted);
+}
+
+.letter-form-glyph {
+	margin: 0;
+	font-size: 32px;
+	line-height: 1.6;
+	color: var(--color-text);
+}
+
+.letter-form-none {
+	background: transparent;
+	outline: 1.5px dashed var(--color-input-border);
+	outline-offset: -1.5px;
+}
+
+.letter-form-none .letter-form-glyph {
+	color: var(--color-text-subtle);
+}
+
+.letter-forms-note {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--color-text-muted);
+	text-align: center;
+}
+
+@media (min-width: 480px) {
+	.letter-forms-row {
+		gap: 10px;
+	}
+
+	.letter-form-glyph {
+		font-size: 40px;
+	}
+}

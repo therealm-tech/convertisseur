@@ -1,5 +1,6 @@
 import type { User } from "@/lib/api";
 import type { Audio, Kind, Status, Track, Variety } from "@/lib/content";
+import type { LetterForms } from "@/lib/letterForms";
 import { json, problem } from "./responses";
 
 interface Row {
@@ -13,6 +14,7 @@ interface Row {
 	transliteration: string | null;
 	meaningFr: string | null;
 	variety: Variety;
+	forms: LetterForms | null;
 	audio: Audio | null;
 	status: Status;
 	createdBy: User;
@@ -78,6 +80,7 @@ export class FakeContent {
 			transliteration: null,
 			meaningFr: null,
 			variety: "classique",
+			forms: null,
 			audio: null,
 			status: "to_review",
 			createdBy: nobody,
@@ -142,6 +145,7 @@ export class FakeContent {
 					transliteration: row.transliteration,
 					meaningFr: row.meaningFr,
 					variety: row.variety,
+					forms: row.forms,
 					audio: row.audio,
 				};
 		}
@@ -352,6 +356,7 @@ export class FakeContent {
 				transliteration: card.transliteration,
 				meaningFr: card.meaningFr,
 				variety: card.variety,
+				forms: card.forms,
 				audio: playback(card.audio),
 			})),
 		});

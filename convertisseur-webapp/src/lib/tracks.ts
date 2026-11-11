@@ -1,6 +1,7 @@
 import { notFound } from "@tanstack/react-router";
 import { z } from "zod";
 import { ApiError, expectOk, send } from "@/lib/api";
+import { LetterFormsSchema } from "@/lib/letterForms";
 
 const TrackIdSchema = z.enum(["arabe", "islam"]);
 export type TrackId = z.infer<typeof TrackIdSchema>;
@@ -39,6 +40,7 @@ const StudyCardSchema = z.object({
 	transliteration: z.string().nullable(),
 	meaningFr: z.string().nullable(),
 	variety: z.enum(["classique", "darija"]),
+	forms: LetterFormsSchema.nullable(),
 	audio: PlaybackSchema.nullable(),
 });
 export type StudyCard = z.infer<typeof StudyCardSchema>;
