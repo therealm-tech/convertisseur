@@ -1,0 +1,20 @@
+# Placeholders for the required values, so that the chart renders under
+# `helm lint`, `kubeconform` and `trivy config`. Never packaged.
+convertisseur:
+  database:
+    existingSecret:
+      name: convertisseur-database
+  superAdmin:
+    username: admin
+    password:
+      existingSecret:
+        name: convertisseur-super-admin
+  s3:
+    endpoint: https://s3.example.com
+    bucket: convertisseur-media
+    accessKeyId:
+      existingSecret:
+        name: convertisseur-s3
+    secretAccessKey:
+      existingSecret:
+        name: convertisseur-s3

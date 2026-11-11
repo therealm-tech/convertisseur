@@ -1,0 +1,60 @@
+# A realistic production set: three replicas behind an ingress-nginx, a
+# self-hosted object store, every credential from Secrets the cluster already
+# holds. Used by the CI to render the chart beyond its defaults; never packaged.
+global:
+  imagePullSecrets:
+    - name: ghcr-pull
+convertisseur:
+  replicaCount: 3
+  image:
+    tag: 0.1.0
+  clientIpHeader: X-Forwarded-For
+  log:
+    format: json
+  database:
+    maxConnections: 5
+    existingSecret:
+      name: convertisseur-database
+      key: url
+  superAdmin:
+    username: admin
+    password:
+      existingSecret:
+        name: convertisseur-super-admin
+        key: password
+  s3:
+    endpoint: https://seaweedfs-s3.storage.svc:8333
+    bucket: convertisseur-media
+    region: eu-west-3
+    forcePathStyle: true
+    accessKeyId:
+      existingSecret:
+        name: convertisseur-s3
+        key: access-key-id
+    secretAccessKey:
+      existingSecret:
+        name: convertisseur-s3
+        key: secret-access-key
+  caCerts:
+    existing:
+      kind: ConfigMap
+      name: internal-ca
+      key: ca.crt
+  ingress:
+    enabled: true
+    className: nginx
+    host: convertisseur.example.com
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+    tls:
+      secretName: convertisseur-tls
+  podDisruptionBudget:
+    enabled: true
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: convertisseur
+          app.kubernetes.io/instance: convertisseur

@@ -1,0 +1,4 @@
+.git/
+.gitignore
+values-lint.yaml
+values-example.yaml

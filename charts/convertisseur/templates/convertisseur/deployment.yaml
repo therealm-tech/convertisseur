@@ -1,0 +1,133 @@
+{{- $c := .Values.convertisseur }}
+{{- include "convertisseur.caCertsValidate" . }}
+{{- $pullSecrets := default .Values.global.imagePullSecrets $c.imagePullSecrets }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "convertisseur.fullname" . }}
+  labels:
+    {{- include "convertisseur.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $c.replicaCount }}
+  revisionHistoryLimit: {{ $c.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "convertisseur.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "convertisseur.labels" . | nindent 8 }}
+        {{- with $c.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $c.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "convertisseur.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with $pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      containers:
+        - name: convertisseur
+          image: {{ include "convertisseur.image" . | quote }}
+          imagePullPolicy: {{ $c.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $c.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $c.port }}
+              protocol: TCP
+          env:
+            - name: BIND_ADDR
+              value: {{ printf "0.0.0.0:%v" $c.port | quote }}
+            - name: COOKIE_SECURE
+              value: {{ $c.cookieSecure | quote }}
+            - name: LOG_FILTER
+              value: {{ $c.log.filter | quote }}
+            - name: LOG_FORMAT
+              value: {{ $c.log.format | quote }}
+            - name: DB_MAX_CONNECTIONS
+              value: {{ $c.database.maxConnections | quote }}
+            - name: SUPER_ADMIN_USERNAME
+              value: {{ required "convertisseur.superAdmin.username is required" $c.superAdmin.username | quote }}
+            - name: S3_ENDPOINT
+              value: {{ required "convertisseur.s3.endpoint is required" $c.s3.endpoint | quote }}
+            - name: S3_BUCKET
+              value: {{ required "convertisseur.s3.bucket is required" $c.s3.bucket | quote }}
+            - name: S3_REGION
+              value: {{ $c.s3.region | quote }}
+            - name: S3_FORCE_PATH_STYLE
+              value: {{ $c.s3.forcePathStyle | quote }}
+            {{- with $c.clientIpHeader }}
+            - name: CLIENT_IP_HEADER
+              value: {{ . | quote }}
+            {{- end }}
+            {{- include "convertisseur.secretEnv" (dict "env" "DATABASE_URL" "ref" $c.database.existingSecret "path" "convertisseur.database.existingSecret") | nindent 12 }}
+            {{- include "convertisseur.secretEnv" (dict "env" "SUPER_ADMIN_PASSWORD" "ref" $c.superAdmin.password.existingSecret "path" "convertisseur.superAdmin.password.existingSecret") | nindent 12 }}
+            {{- include "convertisseur.secretEnv" (dict "env" "S3_ACCESS_KEY_ID" "ref" $c.s3.accessKeyId.existingSecret "path" "convertisseur.s3.accessKeyId.existingSecret") | nindent 12 }}
+            {{- include "convertisseur.secretEnv" (dict "env" "S3_SECRET_ACCESS_KEY" "ref" $c.s3.secretAccessKey.existingSecret "path" "convertisseur.s3.secretAccessKey.existingSecret") | nindent 12 }}
+            {{- if $c.caCerts.existing.name }}
+            - name: SSL_CERT_FILE
+              value: {{ include "convertisseur.caCertsPath" . }}
+            {{- end }}
+            {{- with $c.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            {{- toYaml $c.startupProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml $c.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $c.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          {{- if or $c.caCerts.existing.name $c.extraVolumeMounts }}
+          volumeMounts:
+            {{- if $c.caCerts.existing.name }}
+            - name: ca-certs
+              mountPath: {{ include "convertisseur.caCertsPath" . }}
+              subPath: {{ $c.caCerts.existing.key }}
+              readOnly: true
+            {{- end }}
+            {{- with $c.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+      {{- if or $c.caCerts.existing.name $c.extraVolumes }}
+      volumes:
+        {{- if $c.caCerts.existing.name }}
+        - name: ca-certs
+          {{- if eq $c.caCerts.existing.kind "ConfigMap" }}
+          configMap:
+            name: {{ $c.caCerts.existing.name }}
+          {{- else }}
+          secret:
+            secretName: {{ $c.caCerts.existing.name }}
+          {{- end }}
+        {{- end }}
+        {{- with $c.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with $c.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -36,18 +36,23 @@ You need:
   pipx install pre-commit
   ```
 
-- **hadolint** and **trivy**, which two hooks call from your `PATH`:
+- **hadolint**, **trivy**, **helm**, **helm-docs** and **kubeconform**, which
+  the hooks call from your `PATH`:
 
   **macOS**
 
   ```sh
-  brew install hadolint trivy
+  brew install hadolint trivy helm helm-docs kubeconform
   ```
 
-  **Linux**: download the `hadolint` binary from its
-  [releases](https://github.com/hadolint/hadolint/releases), and install
-  `trivy` following its
-  [installation guide](https://trivy.dev/latest/getting-started/installation/).
+  **Linux**: download the `hadolint`, `helm-docs` and `kubeconform` binaries
+  from their releases
+  ([hadolint](https://github.com/hadolint/hadolint/releases),
+  [helm-docs](https://github.com/norwoodj/helm-docs/releases),
+  [kubeconform](https://github.com/yannh/kubeconform/releases)), and install
+  `trivy` and `helm` following their installation guides
+  ([trivy](https://trivy.dev/latest/getting-started/installation/),
+  [helm](https://helm.sh/docs/intro/install/)).
 
 Then, from a fresh clone:
 
@@ -139,7 +144,12 @@ pre-commit run <hook-id> --all-files
 | `tsc` | `npm ci` | A type error in the webapp |
 | `sqlfluff-lint` | nothing, pre-commit installs it | Reformat the SQL to the rule; [.sqlfluff](.sqlfluff) says which rules are off and why |
 | `hadolint`, `trivy-dockerfile` | `hadolint`, `trivy` | A `Dockerfile` finding, fixed at the source |
+| `helm-lint`, `kubeconform`, `trivy-chart` | `helm`, `kubeconform`, `trivy` | They render the chart twice, with [`values-lint.yaml`](charts/convertisseur/values-lint.yaml) (the required values only) and [`values-example.yaml`](charts/convertisseur/values-example.yaml) (a production-like set). Fix the chart; `.trivy-ksv0125.json` declares `ghcr.io` as a trusted registry, and [.trivyignore](.trivyignore) holds the two checks that do not suit a chart |
+| `helm-docs` | `helm-docs` | It regenerates the chart's README from `values.yaml` and fails when the file changed; commit the result. Every value needs a `# --` comment |
 | `no-co-authors` | nothing | The commit message carries a co-author or "generated with" line: remove it |
+
+The chart's templates are Go templating, so `check-yaml` and `yamllint` skip
+them; `helm lint` and `kubeconform` check them once rendered.
 
 `--no-verify` and `SKIP=` are not the fix: a red hook is a real finding. If a
 rule is wrong for this repository, change its configuration in the same pull
@@ -149,7 +159,7 @@ request and say why. CI runs the same hooks.
 
 | Workflow | What it does | Reproduce locally |
 | --- | --- | --- |
-| [`quality.yaml`](.github/workflows/quality.yaml) | `pre-commit run --all-files`, the API tests against PostgreSQL and SeaweedFS, the webapp tests | `pre-commit run --all-files`, `cargo test`, `npm test --prefix convertisseur-webapp` |
+| [`quality.yaml`](.github/workflows/quality.yaml) | `pre-commit run --all-files` (the chart's lint, schema validation, `trivy config` and README check included), the API tests against PostgreSQL and SeaweedFS, the webapp tests | `pre-commit run --all-files`, `cargo test`, `npm test --prefix convertisseur-webapp` |
 | [`build.yaml`](.github/workflows/build.yaml) | Builds the image for `amd64` and `arm64` and fails on a fixable `HIGH` or `CRITICAL` vulnerability | `docker build -t convertisseur .` then `trivy image --severity HIGH,CRITICAL --ignore-unfixed convertisseur` |
 | [`security.yaml`](.github/workflows/security.yaml) | Scans the lockfiles and the tree for vulnerabilities and secrets, and uploads the report to code scanning | `trivy fs --scanners vuln,secret .` |
 

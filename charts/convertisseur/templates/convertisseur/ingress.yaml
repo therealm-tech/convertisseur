@@ -1,0 +1,34 @@
+{{- $ingress := .Values.convertisseur.ingress }}
+{{- if $ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "convertisseur.fullname" . }}
+  labels:
+    {{- include "convertisseur.labels" . | nindent 4 }}
+  {{- with $ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $ingress.tls.secretName }}
+  tls:
+    - hosts:
+        - {{ required "convertisseur.ingress.host is required when the Ingress is enabled" $ingress.host | quote }}
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ required "convertisseur.ingress.host is required when the Ingress is enabled" $ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "convertisseur.fullname" . }}
+                port:
+                  name: http
+{{- end }}
