@@ -256,8 +256,10 @@ tatweel, so `شكرا` finds `شُكْرًا`.
 ## The review queue
 
 `/admin/review` lists the lessons a reviewer has something to do in, by
-unit; `/admin/review/lessons/{lessonId}` reviews one of them: on a screen
-under 1024px wide, card by card and full screen, without the admin bar, whose
+track and unit, each with the one count its filter is about: the cards left
+to review, or the cards without a recording;
+`/admin/review/lessons/{lessonId}` reviews one of them: on a screen under
+1024px wide, card by card and full screen, without the admin bar, whose
 place the card needs; above, every card on one page, beside the admin
 sidebar. The endpoints,
 in [`api/content/review.rs`](convertisseur-api/src/api/content/review.rs),
