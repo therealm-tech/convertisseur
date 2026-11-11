@@ -86,8 +86,11 @@ track's units and their lessons as a path, and
 `/tracks/{track}/lessons/{lessonId}` shows a lesson's cards one at a time,
 with the transliteration and the meaning hidden until asked for, and a letter's
 shapes in a row under it (see [The forms of a letter](#the-forms-of-a-letter)).
-Its end offers `/tracks/{track}/lessons/{lessonId}/exercise`, a
-multiple-choice exercise on the same cards (see [Exercises](#exercises)). These pages
+The lesson offers `/tracks/{track}/lessons/{lessonId}/exercise`, a
+multiple-choice exercise on the same cards (see [Exercises](#exercises)), from
+its first card and at its end; the track's map offers it under every lesson of
+three cards or more, the fewest an exercise needs, since the map does not load
+the cards that decide the rest. These pages
 load their data in the router's loaders, so a lesson the API does not serve
 renders the page not found rather than an empty screen.
 
@@ -340,7 +343,9 @@ reaches the server: it is built from the lesson the page already loads.
   at random. A distractor never reads like the answer: two cards that share a
   meaning are never offered against each other, nor two that share their
   Arabic. A question needs three choices, so a lesson of fewer than three
-  cards has no exercise, and the end of the lesson does not offer one.
+  cards has no exercise, and neither the lesson nor the map offers one. A
+  lesson whose cards make no question all the same, which the map cannot
+  tell, opens an exercise page that says so.
 - **A question answered wrong comes back near the end**, its choices
   reshuffled, until it is answered right. The progress bar counts the
   questions answered right.

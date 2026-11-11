@@ -2,6 +2,7 @@ import { Link, useLoaderData } from "@tanstack/react-router";
 import { BackIcon } from "@/components/icons";
 import { LessonStar } from "@/components/TrackGlyph";
 import { countOf, trackLabels, trackTaglines } from "@/lib/contentLabels";
+import { mayHaveQuiz } from "@/lib/quiz";
 import type { TrackId, TrackUnit } from "@/lib/tracks";
 
 function UnitPath({
@@ -44,6 +45,16 @@ function UnitPath({
 									</span>
 								</span>
 							</Link>
+							{mayHaveQuiz(lesson.cardCount) ? (
+								<Link
+									to="/tracks/$track/lessons/$lessonId/exercise"
+									params={{ track, lessonId: lesson.id }}
+									className="path-exercise"
+									aria-label={`S'entraîner : ${lesson.title}`}
+								>
+									S'entraîner
+								</Link>
+							) : null}
 						</li>
 					))}
 				</ol>
