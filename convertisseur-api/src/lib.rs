@@ -14,6 +14,7 @@ mod health;
 mod letters;
 mod password;
 mod rate_limit;
+mod review;
 mod router;
 mod sessions;
 pub mod storage;

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use aide::{
     axum::{
         ApiRouter,
@@ -193,7 +195,13 @@ pub struct CardResponse {
 
 impl CardResponse {
     async fn of(state: &AppState, card: Card) -> Result<Self, ApiError> {
-        Ok(Self {
+        let usernames = content::usernames(&state.pool, card.review.authors()).await?;
+        Ok(Self::with(&usernames, card))
+    }
+
+    /// The card, its authors named from `usernames`.
+    pub(super) fn with(usernames: &HashMap<Uuid, String>, card: Card) -> Self {
+        Self {
             id: card.id,
             lesson: CardLessonResponse {
                 id: card.lesson_id,
@@ -207,8 +215,8 @@ impl CardResponse {
             meaning_fr: card.meaning_fr,
             variety: card.variety.into(),
             audio: card.audio.into_audio().map(Into::into),
-            review: ReviewResponse::of(state, card.review).await?,
-        })
+            review: ReviewResponse::with(usernames, card.review),
+        }
     }
 
     async fn find(state: &AppState, id: Uuid) -> Result<Self, ApiError> {

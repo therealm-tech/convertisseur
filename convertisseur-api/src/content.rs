@@ -70,6 +70,14 @@ pub struct Review {
     pub note: Option<String>,
 }
 
+impl Review {
+    /// The accounts the review names.
+    #[must_use]
+    pub fn authors(&self) -> [Option<Uuid>; 3] {
+        [self.created_by, self.updated_by, self.validated_by]
+    }
+}
+
 #[derive(sqlx::FromRow)]
 pub struct Unit {
     pub id: Uuid,
@@ -237,6 +245,8 @@ pub enum ContentRefusal {
     /// The row comes from the content files, which alone change its text and
     /// place, and delete it.
     Imported,
+    /// A row the request names is not a child of the row it names.
+    NotInParent,
     Failed(anyhow::Error),
 }
 
