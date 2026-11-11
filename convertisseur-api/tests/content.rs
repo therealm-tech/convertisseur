@@ -329,6 +329,104 @@ async fn any_admin_validates_and_any_edit_sends_back_to_review(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn a_move_keeps_the_status_but_an_edit_of_content_resets_it(pool: PgPool) {
+    let (server, author) = admin(&pool, "nour").await;
+    create_account(&pool, "bilal", "admin").await;
+    let reviewer = server.session("bilal").await;
+    let alphabet = server.unit(&author, "arabe", "Alphabet").await;
+    let greetings = server.unit(&author, "arabe", "Salutations").await;
+    let first = server.lesson(&author, &alphabet, "Lettres 1").await;
+    let second = server.lesson(&author, &alphabet, "Lettres 2").await;
+    let first_card = server.card(&author, &first, "ب").await;
+    server.card(&author, &first, "ت").await;
+    let second_card = server.card(&author, &second, "ث").await;
+
+    let card_uri = format!("/api/v1/cards/{first_card}");
+    let validated = server.set_status(&reviewer, &card_uri, "validated").await;
+    let validated_at = validated.body["validatedAt"].clone();
+    let card = |lesson: &str, arabic: &str, position: i32| {
+        json!({
+            "lessonId": lesson,
+            "arabic": arabic,
+            "variety": "classique",
+            "position": position,
+        })
+    };
+
+    let reordered = server.put(&author, &card_uri, &card(&first, "ب", 2)).await;
+    assert_eq!(reordered.status, StatusCode::OK, "{}", reordered.body);
+    assert_eq!(reordered.body["position"], 2);
+    assert_eq!(reordered.body["status"], "validated");
+    assert_eq!(reordered.body["validatedBy"]["username"], "bilal");
+    assert_eq!(reordered.body["validatedAt"], validated_at);
+    assert_eq!(reordered.body["updatedBy"]["username"], "nour");
+
+    let moved = server.put(&author, &card_uri, &card(&second, "ب", 1)).await;
+    assert_eq!(moved.status, StatusCode::OK, "{}", moved.body);
+    assert_eq!(moved.body["lesson"]["id"], json!(second));
+    assert_eq!(moved.body["status"], "validated");
+    assert_eq!(moved.body["validatedAt"], validated_at);
+
+    let sibling = server
+        .get(&author, &format!("/api/v1/cards/{second_card}"))
+        .await;
+    assert_eq!(sibling.body["position"], 2);
+
+    let both = server.put(&author, &card_uri, &card(&first, "بـ", 2)).await;
+    assert_eq!(both.status, StatusCode::OK, "{}", both.body);
+    assert_eq!(both.body["position"], 2);
+    assert_eq!(both.body["status"], "to_review");
+    assert_eq!(both.body["validatedBy"], Value::Null);
+
+    server.set_status(&reviewer, &card_uri, "validated").await;
+    let edited = server.put(&author, &card_uri, &card(&first, "با", 2)).await;
+    assert_eq!(edited.body["status"], "to_review");
+    assert_eq!(edited.body["validatedAt"], Value::Null);
+
+    let lesson_uri = format!("/api/v1/lessons/{second}");
+    server.set_status(&reviewer, &lesson_uri, "validated").await;
+    let lesson_moved = server
+        .put(
+            &author,
+            &lesson_uri,
+            &json!({ "unitId": greetings, "title": "Lettres 2", "position": 1 }),
+        )
+        .await;
+    assert_eq!(lesson_moved.status, StatusCode::OK, "{}", lesson_moved.body);
+    assert_eq!(lesson_moved.body["unit"]["title"], "Salutations");
+    assert_eq!(lesson_moved.body["status"], "validated");
+    let lesson_renamed = server
+        .put(
+            &author,
+            &lesson_uri,
+            &json!({ "unitId": alphabet, "title": "Lettres 3", "position": 1 }),
+        )
+        .await;
+    assert_eq!(lesson_renamed.body["status"], "to_review");
+
+    let unit_uri = format!("/api/v1/units/{greetings}");
+    server.set_status(&reviewer, &unit_uri, "validated").await;
+    let unit_moved = server
+        .put(
+            &author,
+            &unit_uri,
+            &json!({ "track": "arabe", "title": "Salutations", "position": 1 }),
+        )
+        .await;
+    assert_eq!(unit_moved.body["position"], 1);
+    assert_eq!(unit_moved.body["status"], "validated");
+    let unit_edited = server
+        .put(
+            &author,
+            &unit_uri,
+            &json!({ "track": "arabe", "title": "Politesse", "position": 2 }),
+        )
+        .await;
+    assert_eq!(unit_edited.body["position"], 2);
+    assert_eq!(unit_edited.body["status"], "to_review");
+}
+
+#[sqlx::test]
 async fn keeps_positions_dense_when_inserting_moving_and_deleting(pool: PgPool) {
     let (server, admin) = admin(&pool, "nour").await;
     let alphabet = server.unit(&admin, "arabe", "Alphabet").await;

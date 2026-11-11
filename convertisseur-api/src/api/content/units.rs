@@ -83,7 +83,8 @@ pub struct CreateUnitRequest {
     position: Option<i32>,
 }
 
-/// A unit, rewritten whole. Any change sends it back to review.
+/// A unit, rewritten whole. Any change of content sends it back to review;
+/// a move keeps its status.
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("example" = serde_json::json!({
@@ -221,8 +222,9 @@ fn update_unit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     op.tag(TAG)
         .summary("Edit a unit")
         .description(
-            "Rewrites the unit, possibly into another track or position. When anything \
-             changes, it goes back to `to_review`; its lessons follow it.",
+            "Rewrites the unit, possibly into another track or position. A new title or \
+             track sends it back to `to_review`; a new position alone keeps its status. Its \
+             lessons follow it.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<UnitResponse>, _>(|r| r.description("The unit"))

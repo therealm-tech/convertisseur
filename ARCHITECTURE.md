@@ -168,12 +168,15 @@ Staff write units, lessons and cards in the admin area; a reviewer, any
 `admin` or the `super_admin`, validates them. The rules, in
 [`content.rs`](convertisseur-api/src/content.rs):
 
-- **New content starts `to_review`, and any edit sends it back there**, by
-  whoever makes it: the `UPDATE` resets the status and the validation in the
-  same statement, when one of the fields differs from the stored row
-  (`IS DISTINCT FROM`). Saving a row unchanged keeps its validation. Moving a
-  row to another place is an edit of that row; the siblings it shifts keep
-  their status.
+- **New content starts `to_review`, and any edit of its content sends it back
+  there**, by whoever makes it: the `UPDATE` resets the status and the
+  validation in the same statement, when a content field (title, Arabic,
+  transliteration, meaning, variety, track) differs from the stored row
+  (`IS DISTINCT FROM`). Saving a row unchanged keeps its validation.
+  Moving or reordering a row, within its parent or to another, changes only
+  its place: it keeps its status and validation, and `updated_by` and
+  `updated_at` still record the move. The siblings it shifts keep their
+  status.
 - **Validating needs no second person.** Any admin validates, the author
   included; setting the status a row already has changes nothing, so the
   first validator and time stay.
