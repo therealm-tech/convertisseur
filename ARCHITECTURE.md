@@ -68,6 +68,13 @@ guards spare the user a page that would only fail: the server enforces the
 same rules on every request. The admin area opens on `/admin/contenu`, where
 staff write and review the learning content, beside `/admin/utilisateurs`.
 
+Learners start on `/`, which shows both tracks; `/parcours/{track}` draws a
+track's units and their lessons as a path, and
+`/parcours/{track}/lecons/{lessonId}` shows a lesson's cards one at a time,
+with the transliteration and the meaning hidden until asked for. These pages
+load their data in the router's loaders, so a lesson the API does not serve
+renders the page not found rather than an empty screen.
+
 The interface is in French. The visual identity lives in CSS custom properties
 in [`styles.css`](convertisseur-webapp/src/styles.css), with a light and a dark
 set switched by `prefers-color-scheme`.
@@ -186,9 +193,10 @@ Staff write units, lessons and cards in the admin area; a reviewer, any
 - **A unit with lessons or a lesson with cards is not deleted**: the request
   answers `409` `not-empty`, and its children have to be moved or deleted
   first. A deletion never takes more than the row named.
-- **The admin area is the only reader of content but recordings.** Every
-  content endpoint takes `RequireRole<Admin>`; playing a recording is open to
-  any logged-in account, for validated content only (see below).
+- **The admin endpoints are for staff alone.** Every endpoint of `/units`,
+  `/lessons`, `/cards` and `/content-items` takes `RequireRole<Admin>`, and
+  shows content whatever its status. Learners read through their own
+  endpoints, described below.
 
 The review list (`GET /api/v1/content-items`) spans the three kinds, the most
 recently edited first, filtered by status, track, kind and text. Its
@@ -196,6 +204,30 @@ recently edited first, filtered by status, track, kind and text. Its
 badges. The text search compares through `content_search_key`, a SQL function
 that lowercases and strips the Arabic short vowels, other diacritics and the
 tatweel, so `شكرا` finds `شُكْرًا`.
+
+## What learners see
+
+Any logged-in account reads the content through `/api/v1/tracks`, in
+[`api/tracks.rs`](convertisseur-api/src/api/tracks.rs): the two tracks with
+their units and lessons, one track, and a lesson with its cards. These
+endpoints take `Authenticated`, so an account waiting for a password change
+gets the same `403` as everywhere else.
+
+- **A unit, lesson or card is visible when it and every row above it are
+  validated.** A validated lesson in a unit to review is hidden, and so are
+  its cards. The rule lives in the SQL under
+  [`queries/tracks/`](convertisseur-api/queries/tracks/) and in the
+  recording lookup, which join up to the unit and test every status.
+- **Hidden content does not exist for learners.** It is left out of the
+  outline, and a lesson that is hidden, or that is not in the track the path
+  names, answers `404`, like an unknown id.
+- **Order is the staff's**: units by position in their track, lessons in
+  their unit, cards in their lesson. The responses carry no position; the
+  order of the arrays is the order, and the webapp numbers what it shows, so
+  that a hidden unit leaves no gap in "Unité 1, Unité 2".
+- **The endpoints serve content, nothing about the learner.** They hold no
+  progress, score or history; the webapp shows a lesson as a sequence of
+  cards and keeps nothing once it is left.
 
 ## Recordings
 
@@ -255,8 +287,9 @@ sequenceDiagram
   `to_review`.
 - **Playback goes through the API** (`GET /api/v1/audio/{audioId}`), which
   streams the object from the store. Any logged-in account plays the
-  recording of validated content, an `admin` plays any; anything else is a
-  `404`, which says nothing of what exists. It honours a single
+  recording of a card or lesson learners see (validated, with every row above
+  it), an `admin` plays any; anything else is a `404`, which says nothing of
+  what exists. It honours a single
   `Range: bytes=…` with a `206`, which Safari needs to seek in an `<audio>`
   element, answers `Cache-Control: private`, and sends the stored type with
   `X-Content-Type-Options: nosniff`.
@@ -511,6 +544,18 @@ each kind keeps its own collection (`/units`, `/lessons`, `/cards`) for
 reading one item and writing. The review status is a state of the item, set
 with `PUT …/status`, rather than an action endpoint.
 
+**Learners read through endpoints of their own.** `/api/v1/tracks` serves
+the shape a learner needs, a tree with the fields of the cards and a URL per
+recording, where the admin collections serve flat rows with their review. Two
+sets of endpoints keep the visibility rule in one place for learners, rather
+than a branch on the role inside every admin handler, and let either side
+change its payload without touching the other.
+
+**The track list is not paginated.** It always holds the two tracks of the
+`content_track` type, and each carries its whole outline, units and lesson
+titles, because the path the webapp draws needs all of it at once. The
+outline grows with what staff write, a few hundred rows, not with use.
+
 **Environment variables have bare names**, such as `BIND_ADDR` or
 `SUPER_ADMIN_PASSWORD`. The server runs in a container whose environment is
 written for it alone, so a prefix would only be noise. `DATABASE_URL` is the
@@ -548,6 +593,10 @@ and no raster that can drift from it.
   clears any pending forced change on it.
 - **Permissions are enforced by the server.** The webapp hides what the
   server would refuse, and nothing more.
+- **Learners see only what is validated together with every row above it.**
+  A card needs its lesson and unit validated, a lesson its unit; this holds
+  for the track outline, the lesson and its cards, and the playback of a
+  recording. Sending a unit back to review hides everything under it at once.
 - **The configured super admin's username is not reserved.** It exists from
   the first start-up, so registering it answers the same `409` as any other
   taken username. Its format is exempt from the registration rules.
