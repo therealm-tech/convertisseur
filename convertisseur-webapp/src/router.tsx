@@ -30,6 +30,7 @@ import { ErrorPage } from "@/pages/ErrorPage";
 import { HomePage } from "@/pages/HomePage";
 import { LessonNotFound, LessonPage } from "@/pages/LessonPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { QuizPage } from "@/pages/QuizPage";
 import { TrackPage } from "@/pages/TrackPage";
 
 // Every navigation asks the API who is logged in: the session cookie is
@@ -78,6 +79,15 @@ const lessonRoute = createRoute({
 	loader: ({ params }) =>
 		fetchLesson(parseTrackId(params.track), params.lessonId),
 	component: LessonPage,
+	notFoundComponent: LessonNotFound,
+});
+
+const quizRoute = createRoute({
+	getParentRoute: () => appRoute,
+	path: "/tracks/$track/lessons/$lessonId/exercise",
+	loader: ({ params }) =>
+		fetchLesson(parseTrackId(params.track), params.lessonId),
+	component: QuizPage,
 	notFoundComponent: LessonNotFound,
 });
 
@@ -167,6 +177,7 @@ const routeTree = rootRoute.addChildren([
 		homeRoute,
 		trackRoute,
 		lessonRoute,
+		quizRoute,
 		adminRoute.addChildren([
 			adminIndexRoute,
 			adminReviewRoute,
