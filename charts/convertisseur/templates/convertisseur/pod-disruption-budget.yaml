@@ -1,0 +1,13 @@
+{{- if .Values.convertisseur.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "convertisseur.fullname" . }}
+  labels:
+    {{- include "convertisseur.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.convertisseur.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "convertisseur.selectorLabels" . | nindent 6 }}
+{{- end }}

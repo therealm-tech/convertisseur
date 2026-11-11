@@ -1,0 +1,187 @@
+# Values shared by every component. Each key can be overridden in the
+# component's own block.
+global:
+  # -- Secrets, in the release namespace, that hold the credentials to pull the image.
+  imagePullSecrets: []
+
+# The one component: the server that serves the API and the webapp.
+convertisseur:
+  # -- Number of pods. The login and registration rate limits are counted in each pod's memory, so every replica adds its own allowance per client IP.
+  replicaCount: 1
+  # -- Number of old revisions the workload keeps for rollback.
+  revisionHistoryLimit: 0
+  image:
+    # -- Image repository.
+    repository: ghcr.io/therealm-tech/convertisseur
+    # -- (string) Image tag. Defaults to `.Chart.AppVersion`.
+    tag: ~
+    # -- Image pull policy.
+    pullPolicy: IfNotPresent
+  # -- (list) Overrides `global.imagePullSecrets` for this component when not empty.
+  imagePullSecrets: []
+  # -- (string) Override of the chart name in resource names.
+  nameOverride: ~
+  # -- (string) Override of the full resource name.
+  fullnameOverride: ~
+  # -- Port the server listens on, passed to it as `BIND_ADDR`.
+  port: 3000
+  # -- Mark the session cookie `Secure`, so that browsers only send it over HTTPS. Turn it off only to serve plain HTTP.
+  cookieSecure: true
+  # -- (string) Header in which the reverse proxy in front of the server passes the client's IP, e.g. `X-Forwarded-For`. Leave unset when clients connect directly, since they can forge it. Behind an ingress, set it, or every client shares the proxy's rate limits.
+  clientIpHeader: ~
+  log:
+    # -- [`tracing` filter directive](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives), passed as `LOG_FILTER`.
+    filter: info
+    # -- Log format, `text` or `json`, passed as `LOG_FORMAT`.
+    format: text
+  database:
+    # -- Size of the connection pool of each pod, passed as `DB_MAX_CONNECTIONS`.
+    maxConnections: 10
+    existingSecret:
+      # -- (string) Name of the Secret holding the PostgreSQL connection string, passed as `DATABASE_URL`. Required.
+      name: ~
+      # -- Key in that Secret holding the connection string.
+      key: DATABASE_URL
+  superAdmin:
+    # -- (string) Username of the super admin, passed as `SUPER_ADMIN_USERNAME`. Required. Changing it demotes the previous super admin to `admin`.
+    username: ~
+    password:
+      existingSecret:
+        # -- (string) Name of the Secret holding the super admin's password, at least 12 characters, passed as `SUPER_ADMIN_PASSWORD`. Required. Applied at every start, so a change needs a pod restart.
+        name: ~
+        # -- Key in that Secret holding the password.
+        key: SUPER_ADMIN_PASSWORD
+  s3:
+    # -- (string) URL of the S3-compatible object store, passed as `S3_ENDPOINT`. Required.
+    endpoint: ~
+    # -- (string) Bucket holding the uploaded media, passed as `S3_BUCKET`. Required. Created at start when it does not exist.
+    bucket: ~
+    # -- Region of the bucket, passed as `S3_REGION`.
+    region: us-east-1
+    # -- Name the bucket in the URL's path rather than in its host name, passed as `S3_FORCE_PATH_STYLE`. Most self-hosted stores need `true`.
+    forcePathStyle: false
+    accessKeyId:
+      existingSecret:
+        # -- (string) Name of the Secret holding the access key ID, passed as `S3_ACCESS_KEY_ID`. Required.
+        name: ~
+        # -- Key in that Secret holding the access key ID.
+        key: S3_ACCESS_KEY_ID
+    secretAccessKey:
+      existingSecret:
+        # -- (string) Name of the Secret holding the secret access key, passed as `S3_SECRET_ACCESS_KEY`. Required.
+        name: ~
+        # -- Key in that Secret holding the secret access key.
+        key: S3_SECRET_ACCESS_KEY
+  caCerts:
+    existing:
+      # -- Kind of the resource holding the PEM bundle: `ConfigMap` or `Secret`.
+      kind: ConfigMap
+      # -- (string) Name of a ConfigMap or Secret holding a PEM bundle to mount. Set → the bundle is mounted and `SSL_CERT_FILE` points at it. The object store's TLS client trusts that bundle instead of the image's roots, so it must hold every root the connection needs.
+      name: ~
+      # -- Key in the resource holding the PEM bundle, also the mounted file's name.
+      key: ca-certificates.crt
+  # -- (list) Extra environment variables for the container.
+  extraEnv: []
+  # -- (list) Extra volumes for the pod.
+  extraVolumes: []
+  # -- (list) Extra volume mounts for the container.
+  extraVolumeMounts: []
+  # -- (object) Annotations added to the pods.
+  podAnnotations: {}
+  # -- (object) Labels added to the pods.
+  podLabels: {}
+  # -- Pod-level security context; loosening it breaks the restricted Pod Security Standard. The IDs match the image's `nonroot` user.
+  podSecurityContext:
+    # -- Refuse to start a container whose image runs as UID 0.
+    runAsNonRoot: true
+    # -- UID of the container's process.
+    runAsUser: 65532
+    # -- GID of the container's process.
+    runAsGroup: 65532
+    # -- GID that owns the pod's mounted volumes.
+    fsGroup: 65532
+    seccompProfile:
+      # -- Seccomp profile of the pod.
+      type: RuntimeDefault
+  # -- Container-level security context. The server writes nothing to its filesystem, so the root filesystem is read-only.
+  securityContext:
+    # -- Forbid a process from gaining more privileges than its parent.
+    allowPrivilegeEscalation: false
+    # -- Mount the container's root filesystem read-only.
+    readOnlyRootFilesystem: true
+    capabilities:
+      # -- Linux capabilities dropped from the container.
+      drop:
+        - ALL
+  # -- Resources of the container. Uploads are buffered in memory and password hashing is memory-hard, hence the memory limit.
+  resources:
+    requests:
+      # -- CPU the scheduler reserves.
+      cpu: 50m
+      # -- Memory the scheduler reserves.
+      memory: 128Mi
+      # -- Ephemeral storage the scheduler reserves.
+      ephemeral-storage: 64Mi
+    limits:
+      # -- Memory above which the container is killed.
+      memory: 256Mi
+      # -- Ephemeral storage above which the pod is evicted.
+      ephemeral-storage: 128Mi
+  # -- Startup probe. The server applies the migrations and sets up the bucket before it listens, so a slow start must not trip the liveness probe.
+  startupProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    periodSeconds: 5
+    failureThreshold: 30
+  # -- Liveness probe: the process serves HTTP.
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    periodSeconds: 10
+    failureThreshold: 3
+  # -- Readiness probe: PostgreSQL and the object store answer.
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    periodSeconds: 10
+    failureThreshold: 3
+  service:
+    # -- Service type.
+    type: ClusterIP
+    # -- Port the Service exposes.
+    port: 80
+  serviceAccount:
+    # -- Create a ServiceAccount for the pods.
+    create: true
+    # -- (string) Name of the ServiceAccount. Defaults to the full resource name.
+    name: ~
+    # -- (object) Annotations added to the ServiceAccount.
+    annotations: {}
+  ingress:
+    # -- Create an Ingress. The session cookie is `Secure`, so the app must be served over HTTPS.
+    enabled: false
+    # -- (string) Ingress class.
+    className: ~
+    # -- (object) Annotations added to the Ingress.
+    annotations: {}
+    # -- (string) Host name served. Required when the Ingress is enabled.
+    host: ~
+    tls:
+      # -- (string) Name of the Secret holding the host's certificate. Unset → the Ingress declares no TLS section.
+      secretName: ~
+  podDisruptionBudget:
+    # -- Create a PodDisruptionBudget. With a single replica it blocks node drains, so enable it with `replicaCount` of 2 or more.
+    enabled: false
+    # -- Pods that must stay available during a voluntary disruption.
+    minAvailable: 1
+  # -- (object) Node selector of the pods.
+  nodeSelector: {}
+  # -- (list) Tolerations of the pods.
+  tolerations: []
+  # -- (object) Affinity of the pods.
+  affinity: {}
+  # -- (list) Topology spread constraints of the pods.
+  topologySpreadConstraints: []

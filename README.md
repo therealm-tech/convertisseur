@@ -138,6 +138,66 @@ records audio with, only on HTTPS pages. Behind a reverse proxy, set `CLIENT_IP_
 header the proxy writes the client's address into, or every client shares the
 proxy's rate limits.
 
+### Deployment on Kubernetes
+
+The Helm chart in [`charts/convertisseur`](charts/convertisseur/) runs the image
+as one Deployment behind a Service, with an optional Ingress. PostgreSQL and the
+object store are external, and every credential is read from a Secret that
+already exists in the namespace: the chart never creates one. Create them first,
+from files kept out of version control:
+
+```sh
+kubectl create secret generic convertisseur-database --from-env-file=database.env
+```
+
+```sh
+kubectl create secret generic convertisseur-super-admin --from-env-file=super-admin.env
+```
+
+```sh
+kubectl create secret generic convertisseur-s3 --from-env-file=s3.env
+```
+
+Each file holds `KEY=value` lines named after the variables above,
+`DATABASE_URL`, `SUPER_ADMIN_PASSWORD`, and `S3_ACCESS_KEY_ID` with
+`S3_SECRET_ACCESS_KEY`. A values file points the chart at them:
+
+```yaml
+convertisseur:
+  clientIpHeader: X-Forwarded-For
+  database:
+    existingSecret:
+      name: convertisseur-database
+  superAdmin:
+    username: admin
+    password:
+      existingSecret:
+        name: convertisseur-super-admin
+  s3:
+    endpoint: https://s3.eu-west-3.amazonaws.com
+    region: eu-west-3
+    bucket: convertisseur-media
+    accessKeyId:
+      existingSecret:
+        name: convertisseur-s3
+    secretAccessKey:
+      existingSecret:
+        name: convertisseur-s3
+  ingress:
+    enabled: true
+    host: convertisseur.example.com
+    tls:
+      secretName: convertisseur-tls
+```
+
+```sh
+helm install convertisseur charts/convertisseur --namespace convertisseur --create-namespace -f values.yaml
+```
+
+The chart's [README](charts/convertisseur/README.md) lists every value. The
+chart runs one replica; with more, each pod counts the login and registration
+rate limits on its own (see [ARCHITECTURE.md](ARCHITECTURE.md#deployment)).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

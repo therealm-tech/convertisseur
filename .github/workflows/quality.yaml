@@ -16,6 +16,9 @@ concurrency:
 env:
   HADOLINT_VERSION: 2.15.1
   TRIVY_VERSION: v0.76.2
+  HELM_VERSION: v4.3.1
+  HELM_DOCS_VERSION: 1.14.2
+  KUBECONFORM_VERSION: v0.8.0
 
 jobs:
   pre-commit:
@@ -52,6 +55,21 @@ jobs:
         with:
           version: ${{ env.TRIVY_VERSION }}
           cache: true
+
+      - name: set up Helm
+        uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: install helm-docs
+        run: |
+          curl -fsSL "https://github.com/norwoodj/helm-docs/releases/download/v${HELM_DOCS_VERSION}/helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin helm-docs
+
+      - name: install kubeconform
+        run: |
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kubeconform
 
       - name: set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

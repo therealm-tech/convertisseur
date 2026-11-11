@@ -427,6 +427,36 @@ sequenceDiagram
 - Demotion runs before the upsert because a partial unique index allows at most
   one `super_admin` row at any point in the transaction.
 
+## Deployment
+
+The image runs in Kubernetes through the chart in
+[`charts/convertisseur`](charts/convertisseur/), which renders one Deployment,
+a Service, a ServiceAccount, and optionally an Ingress and a
+PodDisruptionBudget. PostgreSQL and the object store are outside the chart:
+it holds their addresses, never their servers.
+
+- **The pod runs under the restricted Pod Security profile**: UID and GID
+  65532, the `nonroot` user the image ends on, no capabilities, a seccomp
+  profile, and a read-only root filesystem. The server writes nothing to its
+  filesystem: uploads are buffered in memory, so the memory limit bounds them,
+  and no volume is mounted.
+- **Credentials come from Secrets that already exist**, referenced by name and
+  key. The chart creates no Secret, so no credential passes through a values
+  file or a release's stored manifest.
+- **The probes follow the server's start-up**: it applies the migrations,
+  bootstraps the super admin and sets up the bucket before it listens, so a
+  startup probe on `/healthz` holds the liveness probe back, and readiness
+  follows `/readyz`, which checks PostgreSQL and the object store.
+- **Each pod counts the rate limits on its own.** The limits live in the
+  process's memory (see [Design decisions](#design-decisions)), so `n` replicas
+  allow `n` times the attempts per client IP, spread by the Service's balancing;
+  sessions, in PostgreSQL, work across pods. Brute-force protection then
+  weakens in proportion to the replica count, which is why the chart defaults
+  to one. The super admin bootstrap is safe with several pods starting
+  together, thanks to its advisory lock.
+- **A PodDisruptionBudget is off by default**: with one replica it would block
+  every node drain.
+
 ## Design decisions
 
 **One image serves the API and the webapp.** The browser talks to a single
@@ -470,7 +500,7 @@ the top-level navigations `Lax` still lets the cookie through on are harmless.
 **Rate limits are counted in memory, per process.** They need no shared store,
 and they hold a brute force to a few thousand guesses a day per address, on
 passwords of at least 12 characters. The cost is that each replica counts on
-its own and a restart forgets the counts.
+its own and a restart forgets the counts (see [Deployment](#deployment)).
 
 **Last activity lives on the account, not in `sessions`.** Logout, expiry,
 a password change and a reset all delete sessions, and the admin area must

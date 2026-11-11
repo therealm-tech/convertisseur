@@ -1,0 +1,14 @@
+apiVersion: v2
+name: convertisseur
+description: Convertisseur, a gamified web app for learning the basics of Islam and Arabic, served as one image by a Rust server.
+type: application
+version: 0.1.0
+appVersion: 0.1.0
+home: https://github.com/therealm-tech/convertisseur
+sources:
+  - https://github.com/therealm-tech/convertisseur
+maintainers:
+  - name: Guillaume Leroy
+    email: gleroy@therealm.tech
+annotations:
+  license: Apache-2.0
