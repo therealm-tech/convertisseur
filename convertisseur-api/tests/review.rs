@@ -270,6 +270,14 @@ async fn lists_a_lessons_cards_in_order(pool: PgPool) {
     fixture
         .flag(fixture.sbah, "Le kasra du 2e mot manque")
         .await;
+    sqlx::query(
+        "UPDATE cards SET initial_form = 'سـ', medial_form = 'ـسـ', final_form = 'ـس' \
+         WHERE id = $1",
+    )
+    .bind(fixture.salam)
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let cards = fixture
         .get(&format!("/api/v1/lessons/{}/cards", fixture.bonjour))
@@ -287,6 +295,16 @@ async fn lists_a_lessons_cards_in_order(pool: PgPool) {
     assert_eq!(sbah["importKey"], "arabe/salutations/bonjour/sbah");
     assert_eq!(sbah["createdBy"]["username"], "admin");
     assert_eq!(sbah["audio"], Value::Null);
+    for card in cards["items"].as_array().unwrap() {
+        let single = fixture
+            .get(&format!("/api/v1/cards/{}", card["id"].as_str().unwrap()))
+            .await;
+        assert_eq!(card, &single, "read as GET /cards/{{cardId}} reads it");
+    }
+    assert_eq!(
+        cards["items"][0]["forms"],
+        json!({ "kind": "joining", "initial": "سـ", "medial": "ـسـ", "final": "ـس" })
+    );
 
     let second = fixture
         .get(&format!(

@@ -401,8 +401,16 @@ pub async fn update_card(
 
 pub async fn find_card(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<Option<Card>> {
     sqlx::query_as(include_str!("../../queries/cards/find.sql"))
-        .bind(id)
+        .bind([id])
         .fetch_optional(exec)
+        .await
+}
+
+/// The cards among `ids` that exist, in their lessons' order.
+pub async fn find_cards(exec: impl PgExecutor<'_>, ids: &[Uuid]) -> sqlx::Result<Vec<Card>> {
+    sqlx::query_as(include_str!("../../queries/cards/find.sql"))
+        .bind(ids)
+        .fetch_all(exec)
         .await
 }
 

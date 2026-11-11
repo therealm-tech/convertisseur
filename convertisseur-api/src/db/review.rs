@@ -1,8 +1,9 @@
-use sqlx::PgExecutor;
+use sqlx::{PgExecutor, PgPool};
 use uuid::Uuid;
 
 use crate::{
     content::Card,
+    db,
     review::{CardReview, LessonFilter, LessonSummary, Totals},
 };
 
@@ -45,19 +46,20 @@ pub async fn lesson_exists(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<
         .await
 }
 
-/// One page of the lesson's cards, in order.
+/// One page of the lesson's cards, in order, read as a single card is.
 pub async fn cards_of_lesson(
-    exec: impl PgExecutor<'_>,
+    pool: &PgPool,
     lesson_id: Uuid,
     limit: i64,
     offset: i64,
 ) -> sqlx::Result<Vec<Card>> {
-    sqlx::query_as(include_str!("../../queries/cards/list_by_lesson.sql"))
+    let ids: Vec<Uuid> = sqlx::query_scalar(include_str!("../../queries/cards/ids_by_lesson.sql"))
         .bind(lesson_id)
         .bind(limit)
         .bind(offset)
-        .fetch_all(exec)
-        .await
+        .fetch_all(pool)
+        .await?;
+    db::content::find_cards(pool, &ids).await
 }
 
 pub async fn count_cards_of_lesson(
