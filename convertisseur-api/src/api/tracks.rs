@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::{
     SESSION_SECURITY,
-    content::{TrackJson, VarietyJson},
+    content::{LetterFormsResponse, TrackJson, VarietyJson},
     extract::{ApiPath, Authenticated},
 };
 use crate::{
@@ -219,6 +219,9 @@ pub struct StudyCardResponse {
     transliteration: Option<String>,
     meaning_fr: Option<String>,
     variety: VarietyJson,
+    /// The other shapes of the letter, for a card of the alphabet; `null`
+    /// for any other card.
+    forms: Option<LetterFormsResponse>,
     /// `null` when the card has no recording.
     audio: Option<PlaybackResponse>,
 }
@@ -227,6 +230,7 @@ impl From<StudyCard> for StudyCardResponse {
     fn from(card: StudyCard) -> Self {
         Self {
             id: card.id,
+            forms: LetterFormsResponse::of(&card.arabic, card.forms),
             arabic: card.arabic,
             transliteration: card.transliteration,
             meaning_fr: card.meaning_fr,
@@ -259,6 +263,7 @@ pub struct StudyUnitResponse {
         "transliteration": "wach rak ?",
         "meaningFr": "ça va ?",
         "variety": "darija",
+        "forms": null,
         "audio": { "url": "/api/v1/audio/3c2b1a09-8f7e-4d6c-b5a4-938271605f4e", "durationMs": 1200 },
     }],
 })))]

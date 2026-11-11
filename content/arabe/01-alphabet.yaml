@@ -7,30 +7,56 @@ lessons:
     cards:
       - key: alif
         arabic: ا
+        forms:
+          final: ـا
         transliteration: alif
         meaning_fr: Porte le « a » long (ā) et la hamza
       - key: ba
         arabic: ب
+        forms:
+          initial: بـ
+          medial: ـبـ
+          final: ـب
         transliteration: bāʾ
         meaning_fr: « b » de « bateau »
       - key: ta
         arabic: ت
+        forms:
+          initial: تـ
+          medial: ـتـ
+          final: ـت
         transliteration: tāʾ
         meaning_fr: « t » de « tapis »
       - key: tha
         arabic: ث
+        forms:
+          initial: ثـ
+          medial: ـثـ
+          final: ـث
         transliteration: thāʾ
         meaning_fr: « th » de l'anglais « think »
       - key: jim
         arabic: ج
+        forms:
+          initial: جـ
+          medial: ـجـ
+          final: ـج
         transliteration: jīm
         meaning_fr: « dj » de « djellaba », ou « j » de « jour »
       - key: ha
         arabic: ح
+        forms:
+          initial: حـ
+          medial: ـحـ
+          final: ـح
         transliteration: ḥāʾ
         meaning_fr: « h » soufflé du fond de la gorge
       - key: kha
         arabic: خ
+        forms:
+          initial: خـ
+          medial: ـخـ
+          final: ـخ
         transliteration: khāʾ
         meaning_fr: « ch » allemand de « Bach », « j » espagnol
   - key: lettres-2
@@ -38,30 +64,50 @@ lessons:
     cards:
       - key: dal
         arabic: د
+        forms:
+          final: ـد
         transliteration: dāl
         meaning_fr: « d » de « dos »
       - key: dhal
         arabic: ذ
+        forms:
+          final: ـذ
         transliteration: dhāl
         meaning_fr: « th » de l'anglais « this »
       - key: ra
         arabic: ر
+        forms:
+          final: ـر
         transliteration: rāʾ
         meaning_fr: « r » roulé
       - key: zay
         arabic: ز
+        forms:
+          final: ـز
         transliteration: zāy
         meaning_fr: « z » de « zéro »
       - key: sin
         arabic: س
+        forms:
+          initial: سـ
+          medial: ـسـ
+          final: ـس
         transliteration: sīn
         meaning_fr: « s » de « sel »
       - key: shin
         arabic: ش
+        forms:
+          initial: شـ
+          medial: ـشـ
+          final: ـش
         transliteration: shīn
         meaning_fr: « ch » de « chat »
       - key: sad
         arabic: ص
+        forms:
+          initial: صـ
+          medial: ـصـ
+          final: ـص
         transliteration: ṣād
         meaning_fr: « s » emphatique, la langue en arrière
   - key: lettres-3
@@ -69,30 +115,58 @@ lessons:
     cards:
       - key: dad
         arabic: ض
+        forms:
+          initial: ضـ
+          medial: ـضـ
+          final: ـض
         transliteration: ḍād
         meaning_fr: « d » emphatique
       - key: ta-emphatique
         arabic: ط
+        forms:
+          initial: طـ
+          medial: ـطـ
+          final: ـط
         transliteration: ṭāʾ
         meaning_fr: « t » emphatique
       - key: dha-emphatique
         arabic: ظ
+        forms:
+          initial: ظـ
+          medial: ـظـ
+          final: ـظ
         transliteration: ẓāʾ
         meaning_fr: « th » de « this », emphatique
       - key: ayn
         arabic: ع
+        forms:
+          initial: عـ
+          medial: ـعـ
+          final: ـع
         transliteration: ʿayn
         meaning_fr: Son serré du fond de la gorge, sans équivalent en français
       - key: ghayn
         arabic: غ
+        forms:
+          initial: غـ
+          medial: ـغـ
+          final: ـغ
         transliteration: ghayn
         meaning_fr: « r » grasseyé de « Paris »
       - key: fa
         arabic: ف
+        forms:
+          initial: فـ
+          medial: ـفـ
+          final: ـف
         transliteration: fāʾ
         meaning_fr: « f » de « fou »
       - key: qaf
         arabic: ق
+        forms:
+          initial: قـ
+          medial: ـقـ
+          final: ـق
         transliteration: qāf
         meaning_fr: « k » prononcé au fond de la gorge
   - key: lettres-4
@@ -100,29 +174,55 @@ lessons:
     cards:
       - key: kaf
         arabic: ك
+        forms:
+          initial: كـ
+          medial: ـكـ
+          final: ـك
         transliteration: kāf
         meaning_fr: « k » de « kilo »
       - key: lam
         arabic: ل
+        forms:
+          initial: لـ
+          medial: ـلـ
+          final: ـل
         transliteration: lām
         meaning_fr: « l » de « lune »
       - key: mim
         arabic: م
+        forms:
+          initial: مـ
+          medial: ـمـ
+          final: ـم
         transliteration: mīm
         meaning_fr: « m » de « mère »
       - key: nun
         arabic: ن
+        forms:
+          initial: نـ
+          medial: ـنـ
+          final: ـن
         transliteration: nūn
         meaning_fr: « n » de « nez »
       - key: ha-expire
         arabic: ه
+        forms:
+          initial: هـ
+          medial: ـهـ
+          final: ـه
         transliteration: hāʾ
         meaning_fr: « h » expiré, comme dans l'anglais « house »
       - key: waw
         arabic: و
+        forms:
+          final: ـو
         transliteration: wāw
         meaning_fr: « w » de « watt », ou « ou » long (ū)
       - key: ya
         arabic: ي
+        forms:
+          initial: يـ
+          medial: ـيـ
+          final: ـي
         transliteration: yāʾ
         meaning_fr: « y » de « yeux », ou « i » long (ī)

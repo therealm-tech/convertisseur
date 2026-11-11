@@ -11,6 +11,7 @@ mod content;
 mod db;
 mod error;
 mod health;
+mod letters;
 mod password;
 mod rate_limit;
 mod router;

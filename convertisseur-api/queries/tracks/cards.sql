@@ -6,6 +6,9 @@ SELECT
     cards.transliteration,
     cards.meaning_fr,
     cards.variety,
+    cards.initial_form,
+    cards.medial_form,
+    cards.final_form,
     cards.audio_id,
     audio.duration_ms AS audio_duration_ms
 FROM cards

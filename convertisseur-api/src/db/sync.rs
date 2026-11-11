@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     content::{Track, Variety},
+    letters::{FormColumns, LetterForms},
     sync::{CardText, LessonText, Row, UnitText},
 };
 
@@ -36,6 +37,8 @@ struct CardRow {
     transliteration: Option<String>,
     meaning_fr: Option<String>,
     variety: Variety,
+    #[sqlx(flatten)]
+    forms: FormColumns,
     review_note: Option<String>,
 }
 
@@ -95,6 +98,7 @@ pub async fn cards(exec: impl PgExecutor<'_>) -> sqlx::Result<Vec<Row<Uuid, Card
                 transliteration: row.transliteration,
                 meaning_fr: row.meaning_fr,
                 variety: row.variety,
+                forms: row.forms.into_forms(),
             },
             review_note: row.review_note,
         })
@@ -141,6 +145,7 @@ pub async fn overwrite_card(
     text: &CardText,
     editor: Uuid,
 ) -> sqlx::Result<()> {
+    let [initial, medial, last] = LetterForms::columns(text.forms.as_ref());
     sqlx::query(include_str!("../../queries/cards/overwrite.sql"))
         .bind(id)
         .bind(&text.arabic)
@@ -148,6 +153,9 @@ pub async fn overwrite_card(
         .bind(&text.meaning_fr)
         .bind(text.variety)
         .bind(editor)
+        .bind(initial)
+        .bind(medial)
+        .bind(last)
         .execute(exec)
         .await?;
     Ok(())

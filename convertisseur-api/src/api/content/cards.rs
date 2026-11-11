@@ -12,7 +12,8 @@ use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
 use super::{
-    AudioResponse, MAX_TEXT_CHARS, Resource, ReviewResponse, TAG, TrackJson, VarietyJson,
+    AudioResponse, LetterFormsResponse, MAX_TEXT_CHARS, Resource, ReviewResponse, TAG, TrackJson,
+    VarietyJson,
     audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
     created, delete, delete_docs, optional_text, refused, set_review_note, set_review_note_docs,
     set_status, set_status_docs, validate_text,
@@ -181,6 +182,9 @@ pub struct CardResponse {
     transliteration: Option<String>,
     meaning_fr: Option<String>,
     variety: VarietyJson,
+    /// The other shapes of the letter, for a card of the alphabet; `null`
+    /// for any other card. Only the content files write them.
+    forms: Option<LetterFormsResponse>,
     /// `null` when the card has no recording.
     audio: Option<AudioResponse>,
     #[serde(flatten)]
@@ -197,6 +201,7 @@ impl CardResponse {
             },
             track: card.track.into(),
             position: card.position,
+            forms: LetterFormsResponse::of(&card.arabic, card.forms),
             arabic: card.arabic,
             transliteration: card.transliteration,
             meaning_fr: card.meaning_fr,
@@ -232,7 +237,7 @@ async fn create_card(
         fields.lesson_id,
         request.position,
         async |conn, position| {
-            db::content::insert_card(conn, &fields, position, None, actor.id).await
+            db::content::insert_card(conn, &fields, None, position, None, actor.id).await
         },
     )
     .await

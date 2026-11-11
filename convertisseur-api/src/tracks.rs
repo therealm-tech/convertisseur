@@ -4,7 +4,10 @@
 
 use uuid::Uuid;
 
-use crate::content::{Track, Variety};
+use crate::{
+    content::{Track, Variety},
+    letters::FormColumns,
+};
 
 /// A row of the outline: a visible unit, and one of its visible lessons when
 /// it has any.
@@ -96,6 +99,8 @@ pub struct StudyCard {
     pub transliteration: Option<String>,
     pub meaning_fr: Option<String>,
     pub variety: Variety,
+    #[sqlx(flatten)]
+    pub forms: FormColumns,
     pub audio_id: Option<Uuid>,
     pub audio_duration_ms: Option<i32>,
 }

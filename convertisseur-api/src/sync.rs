@@ -23,6 +23,7 @@ use crate::{
         content::{Cards, Lessons, Ordered, Units},
         sync::Place,
     },
+    letters::LetterForms,
     storage::Storage,
 };
 
@@ -98,6 +99,7 @@ pub struct CardText {
     pub transliteration: Option<String>,
     pub meaning_fr: Option<String>,
     pub variety: Variety,
+    pub forms: Option<LetterForms>,
 }
 
 /// Syncs the content files built into the binary.
@@ -179,6 +181,7 @@ pub async fn sync(
                     transliteration: card.transliteration.clone(),
                     meaning_fr: card.meaning_fr.clone(),
                     variety: card.variety,
+                    forms: card.forms.clone(),
                 },
             })
         });
@@ -362,7 +365,15 @@ impl Level for Cards {
             meaning_fr: text.meaning_fr.clone(),
             variety: text.variety,
         };
-        db::content::insert_card(conn, &fields, position, Some(key), author).await
+        db::content::insert_card(
+            conn,
+            &fields,
+            text.forms.as_ref(),
+            position,
+            Some(key),
+            author,
+        )
+        .await
     }
 
     async fn overwrite(
