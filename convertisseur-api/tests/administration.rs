@@ -1,119 +1,15 @@
-use std::{net::SocketAddr, sync::OnceLock};
+mod common;
 
-use argon2::{Argon2, PasswordHasher};
-use axum::{
-    Router,
-    body::Body,
-    extract::connect_info::MockConnectInfo,
-    http::{HeaderMap, Method, Request, StatusCode, header},
-};
-use convertisseur_api::{
-    AppState, ClientSettings, app, ensure_super_admin,
-    storage::{MemoryStore, Storage},
-};
-use http_body_util::BodyExt;
-use serde_json::{Value, json};
+use axum::http::{Method, StatusCode, header};
+use common::{Answer, PASSWORD, Server, create_account, password_hash};
+use convertisseur_api::ensure_super_admin;
+use serde_json::json;
 use sqlx::PgPool;
-use tower::ServiceExt;
 use uuid::Uuid;
 
-const PASSWORD: &str = "a long enough password";
 const NEW_PASSWORD: &str = "another long enough password";
-const PEER: SocketAddr =
-    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 40000);
-
-struct Answer {
-    status: StatusCode,
-    headers: HeaderMap,
-    body: Value,
-}
-
-impl Answer {
-    fn problem_type(&self) -> &str {
-        assert_eq!(
-            self.headers.get(header::CONTENT_TYPE).unwrap(),
-            "application/problem+json"
-        );
-        self.body["type"].as_str().unwrap()
-    }
-
-    fn assert_problem(&self, status: StatusCode, kind: &str) {
-        assert_eq!(self.status, status, "{}", self.body);
-        assert_eq!(
-            self.problem_type(),
-            format!("urn:convertisseur:problem:{kind}")
-        );
-    }
-
-    fn cookie(&self) -> String {
-        let set_cookie = self.headers[header::SET_COOKIE].to_str().unwrap();
-        set_cookie.split(';').next().unwrap().to_owned()
-    }
-}
-
-/// The app, with the login rate limit of a single client: a test logs in at
-/// most 10 times per `Server`.
-struct Server {
-    router: Router,
-}
 
 impl Server {
-    fn new(pool: &PgPool) -> Self {
-        let state = AppState::new(
-            pool.clone(),
-            Storage::Memory(MemoryStore::default()),
-            ClientSettings::default(),
-        );
-        let router = app(state, &std::env::temp_dir()).layer(MockConnectInfo(PEER));
-        Self { router }
-    }
-
-    async fn send(
-        &self,
-        method: Method,
-        uri: &str,
-        cookie: Option<&str>,
-        body: Option<&Value>,
-    ) -> Answer {
-        let mut request = Request::builder().method(method).uri(uri);
-        if let Some(cookie) = cookie {
-            request = request.header(header::COOKIE, cookie);
-        }
-        let request = match body {
-            Some(body) => request
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body.to_string())),
-            None => request.body(Body::empty()),
-        };
-        let response = self.router.clone().oneshot(request.unwrap()).await.unwrap();
-        let status = response.status();
-        let headers = response.headers().clone();
-        let bytes = response.into_body().collect().await.unwrap().to_bytes();
-        let body = if bytes.is_empty() {
-            Value::Null
-        } else {
-            serde_json::from_slice(&bytes).unwrap()
-        };
-        Answer {
-            status,
-            headers,
-            body,
-        }
-    }
-
-    async fn login(&self, username: &str, password: &str) -> Answer {
-        let body = json!({ "username": username, "password": password });
-        self.send(Method::POST, "/api/v1/sessions", None, Some(&body))
-            .await
-    }
-
-    /// Logs in as `username`, with [`PASSWORD`]; returns the session cookie.
-    async fn session(&self, username: &str) -> String {
-        let answer = self.login(username, PASSWORD).await;
-        assert_eq!(answer.status, StatusCode::CREATED, "{username}");
-        answer.cookie()
-    }
-
     async fn current_session(&self, cookie: &str) -> Answer {
         self.send(Method::GET, "/api/v1/sessions/current", Some(cookie), None)
             .await
@@ -168,31 +64,6 @@ impl Server {
         )
         .await
     }
-}
-
-/// Hashing is slow in a debug build: every account a test creates shares
-/// this hash of [`PASSWORD`].
-fn password_hash() -> &'static str {
-    static HASH: OnceLock<String> = OnceLock::new();
-    HASH.get_or_init(|| {
-        Argon2::default()
-            .hash_password(PASSWORD.as_bytes())
-            .unwrap()
-            .to_string()
-    })
-}
-
-async fn create_account(pool: &PgPool, username: &str, role: &str) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3::user_role) \
-         RETURNING id",
-    )
-    .bind(username)
-    .bind(password_hash())
-    .bind(role)
-    .fetch_one(pool)
-    .await
-    .unwrap()
 }
 
 async fn super_admin(pool: &PgPool) -> Uuid {

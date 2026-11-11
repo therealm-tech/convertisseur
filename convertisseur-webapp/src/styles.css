@@ -750,6 +750,252 @@ button.button-primary {
 	font-size: 15px;
 }
 
+.admin-header-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.admin-header-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.button-outline,
+.button-solid,
+.button-review {
+	min-height: 46px;
+	padding: 0 18px;
+	border-radius: 14px;
+	font: inherit;
+	font-size: 15px;
+	font-weight: 900;
+	cursor: pointer;
+}
+
+.button-outline {
+	border: 1.5px solid var(--color-primary);
+	background: var(--color-surface);
+	color: var(--color-primary-text);
+}
+
+.button-solid {
+	border: 0;
+	background: var(--color-primary);
+	color: var(--color-on-primary);
+}
+
+.button-solid:hover {
+	background: var(--color-primary-hover);
+}
+
+.button-review {
+	border: 0;
+	background: var(--color-accent-soft);
+	color: var(--color-on-accent-soft);
+}
+
+.button-outline:disabled,
+.button-solid:disabled,
+.button-review:disabled {
+	cursor: progress;
+	opacity: 0.7;
+}
+
+.status-filter {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+	padding: 4px;
+	border: 0;
+	border-radius: 16px;
+	background: var(--color-surface-muted);
+}
+
+.status-filter button {
+	min-height: 40px;
+	padding: 0 14px;
+	border: 0;
+	border-radius: var(--radius-small);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 900;
+	cursor: pointer;
+}
+
+.status-filter button[aria-pressed="true"] {
+	background: var(--color-surface);
+}
+
+.status-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 28px;
+	padding: 0 10px;
+	border-radius: 999px;
+	font-size: 13px;
+	font-weight: 900;
+	white-space: nowrap;
+}
+
+.status-pill-validated {
+	background: var(--color-primary-soft);
+	color: var(--color-on-primary-soft);
+}
+
+.status-pill-to_review {
+	background: var(--color-accent-soft);
+	color: var(--color-on-accent-soft);
+}
+
+.content-table {
+	min-width: 620px;
+}
+
+.content-table th[scope="row"] {
+	font-weight: 900;
+}
+
+.content-row-selected {
+	background: var(--color-primary-soft);
+}
+
+.content-title-button {
+	min-height: 44px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 15px;
+	font-weight: 900;
+	text-align: start;
+	cursor: pointer;
+}
+
+.content-title-button :lang(ar) {
+	font-size: 20px;
+}
+
+.content-parent {
+	display: block;
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--color-text-muted);
+}
+
+.content-detail {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
+	padding: 20px;
+	border: 1.5px solid var(--color-border);
+	border-radius: 22px;
+	background: var(--color-surface);
+}
+
+.content-detail-empty {
+	margin: 0;
+	font-weight: 700;
+	color: var(--color-text-muted);
+}
+
+.content-detail-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.content-detail-kind {
+	font-size: 13px;
+	font-weight: 900;
+	letter-spacing: 0.6px;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+.content-detail-title {
+	margin: 0;
+	font-size: 22px;
+	font-weight: 900;
+}
+
+.content-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.content-form-pair {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
+	gap: 12px;
+}
+
+.field-input-arabic {
+	height: 56px;
+	font-size: 26px;
+}
+
+.content-position {
+	max-width: 120px;
+}
+
+.review-note {
+	margin: 0;
+	padding: 12px 14px;
+	border-radius: 14px;
+	background: var(--color-surface-muted);
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--color-text-muted);
+}
+
+.content-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.content-actions > button {
+	flex: 1 1 140px;
+}
+
+.content-delete {
+	align-self: flex-start;
+}
+
+.audio-file {
+	display: flex;
+	flex-direction: column;
+	min-height: 52px;
+	justify-content: center;
+	padding: 6px 12px;
+	border: 1.5px solid var(--color-input-border);
+	border-radius: var(--radius-small);
+	background: var(--color-bg);
+}
+
+.audio-file-name {
+	font-size: 14px;
+	font-weight: 800;
+}
+
+.audio-file-meta {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--color-text-muted);
+}
+
 @media (min-width: 768px) {
 	.dialog-backdrop {
 		align-items: center;
@@ -794,6 +1040,10 @@ button.button-primary {
 
 	.admin-help {
 		flex: 0 0 300px;
+	}
+
+	.content-detail {
+		flex: 0 0 360px;
 	}
 }
 

@@ -170,3 +170,14 @@ pub async fn replace_password(
         .await?;
     Ok(result.rows_affected() == 1)
 }
+
+/// The usernames of the accounts among `ids` that still exist.
+pub async fn usernames(
+    exec: impl PgExecutor<'_>,
+    ids: &[Uuid],
+) -> sqlx::Result<Vec<(Uuid, String)>> {
+    sqlx::query_as(include_str!("../../queries/users/usernames.sql"))
+        .bind(ids)
+        .fetch_all(exec)
+        .await
+}

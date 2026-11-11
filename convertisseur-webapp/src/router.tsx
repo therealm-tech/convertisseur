@@ -10,6 +10,7 @@ import { fetchCurrentSession } from "@/lib/api";
 import { isStaff } from "@/lib/roles";
 import { AuthPage } from "@/pages/AuthPage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
+import { ContentPage } from "@/pages/admin/ContentPage";
 import { UsersPage } from "@/pages/admin/UsersPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { ErrorPage } from "@/pages/ErrorPage";
@@ -63,8 +64,14 @@ const adminIndexRoute = createRoute({
 	getParentRoute: () => adminRoute,
 	path: "/",
 	beforeLoad: () => {
-		throw redirect({ to: "/admin/utilisateurs", replace: true });
+		throw redirect({ to: "/admin/contenu", replace: true });
 	},
+});
+
+const adminContentRoute = createRoute({
+	getParentRoute: () => adminRoute,
+	path: "/contenu",
+	component: ContentPage,
 });
 
 const adminUsersRoute = createRoute({
@@ -99,7 +106,11 @@ const authRoute = createRoute({
 const routeTree = rootRoute.addChildren([
 	appRoute.addChildren([
 		homeRoute,
-		adminRoute.addChildren([adminIndexRoute, adminUsersRoute]),
+		adminRoute.addChildren([
+			adminIndexRoute,
+			adminContentRoute,
+			adminUsersRoute,
+		]),
 	]),
 	passwordRoute,
 	authRoute,

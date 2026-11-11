@@ -1,5 +1,9 @@
 import { vi } from "vitest";
 import type { ListedUser, Role, User } from "@/lib/api";
+import { FakeContent } from "./fakeContent";
+import { json, problem } from "./responses";
+
+export { problem };
 
 interface Account {
 	user: User;
@@ -28,29 +32,11 @@ export interface FakeApi {
 	goOffline(): void;
 	/** The account named `username`, as the server holds it. */
 	account(username: string): Account | undefined;
+	/** The units, lessons and cards, as the server holds them. */
+	content: FakeContent;
 }
 
 export const TEMPORARY_PASSWORD = "k7mqx-4tn9c-wr2hp-a8vjd";
-
-function json(status: number, body: unknown, headers = {}): Response {
-	return new Response(JSON.stringify(body), {
-		status,
-		headers: { "Content-Type": "application/json", ...headers },
-	});
-}
-
-export function problem(
-	status: number,
-	type: string,
-	headers: Record<string, string> = {},
-	errors?: { field: string; code: string }[],
-): Response {
-	return json(
-		status,
-		{ type: `urn:convertisseur:problem:${type}`, status, errors },
-		{ ...headers, "Content-Type": "application/problem+json" },
-	);
-}
 
 const rank: Record<Role, number> = { user: 0, admin: 1, super_admin: 2 };
 
@@ -72,6 +58,8 @@ function seed(
 const memberPath =
 	/^\/api\/v1\/users\/([^/]+)(\/role|\/password|\/password-resets)?$/;
 
+const contentPath = /^\/api\/v1\/(content-items|units|lessons|cards)(\/|$)/;
+
 export function installFakeApi(): FakeApi {
 	const accounts: Account[] = [
 		seed("u-chef", "chef", "super_admin", "2026-11-07T10:00:00Z"),
@@ -81,6 +69,7 @@ export function installFakeApi(): FakeApi {
 		seed("u-karim", "karim.dz", "user"),
 	];
 	let session: Account | null = null;
+	const content = new FakeContent();
 	let offline = false;
 	const overrides = new Map<string, Response>();
 	const calls: Call[] = [];
@@ -211,6 +200,13 @@ export function installFakeApi(): FakeApi {
 			const [, id = "", sub = ""] = memberMatch;
 			return member(method, byId(decodeURIComponent(id)), sub, body);
 		}
+		if (contentPath.test(url.pathname)) {
+			const actor = guard("admin");
+			if (actor instanceof Response) {
+				return actor;
+			}
+			return content.handle(method, url, body, actor.user);
+		}
 		const credentials = body as { username: string; password: string };
 
 		switch (`${method} ${url.pathname}`) {
@@ -268,5 +264,6 @@ export function installFakeApi(): FakeApi {
 		account(username) {
 			return find(username);
 		},
+		content,
 	};
 }

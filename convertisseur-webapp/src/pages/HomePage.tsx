@@ -32,7 +32,7 @@ export function HomePage() {
 			) : null}
 			<nav aria-label="Mon compte" className="home-links">
 				{isStaff(user.role) ? (
-					<Link to="/admin/utilisateurs" className="button-primary">
+					<Link to="/admin/contenu" className="button-primary">
 						Administration
 					</Link>
 				) : null}

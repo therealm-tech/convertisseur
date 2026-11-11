@@ -36,3 +36,13 @@ export function formatLastActivity(
 	}
 	return formatDay(iso);
 }
+
+const shortDayFormat = new Intl.DateTimeFormat("fr-FR", {
+	day: "numeric",
+	month: "short",
+});
+
+/** "7 nov.": the day and month, for recent edits. */
+export function formatShortDay(iso: string): string {
+	return shortDayFormat.format(new Date(iso));
+}

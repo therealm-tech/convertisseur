@@ -43,6 +43,7 @@ const ProblemSchema = z.object({
 
 export const problemTypes = {
 	forbidden: "urn:convertisseur:problem:forbidden",
+	notEmpty: "urn:convertisseur:problem:not-empty",
 	invalidCredentials: "urn:convertisseur:problem:invalid-credentials",
 	passwordChangeRequired: "urn:convertisseur:problem:password-change-required",
 	rateLimited: "urn:convertisseur:problem:rate-limited",
@@ -89,7 +90,7 @@ export class ApiError extends Error {
 	}
 }
 
-async function send(
+export async function send(
 	method: "GET" | "POST" | "PUT" | "DELETE",
 	path: string,
 	body?: unknown,
@@ -126,7 +127,7 @@ async function toError(response: Response): Promise<ApiError> {
 	);
 }
 
-async function expectOk(response: Response): Promise<void> {
+export async function expectOk(response: Response): Promise<void> {
 	if (!response.ok) {
 		throw await toError(response);
 	}

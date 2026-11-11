@@ -31,6 +31,7 @@ pub enum ApiError {
     Forbidden,
     InvalidCredentials,
     UsernameTaken,
+    NotEmpty,
     RateLimited { retry_after: Duration },
     Internal(anyhow::Error),
 }
@@ -158,6 +159,12 @@ impl ApiError {
                 "urn:convertisseur:problem:username-taken",
                 "Username taken",
                 "an account already has this username, whatever its case",
+            ),
+            Self::NotEmpty => (
+                StatusCode::CONFLICT,
+                "urn:convertisseur:problem:not-empty",
+                "Not empty",
+                "it still holds lessons or cards; delete or move them first",
             ),
             Self::RateLimited { .. } => (
                 StatusCode::TOO_MANY_REQUESTS,
