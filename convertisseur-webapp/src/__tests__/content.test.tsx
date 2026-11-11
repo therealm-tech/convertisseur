@@ -44,25 +44,25 @@ function seedContent(api: FakeApi) {
 	});
 }
 
-async function openContentPage() {
+async function openContentPage(path = "/admin/contenu") {
 	const api = installFakeApi();
 	seedContent(api);
 	api.logIn("nour");
 	const user = userEvent.setup();
-	await renderAt("/admin/contenu");
+	const router = await renderAt(path);
 	await screen.findByRole("heading", { name: "Contenu" });
 	await screen.findByRole("table");
-	return { api, user };
+	return { api, user, router };
 }
 
 function titles() {
 	return screen
 		.getAllByRole("rowheader")
-		.map((cell) => within(cell).getByRole("button").textContent ?? "");
+		.map((cell) => within(cell).getByRole("link").textContent ?? "");
 }
 
 function detail() {
-	return screen.getByRole("region", { name: "Détail" });
+	return screen.getByRole("main");
 }
 
 describe("content page", () => {
@@ -76,7 +76,7 @@ describe("content page", () => {
 			"Les 4 formes des lettres",
 			"L'alphabet",
 		]);
-		const card = screen.getByRole("button", { name: "شُكْرًا · shukran" });
+		const card = screen.getByRole("link", { name: "شُكْرًا · shukran" });
 		const arabic = within(card).getByText("شُكْرًا");
 		expect(arabic).toHaveAttribute("lang", "ar");
 		expect(arabic).toHaveAttribute("dir", "rtl");
@@ -115,7 +115,7 @@ describe("content page", () => {
 		await waitFor(() => expect(titles()).toEqual(["شُكْرًا · shukran"]));
 	});
 
-	it("edits a card in the detail panel, which sends it back to review", async () => {
+	it("edits a card on its own page, which sends it back to review", async () => {
 		const { api, user } = await openContentPage();
 		api.content.seed("card", {
 			id: "c-wachrak",
@@ -129,7 +129,7 @@ describe("content page", () => {
 		await user.click(screen.getByRole("button", { name: "Validé · 1" }));
 		await user.click(screen.getByRole("button", { name: "Tout · 6" }));
 
-		await user.click(await screen.findByRole("button", { name: "واش راك؟" }));
+		await user.click(await screen.findByRole("link", { name: "واش راك؟" }));
 
 		const panel = detail();
 		const recto = await within(panel).findByRole("textbox", {
@@ -182,7 +182,7 @@ describe("content page", () => {
 		const { api, user } = await openContentPage();
 
 		await user.click(
-			screen.getByRole("button", { name: "Les 4 formes des lettres" }),
+			screen.getByRole("link", { name: "Les 4 formes des lettres" }),
 		);
 		const panel = detail();
 		await user.click(
@@ -197,9 +197,6 @@ describe("content page", () => {
 			),
 		).toBeVisible();
 		expect(api.content.row("l-lettres")?.status).toBe("validated");
-		await waitFor(() =>
-			expect(screen.getByRole("button", { name: "Validé · 2" })).toBeVisible(),
-		);
 
 		await user.click(
 			within(panel).getByRole("button", { name: "Repasser à relire" }),
@@ -222,7 +219,7 @@ describe("content page", () => {
 		row.validatedBy = { id: "u-bilal", username: "bilal", role: "admin" };
 
 		await user.click(
-			screen.getByRole("button", { name: "Les 4 formes des lettres" }),
+			screen.getByRole("link", { name: "Les 4 formes des lettres" }),
 		);
 		const panel = detail();
 		const position = await within(panel).findByRole("spinbutton", {
@@ -247,17 +244,23 @@ describe("content page", () => {
 	it("shows the audio a card has", async () => {
 		const { user } = await openContentPage();
 
-		await user.click(screen.getByRole("button", { name: "شُكْرًا · shukran" }));
+		await user.click(screen.getByRole("link", { name: "شُكْرًا · shukran" }));
 
 		const panel = detail();
 		expect(await within(panel).findByText("MP3 · 1,2 Mo · 0:03")).toBeVisible();
 		expect(within(panel).getByText("Ajouté le 5 nov. 2026")).toBeVisible();
 	});
 
-	it("creates a lesson in a unit", async () => {
-		const { api, user } = await openContentPage();
+	it("creates a lesson in a unit, then edits it", async () => {
+		const { api, user, router } = await openContentPage();
 
-		await user.click(screen.getByRole("button", { name: "Nouvelle leçon" }));
+		await user.click(screen.getByRole("link", { name: "Nouvelle leçon" }));
+		expect(router.state.location.pathname).toBe(
+			"/admin/contenu/lecons/nouvelle",
+		);
+		expect(
+			screen.getByRole("heading", { name: "Nouvelle leçon" }),
+		).toBeVisible();
 		const panel = detail();
 		const unit = within(panel).getByRole("combobox", { name: "Unité" });
 		await waitFor(() => expect(unit).toBeEnabled());
@@ -268,24 +271,29 @@ describe("content page", () => {
 		);
 		await user.click(within(panel).getByRole("button", { name: "Créer" }));
 
-		expect(await screen.findByRole("status")).toHaveTextContent("Leçon créée.");
+		expect(
+			await screen.findByRole("heading", { name: "La prière" }),
+		).toBeVisible();
 		expect(api.calls).toContainEqual({
 			method: "POST",
 			path: "/api/v1/lessons",
 			body: { unitId: "u-piliers", title: "La prière" },
 		});
-		await waitFor(() => expect(titles()[0]).toBe("La prière"));
+		expect(router.state.location.pathname).toMatch(
+			/^\/admin\/contenu\/lecons\/(?!nouvelle$)[^/]+$/,
+		);
 		expect(
-			await within(detail()).findByRole("button", {
-				name: "Marquer comme validé",
-			}),
+			screen.getByRole("button", { name: "Marquer comme validé" }),
 		).toBeVisible();
+
+		router.history.back();
+		await waitFor(() => expect(titles()[0]).toBe("La prière"));
 	});
 
 	it("explains a card refused for its recto", async () => {
 		const { user } = await openContentPage();
 
-		await user.click(screen.getByRole("button", { name: "Nouvelle carte" }));
+		await user.click(screen.getByRole("link", { name: "Nouvelle carte" }));
 		const panel = detail();
 		const lesson = within(panel).getByRole("combobox", { name: "Leçon" });
 		await waitFor(() => expect(lesson).toBeEnabled());
@@ -303,10 +311,10 @@ describe("content page", () => {
 		);
 	});
 
-	it("deletes an item after confirmation", async () => {
-		const { api, user } = await openContentPage();
+	it("deletes an item after confirmation, back on the list", async () => {
+		const { api, user, router } = await openContentPage();
 
-		await user.click(screen.getByRole("button", { name: "La shahada" }));
+		await user.click(screen.getByRole("link", { name: "La shahada" }));
 		await user.click(
 			await within(detail()).findByRole("button", { name: "Supprimer" }),
 		);
@@ -315,10 +323,98 @@ describe("content page", () => {
 		});
 		await user.click(within(dialog).getByRole("button", { name: "Supprimer" }));
 
-		expect(await screen.findByRole("status")).toHaveTextContent(
-			"Leçon supprimée.",
-		);
+		await screen.findByRole("table");
+		expect(router.state.location.pathname).toBe("/admin/contenu");
 		expect(api.content.row("l-shahada")).toBeUndefined();
 		await waitFor(() => expect(titles()).not.toContain("La shahada"));
+	});
+});
+
+describe("content edit pages", () => {
+	it("opens an item's page from anywhere on its row", async () => {
+		const { user, router } = await openContentPage();
+
+		const row = screen
+			.getByRole("link", { name: "شُكْرًا · shukran" })
+			.closest("tr");
+		if (!row) throw new Error("row missing");
+		await user.click(within(row).getByText("Carte"));
+
+		expect(
+			await screen.findByRole("heading", { name: "شُكْرًا · shukran" }),
+		).toBeVisible();
+		expect(router.state.location.pathname).toBe(
+			"/admin/contenu/cartes/c-shukran",
+		);
+	});
+
+	it("goes back to the list with its filters", async () => {
+		const { user, router } = await openContentPage();
+		await user.click(screen.getByRole("button", { name: "Validé · 1" }));
+		await waitFor(() => expect(titles()).toEqual(["L'alphabet"]));
+		const historyLength = router.history.length;
+
+		await user.click(screen.getByRole("link", { name: "L'alphabet" }));
+		await screen.findByRole("textbox", { name: "Titre" });
+		expect(router.state.location.pathname).toBe(
+			"/admin/contenu/unites/u-alphabet",
+		);
+
+		await user.click(screen.getByRole("link", { name: "Retour à la liste" }));
+
+		await waitFor(() => expect(titles()).toEqual(["L'alphabet"]));
+		expect(router.state.location.search).toEqual({ statut: "valide" });
+		expect(router.history.length).toBe(historyLength + 1);
+		expect(screen.getByRole("button", { name: "Validé · 1" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+	});
+
+	it("reads the list's filters from its URL", async () => {
+		await openContentPage("/admin/contenu?parcours=islam&q=piliers");
+
+		await waitFor(() => expect(titles()).toEqual(["Les piliers"]));
+		expect(screen.getByRole("combobox", { name: "Parcours" })).toHaveValue(
+			"islam",
+		);
+		expect(
+			screen.getByRole("searchbox", { name: "Rechercher du contenu" }),
+		).toHaveValue("piliers");
+	});
+
+	it("opens an item from its URL, with a way to the list", async () => {
+		const api = installFakeApi();
+		seedContent(api);
+		api.logIn("nour");
+		await renderAt("/admin/contenu/lecons/l-shahada");
+
+		expect(
+			await screen.findByRole("heading", { name: "La shahada" }),
+		).toBeVisible();
+		expect(
+			screen.getByRole("link", { name: "Retour à la liste" }),
+		).toHaveAttribute("href", "/admin/contenu");
+	});
+
+	it("says an item does not exist", async () => {
+		const api = installFakeApi();
+		seedContent(api);
+		api.logIn("nour");
+		await renderAt("/admin/contenu/cartes/c-disparue");
+
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Carte introuvable.",
+		);
+	});
+
+	it("answers page not found for a kind it does not know", async () => {
+		const api = installFakeApi();
+		api.logIn("nour");
+		await renderAt("/admin/contenu/chapitres/u-alphabet");
+
+		expect(
+			await screen.findByRole("heading", { name: "Page introuvable" }),
+		).toBeVisible();
 	});
 });

@@ -1,6 +1,32 @@
+import { useRouter } from "@tanstack/react-router";
+import { useCallback } from "react";
 import { Arabic } from "@/components/Arabic";
+import { ApiError, problemTypes } from "@/lib/api";
 import type { Status } from "@/lib/content";
 import { statusLabels } from "@/lib/contentLabels";
+import { logger } from "@/lib/logger";
+
+/**
+ * Logs a failed content request. A session that ended, lost its role or must
+ * change its password answers 401 or 403: the route guards decide where to go.
+ */
+export function useContentFailure() {
+	const router = useRouter();
+	return useCallback(
+		(event: string, failure: unknown) => {
+			logger.warn(event, { error: failure });
+			if (
+				failure instanceof ApiError &&
+				(failure.status === 401 ||
+					failure.type === problemTypes.passwordChangeRequired ||
+					failure.type === problemTypes.forbidden)
+			) {
+				void router.invalidate();
+			}
+		},
+		[router],
+	);
+}
 
 export function StatusPill({ status }: { status: Status }) {
 	return (

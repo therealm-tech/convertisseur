@@ -44,20 +44,20 @@ async function openContentPage() {
 }
 
 function detail() {
-	return screen.getByRole("region", { name: "Détail" });
+	return screen.getByRole("main");
 }
 
 function titles() {
 	return screen
 		.getAllByRole("rowheader")
-		.map((cell) => within(cell).getByRole("button").textContent ?? "");
+		.map((cell) => within(cell).getByRole("link").textContent ?? "");
 }
 
 describe("imported content", () => {
 	it("shows an imported item read-only, its status and audio still open", async () => {
 		const { user } = await openContentPage();
 
-		await user.click(screen.getByRole("button", { name: "سَلَام · salam" }));
+		await user.click(screen.getByRole("link", { name: "سَلَام · salam" }));
 
 		const panel = detail();
 		const recto = await within(panel).findByRole("textbox", {
@@ -95,7 +95,7 @@ describe("imported content", () => {
 	it("keeps an item written in the admin area editable", async () => {
 		const { user } = await openContentPage();
 
-		await user.click(screen.getByRole("button", { name: "صْبَاح النُّور" }));
+		await user.click(screen.getByRole("link", { name: "صْبَاح النُّور" }));
 
 		const panel = detail();
 		const recto = await within(panel).findByRole("textbox", {
@@ -120,7 +120,7 @@ describe("imported content", () => {
 		const { api, user } = await openContentPage();
 		expect(screen.getAllByText("Remarque")).toHaveLength(1);
 
-		await user.click(screen.getByRole("button", { name: "Bonjour" }));
+		await user.click(screen.getByRole("link", { name: "Bonjour" }));
 		const panel = detail();
 		const note = await within(panel).findByRole("textbox", {
 			name: "Remarque de relecture",
@@ -146,12 +146,25 @@ describe("imported content", () => {
 			"Vocalisation fausse sur le 2e mot",
 		);
 		expect(api.content.row("l-bonjour")?.status).toBe("to_review");
+
+		await user.click(screen.getByRole("link", { name: "Retour à la liste" }));
 		await waitFor(() =>
 			expect(screen.getAllByText("Remarque")).toHaveLength(2),
 		);
 
-		await user.clear(note);
-		await user.click(save);
+		await user.click(screen.getByRole("link", { name: "Bonjour" }));
+		const reopened = await within(detail()).findByRole("textbox", {
+			name: "Remarque de relecture",
+		});
+		await waitFor(() =>
+			expect(reopened).toHaveValue("Vocalisation fausse sur le 2e mot"),
+		);
+		await user.clear(reopened);
+		await user.click(
+			within(detail()).getByRole("button", {
+				name: "Enregistrer la remarque",
+			}),
+		);
 		expect(await screen.findByRole("status")).toHaveTextContent(
 			"Remarque effacée.",
 		);
@@ -160,7 +173,7 @@ describe("imported content", () => {
 
 	it("caps a review note at 2000 characters, counted as typed", async () => {
 		const { user } = await openContentPage();
-		await user.click(screen.getByRole("button", { name: "Salutations" }));
+		await user.click(screen.getByRole("link", { name: "Salutations" }));
 		const panel = detail();
 		const note = await within(panel).findByRole("textbox", {
 			name: "Remarque de relecture",

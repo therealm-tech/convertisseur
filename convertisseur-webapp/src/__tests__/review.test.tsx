@@ -515,7 +515,7 @@ describe("content page", () => {
 		const { user } = await open("/admin/contenu");
 		await screen.findByRole("table");
 
-		await user.click(screen.getByRole("button", { name: "Saluer" }));
+		await user.click(screen.getByRole("link", { name: "Saluer" }));
 		await user.click(
 			await screen.findByRole("link", { name: "Relire cette leçon" }),
 		);

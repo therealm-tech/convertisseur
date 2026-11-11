@@ -1,6 +1,14 @@
-import { Link } from "@tanstack/react-router";
+import {
+	Link,
+	useLocation,
+	useNavigate,
+	useParams,
+	useRouteContext,
+	useRouter,
+} from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
 import { Dialog } from "@/components/Dialog";
+import { BackIcon } from "@/components/icons";
 import { LetterFormsRow } from "@/components/LetterFormsRow";
 import { ApiError, problemTypes } from "@/lib/api";
 import {
@@ -21,30 +29,23 @@ import {
 	type Variety,
 } from "@/lib/content";
 import { kindLabels, trackLabels, varietyLabels } from "@/lib/contentLabels";
+import { listOrigin, sectionOf } from "@/lib/contentRoutes";
 import { AudioBlock } from "@/pages/admin/AudioBlock";
-import { ItemTitle, RepoBadge, StatusPill } from "@/pages/admin/contentParts";
-
-export type Selection =
-	| { mode: "edit"; kind: Kind; id: string }
-	| { mode: "create"; kind: Kind };
+import {
+	ItemTitle,
+	RepoBadge,
+	StatusPill,
+	useContentFailure,
+} from "@/pages/admin/contentParts";
 
 type Loaded = { [K in Kind]: { kind: K; item: ItemOf[K] } }[Kind];
 type Draft = { [K in Kind]: { kind: K; fields: FieldsOf[K] } }[Kind];
 
 type Phase =
 	| { phase: "loading" }
+	| { phase: "missing" }
 	| { phase: "failed" }
 	| { phase: "ready"; loaded: Loaded | undefined; draft: Draft };
-
-interface ContentDetailProps {
-	selection: Selection;
-	onFailure: (event: string, failure: unknown) => void;
-	/**
-	 * Something changed: the list reloads, shows `message`, and moves the
-	 * selection to `next` when given (`null` clears it).
-	 */
-	onChanged: (message: string | undefined, next?: Selection | null) => void;
-}
 
 const UNEXPECTED = "Une erreur est survenue. Réessaie dans un moment.";
 
@@ -173,33 +174,92 @@ function describeFailure(failure: unknown, kind: Kind): string {
 	return UNEXPECTED;
 }
 
-/** The detail panel: one item to review and edit, or a new one to write. */
-export function ContentDetail({
-	selection,
-	onFailure,
-	onChanged,
-}: ContentDetailProps) {
-	const [state, setState] = useState<Phase>(
-		selection.mode === "create"
-			? {
-					phase: "ready",
-					loaded: undefined,
-					draft: emptyDraft(selection.kind),
+/** One unit, lesson or card to review and edit. */
+export function ContentEditPage() {
+	const from = "/_app/admin/contenu/$section/$itemId";
+	const { kind } = useRouteContext({ from });
+	const { itemId } = useParams({ from });
+	return <ContentEditor key={itemId} kind={kind} id={itemId} />;
+}
+
+/** A new unit, lesson or card to write. */
+export function ContentCreatePage() {
+	const { kind } = useRouteContext({
+		from: "/_app/admin/contenu/$section/nouvelle",
+	});
+	return <ContentEditor key={kind} kind={kind} id={undefined} />;
+}
+
+/**
+ * Goes back to the list, to the very entry it was opened from when it was,
+ * so that the list keeps its filters and its scroll.
+ */
+function useBackToList() {
+	const router = useRouter();
+	const navigate = useNavigate();
+	const origin = useLocation({ select: (location) => location.state });
+	const filters = listOrigin(origin);
+	return {
+		filters,
+		back: () => {
+			if (filters) {
+				router.history.back();
+			} else {
+				void navigate({ to: "/admin/contenu", replace: true });
+			}
+		},
+	};
+}
+
+function BackToList() {
+	const { filters, back } = useBackToList();
+	return (
+		<Link
+			to="/admin/contenu"
+			search={filters ?? {}}
+			className="button-outline content-back-link"
+			onClick={(event) => {
+				if (filters) {
+					event.preventDefault();
+					back();
 				}
+			}}
+		>
+			<BackIcon />
+			Retour à la liste
+		</Link>
+	);
+}
+
+interface ContentEditorProps {
+	kind: Kind;
+	/** The item to edit; a new one is written when undefined. */
+	id: string | undefined;
+}
+
+function ContentEditor({ kind: pageKind, id }: ContentEditorProps) {
+	const navigate = useNavigate();
+	const onFailure = useContentFailure();
+	const { back } = useBackToList();
+	const titleId = useId();
+	const [state, setState] = useState<Phase>(
+		id === undefined
+			? { phase: "ready", loaded: undefined, draft: emptyDraft(pageKind) }
 			: { phase: "loading" },
 	);
 	const [position, setPosition] = useState("");
 	const [note, setNote] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | undefined>();
+	const [toast, setToast] = useState<string | undefined>();
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 
 	useEffect(() => {
-		if (selection.mode !== "edit") {
+		if (id === undefined) {
 			return;
 		}
 		let current = true;
-		load(selection.kind, selection.id).then(
+		load(pageKind, id).then(
 			(loaded) => {
 				if (current) {
 					setState({ phase: "ready", loaded, draft: draftOf(loaded) });
@@ -209,7 +269,11 @@ export function ContentDetail({
 			},
 			(failure: unknown) => {
 				if (current) {
-					setState({ phase: "failed" });
+					setState(
+						failure instanceof ApiError && failure.status === 404
+							? { phase: "missing" }
+							: { phase: "failed" },
+					);
 					onFailure("admin.content_load_failed", failure);
 				}
 			},
@@ -217,22 +281,24 @@ export function ContentDetail({
 		return () => {
 			current = false;
 		};
-	}, [selection, onFailure]);
+	}, [pageKind, id, onFailure]);
 
-	if (state.phase === "loading") {
+	if (state.phase !== "ready") {
 		return (
-			<section aria-label="Détail" className="content-detail">
-				<p className="content-detail-empty">Chargement…</p>
-			</section>
-		);
-	}
-	if (state.phase === "failed") {
-		return (
-			<section aria-label="Détail" className="content-detail">
-				<p role="alert" className="form-error">
-					Impossible de charger cet élément. Réessaie dans un moment.
-				</p>
-			</section>
+			<div className="admin-content content-edit">
+				<BackToList />
+				<section className="content-detail">
+					{state.phase === "loading" ? (
+						<p className="content-detail-empty">Chargement…</p>
+					) : (
+						<p role="alert" className="form-error">
+							{state.phase === "missing"
+								? `${kindLabels[pageKind]} introuvable.`
+								: "Impossible de charger cet élément. Réessaie dans un moment."}
+						</p>
+					)}
+				</section>
+			</div>
 		);
 	}
 
@@ -246,9 +312,14 @@ export function ContentDetail({
 		}
 	}
 
-	async function submit() {
+	function begin() {
 		setBusy(true);
 		setError(undefined);
+		setToast(undefined);
+	}
+
+	async function submit() {
+		begin();
 		try {
 			if (loaded) {
 				const wanted = Number.parseInt(position, 10);
@@ -264,19 +335,20 @@ export function ContentDetail({
 					draft: draftOf(reloaded),
 				});
 				setPosition(String(reloaded.item.position));
-				onChanged("Modifications enregistrées.");
+				setToast("Modifications enregistrées.");
+				setBusy(false);
 			} else {
 				const created = await create(draft);
-				onChanged(`${kindLabels[kind]} créée.`, {
-					mode: "edit",
-					kind,
-					id: created.item.id,
+				await navigate({
+					to: "/admin/contenu/$section/$itemId",
+					params: { section: sectionOf[kind], itemId: created.item.id },
+					replace: true,
+					state: true,
 				});
 			}
 		} catch (failure) {
 			onFailure("admin.content_save_failed", failure);
 			setError(describeFailure(failure, kind));
-		} finally {
 			setBusy(false);
 		}
 	}
@@ -285,14 +357,13 @@ export function ContentDetail({
 	async function refresh(current: Loaded, message: string) {
 		const reloaded = await load(current.kind, current.item.id);
 		setState({ phase: "ready", loaded: reloaded, draft });
-		onChanged(message);
+		setToast(message);
 	}
 
 	async function toggleStatus(current: Loaded) {
 		const next =
 			current.item.status === "validated" ? "to_review" : "validated";
-		setBusy(true);
-		setError(undefined);
+		begin();
 		try {
 			const change = await setStatus(current.kind, current.item.id, next);
 			const item = { ...current.item, ...change };
@@ -302,7 +373,7 @@ export function ContentDetail({
 				loaded: { ...current, item } as Loaded,
 				draft,
 			});
-			onChanged(
+			setToast(
 				next === "validated" ? "Contenu validé." : "Contenu repassé à relire.",
 			);
 		} catch (failure) {
@@ -314,8 +385,7 @@ export function ContentDetail({
 	}
 
 	async function saveNote(current: Loaded) {
-		setBusy(true);
-		setError(undefined);
+		begin();
 		try {
 			const reviewNote = await setReviewNote(
 				current.kind,
@@ -330,7 +400,7 @@ export function ContentDetail({
 				draft,
 			});
 			setNote(reviewNote ?? "");
-			onChanged(reviewNote ? "Remarque enregistrée." : "Remarque effacée.");
+			setToast(reviewNote ? "Remarque enregistrée." : "Remarque effacée.");
 		} catch (failure) {
 			onFailure("admin.content_note_failed", failure);
 			setError(describeFailure(failure, current.kind));
@@ -341,11 +411,10 @@ export function ContentDetail({
 
 	async function confirmDelete(current: Loaded) {
 		setConfirmingDelete(false);
-		setBusy(true);
-		setError(undefined);
+		begin();
 		try {
 			await deleteItem(current.kind, current.item.id);
-			onChanged(`${kindLabels[current.kind]} supprimée.`, null);
+			back();
 		} catch (failure) {
 			onFailure("admin.content_delete_failed", failure);
 			setError(describeFailure(failure, current.kind));
@@ -354,173 +423,184 @@ export function ContentDetail({
 	}
 
 	return (
-		<section aria-label="Détail" className="content-detail">
-			<div className="content-detail-meta">
-				<span className="content-detail-kind">
-					{loaded
-						? `${kindLabels[kind]} · ${trackLabels[loaded.item.track]}`
-						: `Nouvelle ${kindLabels[kind].toLowerCase()}`}
-				</span>
+		<div className="admin-content content-edit">
+			<BackToList />
+			<section aria-labelledby={titleId} className="content-detail">
 				{loaded ? (
-					<span className="content-detail-badges">
-						{imported ? <RepoBadge /> : null}
-						<StatusPill status={loaded.item.status} />
-					</span>
-				) : null}
-			</div>
-			{loaded ? (
-				<h2 className="content-detail-title">
-					<LoadedTitle loaded={loaded} />
-				</h2>
-			) : null}
-			{loaded?.kind === "lesson" ? (
-				<Link
-					to="/admin/relecture/lecons/$lessonId"
-					params={{ lessonId: loaded.item.id }}
-					className="button-outline content-review-link"
-				>
-					Relire cette leçon
-				</Link>
-			) : null}
-			{imported ? (
-				<p className="content-locked">
-					Texte et place se corrigent dans le dépôt. Signale une erreur par une
-					remarque.
-				</p>
-			) : null}
-
-			<form
-				className="content-form"
-				onSubmit={(event) => {
-					event.preventDefault();
-					void submit();
-				}}
-			>
-				<DraftFields draft={draft} readOnly={imported} onChange={setDraft} />
-				{loaded?.kind === "card" && loaded.item.forms ? (
-					<div className="field">
-						<span className="field-label">Formes</span>
-						<LetterFormsRow
-							arabic={loaded.item.arabic}
-							forms={loaded.item.forms}
-						/>
+					<div className="content-detail-meta">
+						<span className="content-detail-kind">
+							{`${kindLabels[kind]} · ${trackLabels[loaded.item.track]}`}
+						</span>
+						<span className="content-detail-badges">
+							{imported ? <RepoBadge /> : null}
+							<StatusPill status={loaded.item.status} />
+						</span>
 					</div>
 				) : null}
-				{loaded ? (
-					<div className="field">
-						<label htmlFor="contenu-position" className="field-label">
-							Position
-						</label>
-						<input
-							id="contenu-position"
-							className="field-input content-position"
-							type="number"
-							inputMode="numeric"
-							min={1}
-							readOnly={imported}
-							value={position}
-							onChange={(event) => setPosition(event.target.value)}
-						/>
-					</div>
+				<h1 id={titleId} className="content-detail-title">
+					{loaded ? (
+						<LoadedTitle loaded={loaded} />
+					) : (
+						`Nouvelle ${kindLabels[kind].toLowerCase()}`
+					)}
+				</h1>
+				{loaded?.kind === "lesson" ? (
+					<Link
+						to="/admin/relecture/lecons/$lessonId"
+						params={{ lessonId: loaded.item.id }}
+						className="button-outline content-review-link"
+					>
+						Relire cette leçon
+					</Link>
 				) : null}
-
-				{loaded && loaded.kind !== "unit" ? (
-					<AudioBlock
-						audio={loaded.item.audio}
-						onUpload={async (file, filename, durationMs) => {
-							await uploadAudio(
-								loaded.kind,
-								loaded.item.id,
-								file,
-								filename,
-								durationMs,
-							);
-							await refresh(loaded, "Audio enregistré : à relire.");
-						}}
-						onRemove={async () => {
-							await deleteAudio(loaded.kind, loaded.item.id);
-							await refresh(loaded, "Audio supprimé : à relire.");
-						}}
-					/>
-				) : null}
-				{!loaded && kind !== "unit" ? (
-					<p className="field-hint">
-						L'audio s'ajoute une fois la {kindLabels[kind].toLowerCase()} créée.
+				{imported ? (
+					<p className="content-locked">
+						Texte et place se corrigent dans le dépôt. Signale une erreur par
+						une remarque.
 					</p>
 				) : null}
 
-				{loaded ? (
-					<div className="field">
-						<label htmlFor="contenu-remarque" className="field-label">
-							Remarque de relecture
-						</label>
-						<textarea
-							id="contenu-remarque"
-							className="field-input field-textarea"
-							rows={3}
-							maxLength={MAX_NOTE_CHARS}
-							placeholder="Ex. : vocalisation fausse sur le 2e mot"
-							value={note}
-							onChange={(event) => setNote(event.target.value)}
+				<form
+					className="content-form"
+					onSubmit={(event) => {
+						event.preventDefault();
+						void submit();
+					}}
+				>
+					<DraftFields draft={draft} readOnly={imported} onChange={setDraft} />
+					{loaded?.kind === "card" && loaded.item.forms ? (
+						<div className="field">
+							<span className="field-label">Formes</span>
+							<LetterFormsRow
+								arabic={loaded.item.arabic}
+								forms={loaded.item.forms}
+							/>
+						</div>
+					) : null}
+					{loaded ? (
+						<div className="field">
+							<label htmlFor="contenu-position" className="field-label">
+								Position
+							</label>
+							<input
+								id="contenu-position"
+								className="field-input content-position"
+								type="number"
+								inputMode="numeric"
+								min={1}
+								readOnly={imported}
+								value={position}
+								onChange={(event) => setPosition(event.target.value)}
+							/>
+						</div>
+					) : null}
+
+					{loaded && loaded.kind !== "unit" ? (
+						<AudioBlock
+							audio={loaded.item.audio}
+							onUpload={async (file, filename, durationMs) => {
+								setToast(undefined);
+								await uploadAudio(
+									loaded.kind,
+									loaded.item.id,
+									file,
+									filename,
+									durationMs,
+								);
+								await refresh(loaded, "Audio enregistré : à relire.");
+							}}
+							onRemove={async () => {
+								setToast(undefined);
+								await deleteAudio(loaded.kind, loaded.item.id);
+								await refresh(loaded, "Audio supprimé : à relire.");
+							}}
 						/>
-						<div className="note-actions">
-							<span className="field-hint">
-								{note.length} / {MAX_NOTE_CHARS}
-							</span>
+					) : null}
+					{!loaded && kind !== "unit" ? (
+						<p className="field-hint">
+							L'audio s'ajoute une fois la {kindLabels[kind].toLowerCase()}{" "}
+							créée.
+						</p>
+					) : null}
+
+					{loaded ? (
+						<div className="field">
+							<label htmlFor="contenu-remarque" className="field-label">
+								Remarque de relecture
+							</label>
+							<textarea
+								id="contenu-remarque"
+								className="field-input field-textarea"
+								rows={3}
+								maxLength={MAX_NOTE_CHARS}
+								placeholder="Ex. : vocalisation fausse sur le 2e mot"
+								value={note}
+								onChange={(event) => setNote(event.target.value)}
+							/>
+							<div className="note-actions">
+								<span className="field-hint">
+									{note.length} / {MAX_NOTE_CHARS}
+								</span>
+								<button
+									type="button"
+									className="button-small"
+									disabled={busy || note === (loaded.item.reviewNote ?? "")}
+									onClick={() => void saveNote(loaded)}
+								>
+									Enregistrer la remarque
+								</button>
+							</div>
+						</div>
+					) : null}
+
+					{loaded ? <ReviewState loaded={loaded} /> : null}
+
+					{error ? (
+						<p role="alert" className="form-error">
+							{error}
+						</p>
+					) : null}
+					{toast ? (
+						<p role="status" className="admin-toast">
+							{toast}
+						</p>
+					) : null}
+
+					<div className="content-actions">
+						{imported ? null : (
+							<button type="submit" className="button-outline" disabled={busy}>
+								{loaded ? "Sauvegarder" : "Créer"}
+							</button>
+						)}
+						{loaded ? (
 							<button
 								type="button"
-								className="button-small"
-								disabled={busy || note === (loaded.item.reviewNote ?? "")}
-								onClick={() => void saveNote(loaded)}
+								className={
+									loaded.item.status === "validated"
+										? "button-review"
+										: "button-solid"
+								}
+								disabled={busy}
+								onClick={() => void toggleStatus(loaded)}
 							>
-								Enregistrer la remarque
+								{loaded.item.status === "validated"
+									? "Repasser à relire"
+									: "Marquer comme validé"}
 							</button>
-						</div>
+						) : null}
 					</div>
-				) : null}
-
-				{loaded ? <ReviewState loaded={loaded} /> : null}
-
-				{error ? (
-					<p role="alert" className="form-error">
-						{error}
-					</p>
-				) : null}
-
-				<div className="content-actions">
-					{imported ? null : (
-						<button type="submit" className="button-outline" disabled={busy}>
-							{loaded ? "Sauvegarder" : "Créer"}
-						</button>
-					)}
-					{loaded ? (
+					{loaded && !imported ? (
 						<button
 							type="button"
-							className={
-								loaded.item.status === "validated"
-									? "button-review"
-									: "button-solid"
-							}
+							className="button-small button-danger content-delete"
 							disabled={busy}
-							onClick={() => void toggleStatus(loaded)}
+							onClick={() => setConfirmingDelete(true)}
 						>
-							{loaded.item.status === "validated"
-								? "Repasser à relire"
-								: "Marquer comme validé"}
+							Supprimer
 						</button>
 					) : null}
-				</div>
-				{loaded && !imported ? (
-					<button
-						type="button"
-						className="button-small button-danger content-delete"
-						disabled={busy}
-						onClick={() => setConfirmingDelete(true)}
-					>
-						Supprimer
-					</button>
-				) : null}
-			</form>
+				</form>
+			</section>
 
 			{confirmingDelete && loaded ? (
 				<Dialog
@@ -548,7 +628,7 @@ export function ContentDetail({
 					</div>
 				</Dialog>
 			) : null}
-		</section>
+		</div>
 	);
 }
 

@@ -1,6 +1,5 @@
-import { useRouter } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
-import { ApiError, problemTypes } from "@/lib/api";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
 	type ContentItem,
 	type Kind,
@@ -10,14 +9,19 @@ import {
 	type Track,
 } from "@/lib/content";
 import { kindLabels, statusLabels, trackLabels } from "@/lib/contentLabels";
+import {
+	type ContentSearch,
+	sectionOf,
+	statusOf,
+	statusParam,
+} from "@/lib/contentRoutes";
 import { formatShortDay } from "@/lib/dates";
-import { logger } from "@/lib/logger";
-import { ContentDetail, type Selection } from "@/pages/admin/ContentDetail";
 import {
 	ItemTitle,
 	NoteFlag,
 	NoteIcon,
 	StatusPill,
+	useContentFailure,
 } from "@/pages/admin/contentParts";
 
 const PER_PAGE = 50;
@@ -47,45 +51,47 @@ function useDebounced<T>(value: T, delayMs: number): T {
 }
 
 export function ContentPage() {
-	const router = useRouter();
-	const [status, setStatusFilter] = useState<StatusFilter>("");
-	const [track, setTrack] = useState<TrackFilter>("");
-	const [noted, setNoted] = useState(false);
-	const [search, setSearch] = useState("");
-	const [pageNumber, setPageNumber] = useState(1);
+	const filters = useSearch({ from: "/_app/admin/contenu" });
+	const navigate = useNavigate({ from: "/admin/contenu" });
+	const onFailure = useContentFailure();
+	const status = statusOf(filters.statut);
+	const track = filters.parcours;
+	const noted = filters.remarque === true;
+	const q = filters.q ?? "";
+	const pageNumber = filters.page ?? 1;
+	const [search, setSearch] = useState(q);
 	const [listing, setListing] = useState<Listing>({ state: "loading" });
-	const [reloads, setReloads] = useState(0);
-	const [selection, setSelection] = useState<Selection | undefined>();
-	const [toast, setToast] = useState<string | undefined>();
-	const q = useDebounced(search, SEARCH_DELAY_MS);
+	const typed = useDebounced(search, SEARCH_DELAY_MS);
 
-	// A session that ended, lost its role or must change its password
-	// answers 401 or 403: the route guards decide where to go.
-	const onFailure = useCallback(
-		(event: string, failure: unknown) => {
-			logger.warn(event, { error: failure });
-			if (
-				failure instanceof ApiError &&
-				(failure.status === 401 ||
-					failure.type === problemTypes.passwordChangeRequired ||
-					failure.type === problemTypes.forbidden)
-			) {
-				void router.invalidate();
-			}
-		},
-		[router],
-	);
+	// Filters live in the URL, so that going back from an edit page finds them;
+	// they replace the entry rather than pile up in the history.
+	function filter(change: Partial<ContentSearch>) {
+		void navigate({
+			search: (previous) => ({ ...previous, page: undefined, ...change }),
+			replace: true,
+		});
+	}
 
 	useEffect(() => {
-		// The reload counter is a dependency on purpose: bumping it fetches the
-		// page again after a change.
-		void reloads;
+		if (typed !== q) {
+			void navigate({
+				search: (previous) => ({
+					...previous,
+					q: typed || undefined,
+					page: undefined,
+				}),
+				replace: true,
+			});
+		}
+	}, [typed, q, navigate]);
+
+	useEffect(() => {
 		let current = true;
 		listContent({
 			page: pageNumber,
 			perPage: PER_PAGE,
-			status: status || undefined,
-			track: track || undefined,
+			status,
+			track,
 			q,
 			hasReviewNote: noted || undefined,
 		}).then(
@@ -104,16 +110,14 @@ export function ContentPage() {
 		return () => {
 			current = false;
 		};
-	}, [pageNumber, status, track, noted, q, reloads, onFailure]);
+	}, [pageNumber, status, track, noted, q, onFailure]);
 
-	function reload(message?: string) {
-		setToast(message);
-		setReloads((count) => count + 1);
-	}
-
-	function create(kind: Kind) {
-		setToast(undefined);
-		setSelection({ mode: "create", kind });
+	function open(item: ContentItem) {
+		void navigate({
+			to: "/admin/contenu/$section/$itemId",
+			params: { section: sectionOf[item.kind], itemId: item.id },
+			state: { contentList: filters },
+		});
 	}
 
 	const page = listing.state === "ready" ? listing.page : undefined;
@@ -142,6 +146,11 @@ export function ContentPage() {
 			...(counts ? { count: counts.validated } : {}),
 		},
 	];
+	const createLinks: { kind: Kind; label: string; className: string }[] = [
+		{ kind: "unit", label: "Nouvelle unité", className: "button-outline" },
+		{ kind: "card", label: "Nouvelle carte", className: "button-outline" },
+		{ kind: "lesson", label: "Nouvelle leçon", className: "button-solid" },
+	];
 
 	return (
 		<div className="admin-content">
@@ -154,27 +163,17 @@ export function ContentPage() {
 					</p>
 				</header>
 				<div className="admin-header-actions">
-					<button
-						type="button"
-						className="button-outline"
-						onClick={() => create("unit")}
-					>
-						Nouvelle unité
-					</button>
-					<button
-						type="button"
-						className="button-outline"
-						onClick={() => create("card")}
-					>
-						Nouvelle carte
-					</button>
-					<button
-						type="button"
-						className="button-solid"
-						onClick={() => create("lesson")}
-					>
-						Nouvelle leçon
-					</button>
+					{createLinks.map((link) => (
+						<Link
+							key={link.kind}
+							to="/admin/contenu/$section/nouvelle"
+							params={{ section: sectionOf[link.kind] }}
+							state={{ contentList: filters }}
+							className={link.className}
+						>
+							{link.label}
+						</Link>
+					))}
 				</div>
 			</div>
 
@@ -185,11 +184,10 @@ export function ContentPage() {
 						<button
 							key={option.value}
 							type="button"
-							aria-pressed={status === option.value}
-							onClick={() => {
-								setStatusFilter(option.value);
-								setPageNumber(1);
-							}}
+							aria-pressed={(status ?? "") === option.value}
+							onClick={() =>
+								filter({ statut: statusParam(option.value || undefined) })
+							}
 						>
 							{option.label}
 							{option.count === undefined ? null : ` · ${option.count}`}
@@ -200,10 +198,7 @@ export function ContentPage() {
 					type="button"
 					className="note-filter"
 					aria-pressed={noted}
-					onClick={() => {
-						setNoted((on) => !on);
-						setPageNumber(1);
-					}}
+					onClick={() => filter({ remarque: noted ? undefined : true })}
 				>
 					<NoteIcon />
 					Avec remarque
@@ -216,13 +211,12 @@ export function ContentPage() {
 					<select
 						id="content-parcours"
 						className="admin-select"
-						value={track}
+						value={track ?? ""}
 						onChange={(event) => {
 							const chosen = trackOptions.find(
 								(option) => option.value === event.target.value,
 							);
-							setTrack(chosen?.value ?? "");
-							setPageNumber(1);
+							filter({ parcours: chosen?.value || undefined });
 						}}
 					>
 						{trackOptions.map((option) => (
@@ -242,63 +236,22 @@ export function ContentPage() {
 					placeholder="Rechercher un titre ou un mot"
 					autoComplete="off"
 					value={search}
-					onChange={(event) => {
-						setSearch(event.target.value);
-						setPageNumber(1);
-					}}
+					onChange={(event) => setSearch(event.target.value)}
 				/>
 			</div>
 
-			{toast ? (
-				<p role="status" className="admin-toast">
-					{toast}
-				</p>
-			) : null}
-
-			<div className="admin-columns content-columns">
-				<div className="admin-table-card">
-					{listing.state === "failed" ? (
-						<p role="alert" className="form-error admin-table-message">
-							Impossible de charger le contenu. Réessaie dans un moment.
-						</p>
-					) : null}
-					{listing.state === "loading" ? (
-						<p className="admin-table-message">Chargement…</p>
-					) : null}
-					{page ? (
-						<ContentTable
-							items={page.items}
-							selected={selection?.mode === "edit" ? selection.id : undefined}
-							onSelect={(item) => {
-								setToast(undefined);
-								setSelection({ mode: "edit", kind: item.kind, id: item.id });
-							}}
-						/>
-					) : null}
-				</div>
-				{selection ? (
-					<ContentDetail
-						key={
-							selection.mode === "edit"
-								? selection.id
-								: `nouveau-${selection.kind}`
-						}
-						selection={selection}
-						onFailure={onFailure}
-						onChanged={(message, next) => {
-							if (next !== undefined) {
-								setSelection(next ?? undefined);
-							}
-							reload(message);
-						}}
-					/>
-				) : (
-					<section aria-label="Détail" className="content-detail">
-						<p className="content-detail-empty">
-							Choisis une ligne pour la relire ou la modifier.
-						</p>
-					</section>
-				)}
+			<div className="admin-table-card">
+				{listing.state === "failed" ? (
+					<p role="alert" className="form-error admin-table-message">
+						Impossible de charger le contenu. Réessaie dans un moment.
+					</p>
+				) : null}
+				{listing.state === "loading" ? (
+					<p className="admin-table-message">Chargement…</p>
+				) : null}
+				{page ? (
+					<ContentTable items={page.items} filters={filters} onOpen={open} />
+				) : null}
 			</div>
 
 			{page && pageCount > 1 ? (
@@ -307,7 +260,9 @@ export function ContentPage() {
 						type="button"
 						className="button-secondary"
 						disabled={pageNumber <= 1}
-						onClick={() => setPageNumber((n) => n - 1)}
+						onClick={() =>
+							filter({ page: pageNumber > 2 ? pageNumber - 1 : undefined })
+						}
 					>
 						Précédent
 					</button>
@@ -318,7 +273,7 @@ export function ContentPage() {
 						type="button"
 						className="button-secondary"
 						disabled={pageNumber >= pageCount}
-						onClick={() => setPageNumber((n) => n + 1)}
+						onClick={() => filter({ page: pageNumber + 1 })}
 					>
 						Suivant
 					</button>
@@ -330,11 +285,12 @@ export function ContentPage() {
 
 interface ContentTableProps {
 	items: ContentItem[];
-	selected: string | undefined;
-	onSelect: (item: ContentItem) => void;
+	/** The list's filters, which the edit pages lead back to. */
+	filters: ContentSearch;
+	onOpen: (item: ContentItem) => void;
 }
 
-function ContentTable({ items, selected, onSelect }: ContentTableProps) {
+function ContentTable({ items, filters, onOpen }: ContentTableProps) {
 	if (items.length === 0) {
 		return <p className="admin-table-message">Aucun contenu ne correspond.</p>;
 	}
@@ -354,23 +310,32 @@ function ContentTable({ items, selected, onSelect }: ContentTableProps) {
 					{items.map((item) => (
 						<tr
 							key={item.id}
-							className={
-								item.id === selected ? "content-row-selected" : undefined
-							}
+							className="content-row"
+							onClick={(event) => {
+								const target = event.target;
+								const onLink =
+									target instanceof Element && target.closest("a") !== null;
+								const selecting = Boolean(window.getSelection()?.toString());
+								if (!onLink && !selecting) {
+									onOpen(item);
+								}
+							}}
 						>
 							<th scope="row">
-								<button
-									type="button"
-									className="content-title-button"
-									aria-pressed={item.id === selected}
-									onClick={() => onSelect(item)}
+								<Link
+									to="/admin/contenu/$section/$itemId"
+									params={{ section: sectionOf[item.kind], itemId: item.id }}
+									state={{ contentList: filters }}
+									className="content-title-link"
 								>
-									<ItemTitle
-										title={item.title}
-										transliteration={item.transliteration}
-										arabic={item.kind === "card"}
-									/>
-								</button>
+									<span>
+										<ItemTitle
+											title={item.title}
+											transliteration={item.transliteration}
+											arabic={item.kind === "card"}
+										/>
+									</span>
+								</Link>
 								{item.parentTitle ? (
 									<span className="content-parent">{item.parentTitle}</span>
 								) : null}

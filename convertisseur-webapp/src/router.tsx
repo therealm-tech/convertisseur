@@ -7,6 +7,7 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 import { fetchCurrentSession } from "@/lib/api";
+import { parseContentSearch, parseSection } from "@/lib/contentRoutes";
 import { isStaff } from "@/lib/roles";
 import {
 	fetchLesson,
@@ -16,6 +17,10 @@ import {
 } from "@/lib/tracks";
 import { AuthPage } from "@/pages/AuthPage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
+import {
+	ContentCreatePage,
+	ContentEditPage,
+} from "@/pages/admin/ContentEditPage";
 import { ContentPage } from "@/pages/admin/ContentPage";
 import { ReviewLessonPage } from "@/pages/admin/ReviewLessonPage";
 import { ReviewQueuePage } from "@/pages/admin/ReviewQueuePage";
@@ -98,7 +103,22 @@ const adminIndexRoute = createRoute({
 const adminContentRoute = createRoute({
 	getParentRoute: () => adminRoute,
 	path: "/contenu",
+	validateSearch: parseContentSearch,
 	component: ContentPage,
+});
+
+const adminContentItemRoute = createRoute({
+	getParentRoute: () => adminRoute,
+	path: "/contenu/$section/$itemId",
+	beforeLoad: ({ params }) => ({ kind: parseSection(params.section) }),
+	component: ContentEditPage,
+});
+
+const adminContentNewRoute = createRoute({
+	getParentRoute: () => adminRoute,
+	path: "/contenu/$section/nouvelle",
+	beforeLoad: ({ params }) => ({ kind: parseSection(params.section) }),
+	component: ContentCreatePage,
 });
 
 const adminReviewRoute = createRoute({
@@ -152,6 +172,8 @@ const routeTree = rootRoute.addChildren([
 			adminReviewRoute,
 			adminReviewLessonRoute,
 			adminContentRoute,
+			adminContentItemRoute,
+			adminContentNewRoute,
 			adminUsersRoute,
 		]),
 	]),

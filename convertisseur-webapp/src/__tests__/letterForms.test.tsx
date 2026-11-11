@@ -125,9 +125,9 @@ describe("letter forms", () => {
 		await renderAt("/admin/contenu");
 		await screen.findByRole("table");
 
-		await user.click(screen.getByRole("button", { name: "د · dāl" }));
+		await user.click(screen.getByRole("link", { name: "د · dāl" }));
 
-		const detail = await screen.findByRole("region", { name: "Détail" });
+		const detail = screen.getByRole("main");
 		await within(detail).findByText("Formes");
 		expect(shapes()).toEqual([
 			["Isolée", "د"],
