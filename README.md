@@ -25,7 +25,10 @@ an admin has validated, together with everything above it, is shown. In the
 admin area, admins write and review the
 learning content at `/admin/contenu`: units, lessons and cards, with audio
 uploaded or recorded from the device's microphone, each "to review" until an
-admin validates it. At `/admin/utilisateurs`, they search
+admin validates it, and leave a review note on what needs a correction. The
+starter content is written in the repository and kept in step by the server;
+the admin area shows it read-only, apart from its review, its recording and
+its note. At `/admin/utilisateurs`, they search
 accounts, reset forgotten passwords and delete accounts, and the super admin
 also promotes users to admin and back.
 
@@ -105,26 +108,25 @@ record.
 | `/readyz` | Readiness probe: `200` when PostgreSQL and the object store answer, `503` otherwise |
 | anything else | The webapp |
 
-### Importing the starter content
+### The starter content
 
 The image carries the starter units, lessons and cards written in
-[`content/`](content/). `import-content` creates those the database lacks, all
-"to review", authored by the super admin, and logs what it creates and what it
-skips. It never changes nor deletes existing content, so a correction made in
-the admin area stays; a unit, lesson or card deleted there comes back on the
-next import. It needs only `DATABASE_URL`, and the server to have started once
-on that database, which creates the super admin.
-
-With the local stack running, rebuild the app so that it carries the content,
-then import:
+[`content/`](content/), and every start-up of the server brings the database
+in line with them before it listens: it creates the entries the database
+lacks, rewrites those whose text changed and sends them back to review,
+moves those whose place changed, and deletes those gone from the files, with
+their recordings. The log ends with a `content synced` line that counts each.
+With the local stack, a change to `content/` reaches the database with a
+rebuild:
 
 ```sh
-docker compose --profile app up --build --detach
+docker compose --profile app up --build
 ```
 
-```sh
-docker compose --profile app run --rm app import-content
-```
+When an entry gone from the files still holds a lesson or card written in the
+admin area, the server refuses to start rather than delete it, and its log
+names the entry and what it holds: move or delete that content in the admin
+area, or put the entry back, then start again.
 
 ### Deployment
 
@@ -135,7 +137,8 @@ docker build -t convertisseur .
 ```
 
 Run it against a PostgreSQL database and an S3-compatible object store; it
-applies the migrations and creates the bucket on start-up:
+applies the migrations, creates the bucket and syncs the starter content on
+start-up:
 
 ```sh
 docker run --rm -p 3000:3000 \
@@ -153,14 +156,6 @@ docker run --rm -p 3000:3000 \
 `-e SUPER_ADMIN_PASSWORD` with no value passes the variable from your shell,
 so the password stays out of the command line; the same goes for the object
 store's keys.
-
-Once the server has started, import the starter content with the same image:
-
-```sh
-docker run --rm \
-  -e DATABASE_URL=postgres://user:password@db.example.com/convertisseur \
-  convertisseur import-content
-```
 
 Back up the database and the bucket together: rows point at objects, and a
 restore of one without the other leaves broken references or orphaned files.
@@ -227,12 +222,9 @@ convertisseur:
 helm install convertisseur charts/convertisseur --namespace convertisseur --create-namespace -f values.yaml
 ```
 
-Once the pod is ready, import the starter content from inside it, where
-`DATABASE_URL` is already set:
-
-```sh
-kubectl exec --namespace convertisseur deploy/convertisseur -- /usr/local/bin/convertisseur-api import-content
-```
+A new image syncs its starter content as its pod starts; a pod that refuses
+to start leaves the previous one serving, so the admin area stays open to fix
+what its log names.
 
 The chart's [README](charts/convertisseur/README.md) lists every value. The
 chart runs one replica; with more, each pod counts the login and registration
