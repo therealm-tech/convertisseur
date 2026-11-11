@@ -570,6 +570,17 @@ button.button-primary {
 	gap: 20px;
 }
 
+/* The narrowest each table lays out in on a wide screen without clipping a
+   cell, measured with the longest role badge and both action buttons on one
+   line. */
+.content-columns {
+	--table-fit: 440px;
+}
+
+.users-columns {
+	--table-fit: 910px;
+}
+
 .admin-table-card,
 .admin-help {
 	min-width: 0;
@@ -1048,14 +1059,16 @@ button.button-primary {
 	color: var(--color-text-muted);
 }
 
+/* Side by side only when each half holds "Marquer comme validé" on one line
+   (201px, measured); stacked, full width, otherwise. */
 .content-actions {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
 	gap: 10px;
 }
 
 .content-actions > button {
-	flex: 1 1 140px;
+	white-space: nowrap;
 }
 
 .content-delete {
@@ -1194,10 +1207,12 @@ button.button-primary {
 	justify-content: center;
 	gap: 8px;
 	min-height: 46px;
+	padding: 0 12px;
 	border-radius: var(--radius-small);
 	font: inherit;
 	font-size: 14px;
 	font-weight: 900;
+	white-space: nowrap;
 	cursor: pointer;
 }
 
@@ -1284,7 +1299,36 @@ button.button-primary {
 	}
 }
 
+/* The panel stays beside the table while the table keeps --table-fit, and
+   wraps below it, full width, once it would leave the table less. */
 @media (min-width: 1024px) {
+	.admin-columns {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: flex-start;
+	}
+
+	.admin-table-card {
+		flex: 999 1 0;
+		min-inline-size: min(100%, var(--table-fit));
+	}
+
+	.admin-table {
+		min-width: 0;
+	}
+
+	.admin-help {
+		flex: 1 1 300px;
+	}
+
+	.content-detail {
+		flex: 1 1 360px;
+	}
+}
+
+/* Below 1280px the sidebar would leave the users table less than it needs:
+   the top bar stays. */
+@media (min-width: 1280px) {
 	.admin {
 		flex-direction: row;
 	}
@@ -1348,23 +1392,6 @@ button.button-primary {
 
 	.admin-whoami-name {
 		font-size: 15px;
-	}
-
-	.admin-columns {
-		flex-direction: row;
-		align-items: flex-start;
-	}
-
-	.admin-table-card {
-		flex: 1 1 auto;
-	}
-
-	.admin-help {
-		flex: 0 0 300px;
-	}
-
-	.content-detail {
-		flex: 0 0 360px;
 	}
 }
 

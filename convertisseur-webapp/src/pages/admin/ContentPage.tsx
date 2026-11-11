@@ -235,7 +235,7 @@ export function ContentPage() {
 				</p>
 			) : null}
 
-			<div className="admin-columns">
+			<div className="admin-columns content-columns">
 				<div className="admin-table-card">
 					{listing.state === "failed" ? (
 						<p role="alert" className="form-error admin-table-message">

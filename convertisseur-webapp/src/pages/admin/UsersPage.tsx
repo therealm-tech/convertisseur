@@ -206,7 +206,7 @@ export function UsersPage() {
 				</p>
 			) : null}
 
-			<div className="admin-columns">
+			<div className="admin-columns users-columns">
 				<div className="admin-table-card">
 					{listing.state === "failed" ? (
 						<p role="alert" className="form-error admin-table-message">
