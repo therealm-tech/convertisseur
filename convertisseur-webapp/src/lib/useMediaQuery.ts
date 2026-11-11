@@ -1,5 +1,8 @@
 import { useSyncExternalStore } from "react";
 
+/** Wide enough for the admin area's desktop layouts. */
+export const DESKTOP_QUERY = "(min-width: 1024px)";
+
 /**
  * Whether the media query matches, kept up to date. False where the browser
  * cannot tell, so that the phone layout is the default.

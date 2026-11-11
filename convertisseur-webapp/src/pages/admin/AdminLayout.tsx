@@ -1,5 +1,11 @@
-import { Link, Outlet, useRouteContext } from "@tanstack/react-router";
+import {
+	Link,
+	Outlet,
+	useMatchRoute,
+	useRouteContext,
+} from "@tanstack/react-router";
 import { roleLabels } from "@/lib/roles";
+import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import {
 	ReviewTotalsProvider,
 	useReviewTotals,
@@ -112,6 +118,22 @@ export function AdminLayout() {
 
 function AdminFrame() {
 	const { user } = useRouteContext({ from: "/_app/admin" });
+	const matchRoute = useMatchRoute();
+	const desktop = useMediaQuery(DESKTOP_QUERY);
+	// On a phone, reviewing a lesson takes the whole screen; its close
+	// button leads back to the queue.
+	const fullScreen =
+		!desktop &&
+		Boolean(matchRoute({ to: "/admin/relecture/lecons/$lessonId" }));
+	if (fullScreen) {
+		return (
+			<div className="admin">
+				<main className="admin-main admin-main-full">
+					<Outlet />
+				</main>
+			</div>
+		);
+	}
 	return (
 		<div className="admin">
 			<aside className="admin-sidebar">
@@ -128,9 +150,15 @@ function AdminFrame() {
 						<ContentIcon />
 						Contenu
 					</Link>
-					<Link to="/admin/utilisateurs" className="admin-nav-link">
+					<Link
+						to="/admin/utilisateurs"
+						className="admin-nav-link"
+						aria-label="Utilisateurs et rôles"
+					>
 						<UsersIcon />
-						Utilisateurs et rôles
+						<span>
+							Utilisateurs<span className="admin-nav-long"> et rôles</span>
+						</span>
 					</Link>
 				</nav>
 				<Link to="/" className="admin-back" activeOptions={{ exact: true }}>

@@ -1,4 +1,4 @@
-import { useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import {
@@ -21,7 +21,7 @@ import {
 	listAllLessons,
 	validateCards,
 } from "@/lib/review";
-import { useMediaQuery } from "@/lib/useMediaQuery";
+import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { ReviewDesktop } from "@/pages/admin/ReviewDesktop";
 import { ReviewPhone } from "@/pages/admin/ReviewPhone";
 import { countCards } from "@/pages/admin/reviewParts";
@@ -64,8 +64,6 @@ type Phase =
 	| { phase: "missing" }
 	| { phase: "failed" }
 	| { phase: "ready"; data: ReviewData; queue: LessonSummary[] };
-
-const DESKTOP = "(min-width: 1024px)";
 
 /** Recomputes what depends on the lesson, its unit and its cards. */
 function derive(
@@ -127,7 +125,7 @@ export function ReviewLessonPage() {
 	const { lessonId } = useParams({
 		from: "/_app/admin/relecture/lecons/$lessonId",
 	});
-	const desktop = useMediaQuery(DESKTOP);
+	const desktop = useMediaQuery(DESKTOP_QUERY);
 	const { refresh } = useReviewTotals();
 	const [state, setState] = useState<Phase>({ phase: "loading" });
 	const [busy, setBusy] = useState(false);
@@ -204,11 +202,16 @@ export function ReviewLessonPage() {
 	}
 	if (state.phase !== "ready") {
 		return (
-			<p role="alert" className="admin-content form-error">
-				{state.phase === "missing"
-					? "Cette leçon n'existe plus."
-					: "La leçon n'a pas pu être chargée. Réessaie dans un moment."}
-			</p>
+			<div className="admin-content">
+				<p role="alert" className="form-error">
+					{state.phase === "missing"
+						? "Cette leçon n'existe plus."
+						: "La leçon n'a pas pu être chargée. Réessaie dans un moment."}
+				</p>
+				<Link to="/admin/relecture" className="button-outline review-back-link">
+					Toutes les leçons
+				</Link>
+			</div>
 		);
 	}
 

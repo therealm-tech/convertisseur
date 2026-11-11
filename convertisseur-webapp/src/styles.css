@@ -438,7 +438,6 @@ button.button-primary {
 .admin-nav {
 	grid-area: nav;
 	display: flex;
-	flex-wrap: wrap;
 	gap: 4px;
 	padding: 4px;
 	border-radius: 14px;
@@ -457,9 +456,9 @@ button.button-primary {
 .admin-nav-link {
 	flex: 1 1 auto;
 	justify-content: center;
-	gap: 8px;
+	gap: 6px;
 	min-height: 40px;
-	padding: 0 10px;
+	padding: 0 6px;
 	border-radius: 11px;
 	font-size: 14px;
 	white-space: nowrap;
@@ -2161,13 +2160,17 @@ button.button-primary {
 	}
 }
 
+.admin-nav-long {
+	display: none;
+}
+
 .admin-nav-count {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-width: 28px;
-	height: 24px;
-	padding: 0 8px;
+	min-width: 24px;
+	height: 22px;
+	padding: 0 6px;
 	border-radius: 999px;
 	background: var(--color-accent);
 	color: #3b2a00;
@@ -2180,14 +2183,39 @@ button.button-primary {
 	width: min(100%, 24rem);
 }
 
-/* In a narrow card the recording's description keeps room to be read; the
-   buttons go to the next line. */
+/* In a card, the buttons keep one row and the recording's description wraps
+   rather than being cut: beside the buttons from 360px, below them on a
+   narrower screen, where it would get less than 4rem beside them. */
 .audio-block-compact .audio-file {
 	flex-wrap: wrap;
+	gap: 8px;
 }
 
 .audio-block-compact .audio-file-text {
-	flex: 1 1 8rem;
+	flex: 1 1 100%;
+	order: 1;
+	padding-inline-start: 6px;
+}
+
+.audio-block-compact .audio-file .button-small {
+	margin-inline-start: auto;
+	padding: 0 10px;
+}
+
+@media (min-width: 360px) {
+	.audio-block-compact .audio-file-text {
+		flex: 1 1 4rem;
+		order: 0;
+		padding-inline-start: 0;
+	}
+
+	.audio-block-compact .audio-file .button-small {
+		margin-inline-start: 0;
+	}
+}
+
+.audio-block-compact .audio-file-name {
+	white-space: normal;
 }
 
 .review-groups {
@@ -2339,6 +2367,7 @@ button.button-primary {
 
 .review-empty .button-outline,
 .content-review-link,
+.review-back-link,
 .review-lesson-link {
 	display: inline-flex;
 	align-items: center;
@@ -2347,8 +2376,13 @@ button.button-primary {
 	text-decoration: none;
 }
 
-.content-review-link {
+.content-review-link,
+.review-back-link {
 	align-self: flex-start;
+}
+
+.admin-main-full {
+	padding: 16px 16px 0;
 }
 
 .status-pill-flagged {
@@ -2375,7 +2409,7 @@ button.button-primary {
 	flex-direction: column;
 	gap: 14px;
 	max-width: 560px;
-	min-height: calc(100dvh - 200px);
+	min-height: calc(100dvh - 16px);
 	margin: 0 auto;
 }
 
@@ -2878,6 +2912,22 @@ button.button-primary {
 	align-items: baseline;
 	gap: 4px 10px;
 	padding: 10px 12px;
+}
+
+@media (min-width: 640px) {
+	.admin-nav-long {
+		display: inline;
+	}
+
+	.admin-nav-link {
+		gap: 8px;
+	}
+
+	.admin-nav-count {
+		min-width: 28px;
+		height: 24px;
+		padding: 0 8px;
+	}
 }
 
 @media (min-width: 1280px) {

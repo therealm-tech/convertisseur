@@ -210,10 +210,34 @@ describe("review queue", () => {
 			expect(first).toHaveAccessibleName("Relecture, 4 à relire"),
 		);
 		expect(first).toHaveAttribute("href", "/admin/relecture");
+		expect(
+			within(nav).getByRole("link", { name: "Utilisateurs et rôles" }),
+		).toHaveAttribute("href", "/admin/utilisateurs");
 	});
 });
 
 describe("reviewing on a phone", () => {
+	it("takes the whole screen, and its close button leads back to the queue", async () => {
+		const { user } = await open("/admin/relecture/lecons/l-saluer");
+		await screen.findByRole("article", { name: "Carte 3" });
+
+		expect(
+			screen.queryByRole("navigation", { name: "Administration" }),
+		).not.toBeInTheDocument();
+		expect(screen.queryByText("Connecté en tant que")).not.toBeInTheDocument();
+
+		await user.click(
+			screen.getByRole("link", { name: "Revenir à la liste des leçons" }),
+		);
+
+		expect(
+			await screen.findByRole("navigation", { name: "Administration" }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", { name: "Relecture", level: 1 }),
+		).toBeInTheDocument();
+	});
+
 	it("opens on the first card to review, with its audio to record", async () => {
 		await open("/admin/relecture/lecons/l-saluer");
 
@@ -378,6 +402,15 @@ describe("reviewing on a phone", () => {
 });
 
 describe("reviewing on a desktop", () => {
+	it("keeps the admin navigation", async () => {
+		await open("/admin/relecture/lecons/l-saluer", true);
+		await screen.findByRole("region", { name: "Cartes de la leçon" });
+
+		expect(
+			screen.getByRole("navigation", { name: "Administration" }),
+		).toBeInTheDocument();
+	});
+
 	it("lists every card with its state, its audio and its note", async () => {
 		await open("/admin/relecture/lecons/l-saluer", true);
 
