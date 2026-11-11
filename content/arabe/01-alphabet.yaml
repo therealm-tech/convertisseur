@@ -1,0 +1,128 @@
+key: alphabet
+title: L'alphabet
+variety: classique
+lessons:
+  - key: lettres-1
+    title: De alif à khāʾ
+    cards:
+      - key: alif
+        arabic: ا
+        transliteration: alif
+        meaning_fr: Porte le « a » long (ā) et la hamza
+      - key: ba
+        arabic: ب
+        transliteration: bāʾ
+        meaning_fr: « b » de « bateau »
+      - key: ta
+        arabic: ت
+        transliteration: tāʾ
+        meaning_fr: « t » de « tapis »
+      - key: tha
+        arabic: ث
+        transliteration: thāʾ
+        meaning_fr: « th » de l'anglais « think »
+      - key: jim
+        arabic: ج
+        transliteration: jīm
+        meaning_fr: « dj » de « djellaba », ou « j » de « jour »
+      - key: ha
+        arabic: ح
+        transliteration: ḥāʾ
+        meaning_fr: « h » soufflé du fond de la gorge
+      - key: kha
+        arabic: خ
+        transliteration: khāʾ
+        meaning_fr: « ch » allemand de « Bach », « j » espagnol
+  - key: lettres-2
+    title: De dāl à ṣād
+    cards:
+      - key: dal
+        arabic: د
+        transliteration: dāl
+        meaning_fr: « d » de « dos »
+      - key: dhal
+        arabic: ذ
+        transliteration: dhāl
+        meaning_fr: « th » de l'anglais « this »
+      - key: ra
+        arabic: ر
+        transliteration: rāʾ
+        meaning_fr: « r » roulé
+      - key: zay
+        arabic: ز
+        transliteration: zāy
+        meaning_fr: « z » de « zéro »
+      - key: sin
+        arabic: س
+        transliteration: sīn
+        meaning_fr: « s » de « sel »
+      - key: shin
+        arabic: ش
+        transliteration: shīn
+        meaning_fr: « ch » de « chat »
+      - key: sad
+        arabic: ص
+        transliteration: ṣād
+        meaning_fr: « s » emphatique, la langue en arrière
+  - key: lettres-3
+    title: De ḍād à qāf
+    cards:
+      - key: dad
+        arabic: ض
+        transliteration: ḍād
+        meaning_fr: « d » emphatique
+      - key: ta-emphatique
+        arabic: ط
+        transliteration: ṭāʾ
+        meaning_fr: « t » emphatique
+      - key: dha-emphatique
+        arabic: ظ
+        transliteration: ẓāʾ
+        meaning_fr: « th » de « this », emphatique
+      - key: ayn
+        arabic: ع
+        transliteration: ʿayn
+        meaning_fr: Son serré du fond de la gorge, sans équivalent en français
+      - key: ghayn
+        arabic: غ
+        transliteration: ghayn
+        meaning_fr: « r » grasseyé de « Paris »
+      - key: fa
+        arabic: ف
+        transliteration: fāʾ
+        meaning_fr: « f » de « fou »
+      - key: qaf
+        arabic: ق
+        transliteration: qāf
+        meaning_fr: « k » prononcé au fond de la gorge
+  - key: lettres-4
+    title: De kāf à yāʾ
+    cards:
+      - key: kaf
+        arabic: ك
+        transliteration: kāf
+        meaning_fr: « k » de « kilo »
+      - key: lam
+        arabic: ل
+        transliteration: lām
+        meaning_fr: « l » de « lune »
+      - key: mim
+        arabic: م
+        transliteration: mīm
+        meaning_fr: « m » de « mère »
+      - key: nun
+        arabic: ن
+        transliteration: nūn
+        meaning_fr: « n » de « nez »
+      - key: ha-expire
+        arabic: ه
+        transliteration: hāʾ
+        meaning_fr: « h » expiré, comme dans l'anglais « house »
+      - key: waw
+        arabic: و
+        transliteration: wāw
+        meaning_fr: « w » de « watt », ou « ou » long (ū)
+      - key: ya
+        arabic: ي
+        transliteration: yāʾ
+        meaning_fr: « y » de « yeux », ou « i » long (ī)

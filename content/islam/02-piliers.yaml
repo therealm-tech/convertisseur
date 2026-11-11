@@ -1,0 +1,46 @@
+key: piliers
+title: La shahada et les cinq piliers
+variety: classique
+lessons:
+  - key: shahada
+    title: La shahada
+    cards:
+      - key: premiere-attestation
+        arabic: أَشْهَدُ أَنْ لَا إِلَٰهَ إِلَّا اللَّهُ
+        transliteration: ashhadu an lā ilāha illā llāh
+        meaning_fr: J'atteste qu'il n'y a de divinité que Dieu
+      - key: seconde-attestation
+        arabic: وَأَشْهَدُ أَنَّ مُحَمَّدًا رَسُولُ اللَّهِ
+        transliteration: wa ashhadu anna Muḥammadan rasūlu llāh
+        meaning_fr: Et j'atteste que Muhammad est le messager de Dieu
+      - key: forme-courte
+        arabic: لَا إِلَٰهَ إِلَّا اللَّهُ مُحَمَّدٌ رَسُولُ اللَّهِ
+        transliteration: lā ilāha illā llāh, Muḥammadun rasūlu llāh
+        meaning_fr: Il n'y a de divinité que Dieu, Muhammad est le messager de Dieu
+  - key: cinq-piliers
+    title: Les cinq piliers de l'islam
+    cards:
+      - key: arkan
+        arabic: أَرْكَانُ الْإِسْلَامِ
+        transliteration: arkānu l-islām
+        meaning_fr: Les piliers de l'islam
+      - key: shahadatan
+        arabic: الشَّهَادَتَانِ
+        transliteration: ash-shahādatān
+        meaning_fr: Prononcer les deux attestations de foi
+      - key: salat
+        arabic: إِقَامُ الصَّلَاةِ
+        transliteration: iqāmu ṣ-ṣalāh
+        meaning_fr: Accomplir la prière
+      - key: zakat
+        arabic: إِيتَاءُ الزَّكَاةِ
+        transliteration: ītāʾu z-zakāh
+        meaning_fr: Verser l'aumône obligatoire
+      - key: sawm
+        arabic: صَوْمُ رَمَضَانَ
+        transliteration: ṣawmu ramaḍān
+        meaning_fr: Jeûner le mois de ramadan
+      - key: hajj
+        arabic: حَجُّ الْبَيْتِ
+        transliteration: ḥajju l-bayt
+        meaning_fr: Le pèlerinage à La Mecque, pour qui le peut

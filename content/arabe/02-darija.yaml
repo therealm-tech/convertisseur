@@ -1,0 +1,232 @@
+key: darija
+title: 'La darija algérienne : premiers échanges'
+variety: darija
+lessons:
+  - key: salutations
+    title: Saluer
+    cards:
+      - key: salam-alikoum
+        arabic: السلام عليكم
+        transliteration: salam 3likoum
+        meaning_fr: Bonjour (la paix sur vous)
+      - key: wa-alikoum-salam
+        arabic: وعليكم السلام
+        transliteration: w 3likoum salam
+        meaning_fr: Réponse au salam
+      - key: sbah-el-khir
+        arabic: صباح الخير
+        transliteration: sba7 el khir
+        meaning_fr: Bonjour (le matin)
+      - key: msa-el-khir
+        arabic: مسا الخير
+        transliteration: msa el khir
+        meaning_fr: Bonsoir
+      - key: wach-rak
+        arabic: واش راك؟
+        transliteration: wach rak ?
+        meaning_fr: Comment vas-tu ? (à un homme)
+      - key: wach-raki
+        arabic: واش راكي؟
+        transliteration: wach raki ?
+        meaning_fr: Comment vas-tu ? (à une femme)
+      - key: wach-rakoum
+        arabic: واش راكم؟
+        transliteration: wach rakoum ?
+        meaning_fr: Comment allez-vous ?
+      - key: labes
+        arabic: لاباس
+        transliteration: labès
+        meaning_fr: Ça va, bien
+      - key: labes-hamdoullah
+        arabic: لاباس، الحمد لله
+        transliteration: labès, el7amdoulillah
+        meaning_fr: Ça va, Dieu merci
+      - key: saha
+        arabic: صحة
+        transliteration: sa7a
+        meaning_fr: Salut ! (litt. santé)
+      - key: marhba-bik
+        arabic: مرحبا بيك
+        transliteration: mar7ba bik
+        meaning_fr: Bienvenue (à toi)
+      - key: bslama
+        arabic: بسلامة
+        transliteration: bslama
+        meaning_fr: Au revoir
+      - key: tesbah-ala-khir
+        arabic: تصبح على خير
+        transliteration: tesba7 3la khir
+        meaning_fr: Bonne nuit
+  - key: politesse
+    title: La politesse
+    cards:
+      - key: sahit
+        arabic: صحّيت
+        transliteration: sa77it
+        meaning_fr: Merci !
+      - key: yatik-saha
+        arabic: يعطيك الصحة
+        transliteration: ya3tik sa7a
+        meaning_fr: Merci (que Dieu te donne la santé)
+      - key: smahli
+        arabic: سمحلي
+        transliteration: sme7li
+        meaning_fr: Pardon, excuse-moi
+      - key: aychek
+        arabic: عيشك
+        transliteration: 3aychek
+        meaning_fr: S'il te plaît (litt. que tu vives)
+      - key: min-fadlek
+        arabic: من فضلك
+        transliteration: men fadlek
+        meaning_fr: S'il te plaît
+      - key: barak-allahou-fik
+        arabic: بارك الله فيك
+        transliteration: barak allahou fik
+        meaning_fr: Merci (que Dieu te bénisse)
+      - key: allah-ybarek-fik
+        arabic: الله يبارك فيك
+        transliteration: allah ybarek fik
+        meaning_fr: Réponse à un merci
+      - key: machi-mouchkil
+        arabic: ماشي مشكل
+        transliteration: machi mouchkil
+        meaning_fr: Pas de problème
+      - key: bessaha
+        arabic: بالصحة
+        transliteration: bessa7a
+        meaning_fr: Bon appétit ! À ta santé !
+      - key: wah
+        arabic: واه
+        transliteration: wah
+        meaning_fr: Oui
+      - key: la
+        arabic: لا
+        transliteration: la
+        meaning_fr: Non
+  - key: famille
+    title: La famille
+    cards:
+      - key: yemma
+        arabic: يمّا
+        transliteration: yemma
+        meaning_fr: Maman, ma mère
+      - key: baba
+        arabic: بابا
+        transliteration: baba
+        meaning_fr: Papa, mon père
+      - key: khouya
+        arabic: خويا
+        transliteration: khouya
+        meaning_fr: Mon frère
+      - key: khti
+        arabic: ختي
+        transliteration: khti
+        meaning_fr: Ma sœur
+      - key: jeddi
+        arabic: جدّي
+        transliteration: jeddi
+        meaning_fr: Mon grand-père
+      - key: jeddti
+        arabic: جدّتي
+        transliteration: jeddti
+        meaning_fr: Ma grand-mère
+      - key: ammi
+        arabic: عمّي
+        transliteration: 3ammi
+        meaning_fr: Mon oncle (frère du père)
+      - key: khali
+        arabic: خالي
+        transliteration: khali
+        meaning_fr: Mon oncle (frère de la mère)
+      - key: ammti
+        arabic: عمّتي
+        transliteration: 3ammti
+        meaning_fr: Ma tante (sœur du père)
+      - key: khalti
+        arabic: خالتي
+        transliteration: khalti
+        meaning_fr: Ma tante (sœur de la mère)
+      - key: rajli
+        arabic: راجلي
+        transliteration: rajli
+        meaning_fr: Mon mari
+      - key: marti
+        arabic: مرتي
+        transliteration: marti
+        meaning_fr: Ma femme
+      - key: khatibi
+        arabic: خطيبي
+        transliteration: khatibi
+        meaning_fr: Mon fiancé
+      - key: khatibti
+        arabic: خطيبتي
+        transliteration: khatibti
+        meaning_fr: Ma fiancée
+      - key: weldi
+        arabic: ولدي
+        transliteration: weldi
+        meaning_fr: Mon fils
+      - key: benti
+        arabic: بنتي
+        transliteration: benti
+        meaning_fr: Ma fille
+      - key: la3ayla
+        arabic: العايلة
+        transliteration: la3ayla
+        meaning_fr: La famille
+  - key: belle-famille
+    title: Chez la belle-famille
+    cards:
+      - key: marhba-bikoum
+        arabic: مرحبا بيكم
+        transliteration: mar7ba bikoum
+        meaning_fr: Bienvenue à vous
+      - key: allah-ybarek-fikoum
+        arabic: الله يبارك فيكم
+        transliteration: allah ybarek fikoum
+        meaning_fr: Merci à vous (que Dieu vous bénisse)
+      - key: tcharrafna
+        arabic: تشرّفنا
+        transliteration: tcharrafna
+        meaning_fr: Enchanté (litt. nous sommes honorés)
+      - key: nsibi
+        arabic: نسيبي
+        transliteration: nsibi
+        meaning_fr: Mon beau-père, mon beau-frère
+      - key: la3jouza
+        arabic: العجوزة
+        transliteration: la3jouza
+        meaning_fr: Ma belle-mère
+      - key: kirahi-yemmak
+        arabic: كي راهي يمّاك؟
+        transliteration: ki rahi yemmak ?
+        meaning_fr: Comment va ta mère ?
+      - key: el-makla-bnina
+        arabic: الماكلة بنينة بزاف
+        transliteration: el makla bnina bezzaf
+        meaning_fr: Le repas est délicieux
+      - key: saha-ydik
+        arabic: صحة يديك
+        transliteration: sa7a ydik
+        meaning_fr: Merci pour le repas (santé à tes mains)
+      - key: chba3t
+        arabic: شبعت، الحمد لله
+        transliteration: chba3t, el7amdoulillah
+        meaning_fr: J'ai bien mangé, Dieu merci
+      - key: chwiya-berk
+        arabic: شوية برك
+        transliteration: chwiya berk
+        meaning_fr: Juste un peu
+      - key: rabbi-ykhallik
+        arabic: ربي يخلّيك
+        transliteration: rabbi ykhallik
+        meaning_fr: Merci (que Dieu te garde)
+      - key: nhabkoum-bezzaf
+        arabic: نحبّكم بزاف
+        transliteration: n7abbkoum bezzaf
+        meaning_fr: Je vous aime beaucoup
+      - key: inchallah-ntlaqaw
+        arabic: إن شاء الله نتلاقاو
+        transliteration: inchallah ntlaqaw
+        meaning_fr: À bientôt, si Dieu le veut
