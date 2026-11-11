@@ -4,7 +4,7 @@ use axum::{Router, http::HeaderName, routing::get};
 use sqlx::PgPool;
 use tower_http::trace::TraceLayer;
 
-use crate::{api, db, health, rate_limit::RateLimits, webapp};
+use crate::{api, db, health, rate_limit::RateLimits, storage::Storage, webapp};
 
 /// How the server sees its HTTP clients.
 #[derive(Clone)]
@@ -30,15 +30,17 @@ impl Default for ClientSettings {
 #[derive(Clone)]
 pub struct AppState {
     pub(crate) pool: PgPool,
+    pub(crate) storage: Storage,
     pub(crate) clients: Arc<ClientSettings>,
     pub(crate) rate_limits: Arc<RateLimits>,
 }
 
 impl AppState {
     #[must_use]
-    pub fn new(pool: PgPool, clients: ClientSettings) -> Self {
+    pub fn new(pool: PgPool, storage: Storage, clients: ClientSettings) -> Self {
         Self {
             pool,
+            storage,
             clients: Arc::new(clients),
             rate_limits: Arc::new(RateLimits::default()),
         }

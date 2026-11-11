@@ -7,7 +7,10 @@ use axum::{
     extract::connect_info::MockConnectInfo,
     http::{HeaderMap, Method, Request, StatusCode, header},
 };
-use convertisseur_api::{AppState, ClientSettings, app, ensure_super_admin};
+use convertisseur_api::{
+    AppState, ClientSettings, app, ensure_super_admin,
+    storage::{MemoryStore, Storage},
+};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -56,7 +59,11 @@ struct Server {
 
 impl Server {
     fn new(pool: &PgPool) -> Self {
-        let state = AppState::new(pool.clone(), ClientSettings::default());
+        let state = AppState::new(
+            pool.clone(),
+            Storage::Memory(MemoryStore::default()),
+            ClientSettings::default(),
+        );
         let router = app(state, &std::env::temp_dir()).layer(MockConnectInfo(PEER));
         Self { router }
     }

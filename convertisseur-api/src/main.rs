@@ -5,6 +5,7 @@ use clap::Parser;
 use convertisseur_api::{
     AppState, ClientSettings,
     config::{Cli, Command, HealthcheckArgs, LogFormat, ServeArgs},
+    storage::{S3Store, Storage},
 };
 use sqlx::postgres::PgPoolOptions;
 use tokio::{
@@ -26,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match cli.command {
-        Command::Serve(args) => serve(args).await,
+        Command::Serve(args) => serve(*args).await,
         Command::Healthcheck(args) => healthcheck(&args).await,
     }
 }
@@ -49,9 +50,20 @@ async fn serve(args: ServeArgs) -> anyhow::Result<()> {
     )
     .await
     .context("failed to set up the super admin account")?;
+    let store = S3Store::new(&args.storage);
+    store
+        .ensure_bucket()
+        .await
+        .context("failed to set up the object store")?;
+    tracing::info!(
+        endpoint = args.storage.endpoint,
+        bucket = store.bucket(),
+        "object store ready"
+    );
 
     let state = AppState::new(
         pool.clone(),
+        Storage::S3(store),
         ClientSettings {
             cookie_secure: args.cookie_secure,
             client_ip_header: args.client_ip_header,

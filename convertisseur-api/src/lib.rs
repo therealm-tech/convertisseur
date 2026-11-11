@@ -13,6 +13,7 @@ mod password;
 mod rate_limit;
 mod router;
 mod sessions;
+pub mod storage;
 mod users;
 mod webapp;
 

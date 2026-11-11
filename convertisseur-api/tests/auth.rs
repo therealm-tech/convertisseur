@@ -6,7 +6,10 @@ use axum::{
     extract::connect_info::MockConnectInfo,
     http::{HeaderMap, HeaderName, Method, Request, StatusCode, header},
 };
-use convertisseur_api::{AppState, COOKIE_NAME, ClientSettings, app, ensure_super_admin};
+use convertisseur_api::{
+    AppState, COOKIE_NAME, ClientSettings, app, ensure_super_admin,
+    storage::{MemoryStore, Storage},
+};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -56,7 +59,11 @@ impl Server {
 
     fn with(pool: PgPool, clients: ClientSettings) -> Self {
         let dir = std::env::temp_dir();
-        let router = app(AppState::new(pool, clients), &dir).layer(MockConnectInfo(PEER));
+        let router = app(
+            AppState::new(pool, Storage::Memory(MemoryStore::default()), clients),
+            &dir,
+        )
+        .layer(MockConnectInfo(PEER));
         Self { router }
     }
 
@@ -418,7 +425,11 @@ async fn using_a_session_slides_its_expiry(pool: PgPool) {
 
 #[sqlx::test]
 async fn housekeeping_purges_expired_sessions(pool: PgPool) {
-    let state = AppState::new(pool.clone(), ClientSettings::default());
+    let state = AppState::new(
+        pool.clone(),
+        Storage::Memory(MemoryStore::default()),
+        ClientSettings::default(),
+    );
     let router = app(state.clone(), &std::env::temp_dir()).layer(MockConnectInfo(PEER));
     let server = Server { router };
     server.session_for("aicha").await;

@@ -28,7 +28,8 @@ You need:
   nvm install "$(cat convertisseur-webapp/.nvmrc)"
   ```
 
-- **Docker** with the Compose plugin, for PostgreSQL.
+- **Docker** with the Compose plugin, for PostgreSQL and SeaweedFS, the
+  development object store.
 - **pre-commit** 4.x:
 
   ```sh
@@ -51,7 +52,7 @@ You need:
 Then, from a fresh clone:
 
 ```sh
-docker compose up -d --wait postgres
+docker compose up -d --wait postgres seaweedfs
 ```
 
 ```sh
@@ -64,7 +65,7 @@ pre-commit install
 
 `cargo run` and `cargo test` take their settings from
 [.cargo/config.toml](.cargo/config.toml), which points them at the compose
-PostgreSQL, sets a throwaway super admin and lets the session cookie travel
+PostgreSQL and SeaweedFS, sets a throwaway super admin and lets the session cookie travel
 over plain HTTP; a variable already set in your environment wins. Cargo applies them only to what it spawns, not to
 `./target/debug/convertisseur-api` run by hand.
 
@@ -86,9 +87,11 @@ serves the last `npm run build` of the webapp. See the
 
 ## Running the tests
 
-The API tests need the compose PostgreSQL. Each `#[sqlx::test]` creates its
-own database, applies the migrations and drops it afterwards, so tests never
-see each other's data.
+The API tests need the compose PostgreSQL and SeaweedFS. Each `#[sqlx::test]`
+creates its own database, applies the migrations and drops it afterwards, so
+tests never see each other's data. Most tests keep objects in memory; the
+storage contract test runs against SeaweedFS in a bucket it creates, then
+empties and deletes.
 
 ```sh
 cargo test
@@ -146,7 +149,7 @@ request and say why. CI runs the same hooks.
 
 | Workflow | What it does | Reproduce locally |
 | --- | --- | --- |
-| [`quality.yaml`](.github/workflows/quality.yaml) | `pre-commit run --all-files`, the API tests against PostgreSQL, the webapp tests | `pre-commit run --all-files`, `cargo test`, `npm test --prefix convertisseur-webapp` |
+| [`quality.yaml`](.github/workflows/quality.yaml) | `pre-commit run --all-files`, the API tests against PostgreSQL and SeaweedFS, the webapp tests | `pre-commit run --all-files`, `cargo test`, `npm test --prefix convertisseur-webapp` |
 | [`build.yaml`](.github/workflows/build.yaml) | Builds the image for `amd64` and `arm64` and fails on a fixable `HIGH` or `CRITICAL` vulnerability | `docker build -t convertisseur .` then `trivy image --severity HIGH,CRITICAL --ignore-unfixed convertisseur` |
 | [`security.yaml`](.github/workflows/security.yaml) | Scans the lockfiles and the tree for vulnerabilities and secrets, and uploads the report to code scanning | `trivy fs --scanners vuln,secret .` |
 
