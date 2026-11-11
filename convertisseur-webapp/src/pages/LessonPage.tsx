@@ -5,6 +5,7 @@ import { BackIcon, CloseIcon } from "@/components/icons";
 import { LetterFormsRow } from "@/components/LetterFormsRow";
 import { PlayButton } from "@/components/PlayButton";
 import { countOf, varietyLabels } from "@/lib/contentLabels";
+import { hasQuiz } from "@/lib/quiz";
 import type { StudyCard, StudyLesson } from "@/lib/tracks";
 
 function Answer({ card }: { card: StudyCard }) {
@@ -75,6 +76,7 @@ function Finished({
 	lesson: StudyLesson;
 	onRestart: () => void;
 }) {
+	const quiz = hasQuiz(lesson.cards);
 	return (
 		<section className="lesson-end" aria-labelledby="lesson-end-title">
 			<h2 id="lesson-end-title" className="lesson-end-title">
@@ -84,13 +86,22 @@ function Finished({
 				Tu as parcouru les {countOf(lesson.cards.length, "carte", "cartes")} de
 				« {lesson.title} ».
 			</p>
+			{quiz ? (
+				<Link
+					to="/tracks/$track/lessons/$lessonId/exercise"
+					params={{ track: lesson.track, lessonId: lesson.id }}
+					className="button-primary"
+				>
+					S'entraîner
+				</Link>
+			) : null}
 			<button type="button" className="button-secondary" onClick={onRestart}>
 				Revoir les cartes
 			</button>
 			<Link
 				to="/tracks/$track"
 				params={{ track: lesson.track }}
-				className="button-primary"
+				className={quiz ? "button-secondary" : "button-primary"}
 			>
 				Retour au parcours
 			</Link>

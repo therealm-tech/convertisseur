@@ -85,7 +85,9 @@ Learners start on `/`, which shows both tracks; `/tracks/{track}` draws a
 track's units and their lessons as a path, and
 `/tracks/{track}/lessons/{lessonId}` shows a lesson's cards one at a time,
 with the transliteration and the meaning hidden until asked for, and a letter's
-shapes in a row under it (see [The forms of a letter](#the-forms-of-a-letter)). These pages
+shapes in a row under it (see [The forms of a letter](#the-forms-of-a-letter)).
+Its end offers `/tracks/{track}/lessons/{lessonId}/exercise`, a
+multiple-choice exercise on the same cards (see [Exercises](#exercises)). These pages
 load their data in the router's loaders, so a lesson the API does not serve
 renders the page not found rather than an empty screen.
 
@@ -311,7 +313,30 @@ gets the same `403` as everywhere else.
   that a hidden unit leaves no gap in "Unité 1, Unité 2".
 - **The endpoints serve content, nothing about the learner.** They hold no
   progress, score or history; the webapp shows a lesson as a sequence of
-  cards and keeps nothing once it is left.
+  cards, then its exercise, and keeps nothing once they are left.
+
+## Exercises
+
+An exercise asks questions about the cards of one lesson, in
+[`quiz.ts`](convertisseur-webapp/src/lib/quiz.ts), and the exercise page
+asks them one at a time, with three or four choices each. Nothing about it
+reaches the server: it is built from the lesson the page already loads.
+
+- **Three kinds of question**: the Arabic of a card, pick its meaning; the
+  meaning, pick the Arabic; and for a letter of the alphabet, one of its
+  initial, medial or final forms, pick the isolated letter. On a letter, the
+  meaning is its sound, and the page words the question that way.
+- **One question per card**, of a kind drawn among those the card allows, in
+  a random order. A card without a meaning and without forms asks nothing.
+- **The distractors are the other cards of the lesson**, up to three, drawn
+  at random. A distractor never reads like the answer: two cards that share a
+  meaning are never offered against each other, nor two that share their
+  Arabic. A question needs three choices, so a lesson of fewer than three
+  cards has no exercise, and the end of the lesson does not offer one.
+- **A question answered wrong comes back at the end**, its choices
+  reshuffled, until it is answered right. The progress bar counts the
+  questions answered right, and the score at the end those answered right the
+  first time.
 
 ## The starter content
 
@@ -821,6 +846,19 @@ order an admin set by placing the row, and it survives any reordering of the
 files without a position of its own in them; positions alone would not, since
 every creation or deletion in the files shifts them.
 
+**Exercises are generated from the cards, not written as content.** The
+cards are already written, reviewed and validated, so an exercise built from
+them shows learners nothing a reviewer has not seen. Exercises written by hand
+would need their own tables, content files, sync, admin forms and review queue,
+for questions the cards already answer. The price is that a question is only
+as good as its draw: the distractors are whatever the lesson holds.
+
+**Exercises are built in the webapp, not by the server.** The lesson's cards
+are all the questions need, and the learner's own client is the only one that
+reads the answers, so a server-side exercise would hide nothing worth hiding;
+built in the browser, an exercise takes no request of its own, works offline
+once the lesson is loaded, and leaves the API unchanged.
+
 **Icons are generated, not committed.** The build rasterises `logo.svg` into
 the favicon, the PWA icons and the Apple touch icon, so there is one logo file
 and no raster that can drift from it.
@@ -887,5 +925,8 @@ rather than a part of it.
   loses its status, its review note and its recording. Keys are paths, so
   moving an entry to another unit or lesson in the files changes its key too;
   only an entry's place among its siblings changes without one.
+- An exercise draws its distractors from its own lesson: a lesson of three
+  cards offers three choices, and one of fewer has no exercise.
+- Exercises keep no score: the score at the end is gone once the page is left.
 - Rolling back to an image with older content files brings the content back
   to those files: the entries they lack are deleted, with their recordings.
