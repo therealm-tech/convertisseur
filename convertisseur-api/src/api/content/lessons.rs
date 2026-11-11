@@ -14,7 +14,8 @@ use validator::Validate;
 use super::{
     AudioResponse, Resource, ReviewResponse, TAG, TrackJson,
     audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
-    created, delete, delete_docs, refused, set_status, set_status_docs, validate_title,
+    created, delete, delete_docs, refused, set_review_note, set_review_note_docs, set_status,
+    set_status_docs, validate_title,
 };
 use crate::{
     api::{
@@ -56,6 +57,13 @@ pub fn routes() -> ApiRouter<AppState> {
             put_with(
                 set_status::<LessonResource>,
                 set_status_docs::<LessonResource>,
+            ),
+        )
+        .api_route(
+            "/api/v1/lessons/{lessonId}/review-note",
+            put_with(
+                set_review_note::<LessonResource>,
+                set_review_note_docs::<LessonResource>,
             ),
         )
 }
@@ -278,6 +286,11 @@ fn update_lesson_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
             r.description("`forbidden`: the account is a `user`")
         })
         .response_with::<404, ApiError, _>(|r| r.description(LessonResource::NOT_FOUND_DOCS))
+        .response_with::<409, ApiError, _>(|r| {
+            r.description(
+                "`imported-content`: it comes from the content files, which alone change it",
+            )
+        })
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
         .response_with::<422, ApiError, _>(|r| {
             r.description("A field breaks a rule: `title_length`, `range`, `unit_not_found`")

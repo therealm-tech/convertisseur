@@ -17,10 +17,11 @@ use axum::{
 use convertisseur_api::{
     AppState, ClientSettings, app,
     storage::{MemoryStore, Storage},
+    sync::{Catalogue, SyncReport, sync},
 };
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -164,4 +165,66 @@ pub async fn create_account(pool: &PgPool, username: &str, role: &str) -> Uuid {
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+/// A content file of one unit, two lessons and four cards, synced in place
+/// of the built-in ones.
+pub const SALUTATIONS: &str = "
+key: salutations
+title: Salutations
+variety: darija
+lessons:
+  - key: bonjour
+    title: Bonjour
+    cards:
+      - key: salam
+        arabic: سَلَام
+        transliteration: salam
+        meaning_fr: Paix
+      - key: sbah
+        arabic: صْبَاح الْخِير
+        transliteration: sbah el khir
+        meaning_fr: Bonjour, le matin
+      - key: msa
+        arabic: مْسَا الْخِير
+        transliteration: msa el khir
+        meaning_fr: Bonsoir
+  - key: politesse
+    title: Politesse
+    cards:
+      - key: choukran
+        arabic: شُكْرًا
+        transliteration: choukran
+        meaning_fr: Merci
+";
+
+/// Syncs `files`, given as `(path under content/, text)`, keeping the
+/// objects of recordings in `store`.
+pub async fn sync_files(
+    pool: &PgPool,
+    store: &MemoryStore,
+    files: &[(&str, &str)],
+) -> anyhow::Result<SyncReport> {
+    let catalogue = Catalogue::parse(files).unwrap_or_else(|invalid| panic!("{invalid}"));
+    sync(pool, &Storage::Memory(store.clone()), &catalogue).await
+}
+
+/// Syncs `text` as the only content file, `arabe/01-salutations.yaml`.
+pub async fn sync_salutations(
+    pool: &PgPool,
+    store: &MemoryStore,
+    text: &str,
+) -> anyhow::Result<SyncReport> {
+    sync_files(pool, store, &[("arabe/01-salutations.yaml", text)]).await
+}
+
+/// The id of the row of `table` imported under `key`.
+pub async fn imported_id(pool: &PgPool, table: &str, key: &str) -> Uuid {
+    sqlx::query_scalar(AssertSqlSafe(format!(
+        "SELECT id FROM {table} WHERE import_key = $1"
+    )))
+    .bind(key)
+    .fetch_one(pool)
+    .await
+    .unwrap_or_else(|error| panic!("{table} {key}: {error}"))
 }

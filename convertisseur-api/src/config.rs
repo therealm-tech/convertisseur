@@ -34,16 +34,13 @@ pub enum LogFormat {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Apply the database migrations, set up the super admin and serve the
-    /// API and the webapp
+    /// Apply the database migrations, set up the super admin and the object
+    /// store, bring the content of the built-in content files into the
+    /// database, then serve the API and the webapp
     Serve(Box<ServeArgs>),
     /// Probe the liveness endpoint of a server running on this host; exits
     /// non-zero when it does not answer 200
     Healthcheck(HealthcheckArgs),
-    /// Apply the database migrations, then create the units, lessons and
-    /// cards of the built-in content files that the database lacks, to
-    /// review; never changes nor deletes existing content
-    ImportContent(ImportContentArgs),
 }
 
 #[derive(Args)]
@@ -144,13 +141,6 @@ pub struct HealthcheckArgs {
     pub bind_addr: SocketAddr,
 }
 
-#[derive(Args)]
-pub struct ImportContentArgs {
-    /// PostgreSQL connection string
-    #[arg(long, env = "DATABASE_URL", hide_env_values = true)]
-    pub database_url: String,
-}
-
 fn default_bind_addr() -> SocketAddr {
     SocketAddr::from(([0, 0, 0, 0], 3000))
 }
@@ -204,16 +194,6 @@ mod tests {
                 ("webapp_dir", "WEBAPP_DIR"),
             ]
             .map(|(id, env)| (id.to_owned(), env.to_owned()))
-        );
-    }
-
-    #[test]
-    fn import_content_reads_the_database_url() {
-        let cli = Cli::command();
-        let import = cli.find_subcommand("import-content").unwrap();
-        assert_eq!(
-            env_names(import),
-            [("database_url".to_owned(), "DATABASE_URL".to_owned())]
         );
     }
 }

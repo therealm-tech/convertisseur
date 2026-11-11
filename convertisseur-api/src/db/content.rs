@@ -39,7 +39,7 @@ pub trait Ordered: Send {
     /// Whether a parent row exists; `None` when the parent is not a row.
     const PARENT_EXISTS: Option<&'static str>;
     const SET_STATUS: &'static str;
-    const FIND_BY_IMPORT_KEY: &'static str;
+    const SET_REVIEW_NOTE: &'static str;
     /// Whether rows of the next level hang off this one; `None` for cards.
     const HAS_CHILDREN: Option<&'static str>;
 }
@@ -55,8 +55,7 @@ impl Ordered for Units {
     const DELETE: &'static str = include_str!("../../queries/units/delete.sql");
     const PARENT_EXISTS: Option<&'static str> = None;
     const SET_STATUS: &'static str = include_str!("../../queries/units/set_status.sql");
-    const FIND_BY_IMPORT_KEY: &'static str =
-        include_str!("../../queries/units/find_by_import_key.sql");
+    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/units/set_review_note.sql");
     const HAS_CHILDREN: Option<&'static str> =
         Some(include_str!("../../queries/units/has_children.sql"));
 }
@@ -73,8 +72,7 @@ impl Ordered for Lessons {
     const PARENT_EXISTS: Option<&'static str> =
         Some(include_str!("../../queries/units/exists.sql"));
     const SET_STATUS: &'static str = include_str!("../../queries/lessons/set_status.sql");
-    const FIND_BY_IMPORT_KEY: &'static str =
-        include_str!("../../queries/lessons/find_by_import_key.sql");
+    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/lessons/set_review_note.sql");
     const HAS_CHILDREN: Option<&'static str> =
         Some(include_str!("../../queries/lessons/has_children.sql"));
 }
@@ -107,8 +105,7 @@ impl Ordered for Cards {
     const PARENT_EXISTS: Option<&'static str> =
         Some(include_str!("../../queries/lessons/exists.sql"));
     const SET_STATUS: &'static str = include_str!("../../queries/cards/set_status.sql");
-    const FIND_BY_IMPORT_KEY: &'static str =
-        include_str!("../../queries/cards/find_by_import_key.sql");
+    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/cards/set_review_note.sql");
     const HAS_CHILDREN: Option<&'static str> = None;
 }
 
@@ -117,6 +114,8 @@ impl Ordered for Cards {
 pub struct Placement<P> {
     pub parent: P,
     pub position: i32,
+    /// Whether the row comes from the content files.
+    pub imported: bool,
 }
 
 /// How many rows share `parent`, `except` aside.
@@ -188,17 +187,6 @@ pub async fn parent_exists<O: Ordered>(
     }
 }
 
-/// The row imported under `key`, if it still exists.
-pub async fn find_by_import_key<O: Ordered>(
-    exec: impl PgExecutor<'_>,
-    key: &str,
-) -> sqlx::Result<Option<Uuid>> {
-    sqlx::query_scalar(O::FIND_BY_IMPORT_KEY)
-        .bind(key)
-        .fetch_optional(exec)
-        .await
-}
-
 pub async fn has_children<O: Ordered>(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<bool> {
     match O::HAS_CHILDREN {
         Some(query) => sqlx::query_scalar(query).bind(id).fetch_one(exec).await,
@@ -218,6 +206,20 @@ pub async fn set_status<O: Ordered>(
         .bind(id)
         .bind(status)
         .bind(validator)
+        .fetch_optional(exec)
+        .await
+}
+
+/// Sets or clears the review note; returns the stored note, or `None` in
+/// the outer option when the row does not exist.
+pub async fn set_review_note<O: Ordered>(
+    exec: impl PgExecutor<'_>,
+    id: Uuid,
+    note: Option<&str>,
+) -> sqlx::Result<Option<Option<String>>> {
+    sqlx::query_scalar(O::SET_REVIEW_NOTE)
+        .bind(id)
+        .bind(note)
         .fetch_optional(exec)
         .await
 }
@@ -408,19 +410,20 @@ pub async fn list(
         .bind(query.track)
         .bind(query.kind)
         .bind(query.text)
+        .bind(query.has_review_note)
         .bind(limit)
         .bind(offset)
         .fetch_all(exec)
         .await
 }
 
-/// How many items match `query` in each review status, whatever its own
-/// status filter.
-pub async fn count_by_status(
+/// How many items match `query`'s track, kind and text, per review status
+/// and per presence of a review note: `(status, noted, items)`.
+pub async fn counts(
     exec: impl PgExecutor<'_>,
     query: &ContentQuery<'_>,
-) -> sqlx::Result<Vec<(Status, i64)>> {
-    sqlx::query_as(include_str!("../../queries/content/count_by_status.sql"))
+) -> sqlx::Result<Vec<(Status, bool, i64)>> {
+    sqlx::query_as(include_str!("../../queries/content/counts.sql"))
         .bind(query.track)
         .bind(query.kind)
         .bind(query.text)

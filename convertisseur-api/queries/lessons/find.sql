@@ -17,7 +17,9 @@ SELECT
     lessons.updated_at,
     lessons.updated_by,
     lessons.validated_at,
-    lessons.validated_by
+    lessons.validated_by,
+    lessons.import_key,
+    lessons.review_note
 FROM lessons
 INNER JOIN units ON lessons.unit_id = units.id
 LEFT JOIN audio ON lessons.audio_id = audio.id

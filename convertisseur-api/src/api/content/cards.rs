@@ -14,8 +14,8 @@ use validator::{Validate, ValidationError};
 use super::{
     AudioResponse, MAX_TEXT_CHARS, Resource, ReviewResponse, TAG, TrackJson, VarietyJson,
     audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
-    created, delete, delete_docs, optional_text, refused, set_status, set_status_docs,
-    validate_text,
+    created, delete, delete_docs, optional_text, refused, set_review_note, set_review_note_docs,
+    set_status, set_status_docs, validate_text,
 };
 use crate::{
     api::{
@@ -49,6 +49,13 @@ pub fn routes() -> ApiRouter<AppState> {
         .api_route(
             "/api/v1/cards/{cardId}/status",
             put_with(set_status::<CardResource>, set_status_docs::<CardResource>),
+        )
+        .api_route(
+            "/api/v1/cards/{cardId}/review-note",
+            put_with(
+                set_review_note::<CardResource>,
+                set_review_note_docs::<CardResource>,
+            ),
         )
 }
 
@@ -321,6 +328,11 @@ fn update_card_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
             r.description("`forbidden`: the account is a `user`")
         })
         .response_with::<404, ApiError, _>(|r| r.description(CardResource::NOT_FOUND_DOCS))
+        .response_with::<409, ApiError, _>(|r| {
+            r.description(
+                "`imported-content`: it comes from the content files, which alone change it",
+            )
+        })
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
         .response_with::<422, ApiError, _>(|r| {
             r.description(
