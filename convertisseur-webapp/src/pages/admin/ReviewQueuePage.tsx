@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import type { Track } from "@/lib/content";
 import { countOf, trackLabels } from "@/lib/contentLabels";
 import { logger } from "@/lib/logger";
 import {
@@ -7,31 +8,42 @@ import {
 	listAllLessons,
 	type ReviewTotals,
 } from "@/lib/review";
-import { describeCounts, Progress, totalOf } from "@/pages/admin/reviewParts";
+import { FlagIcon, Progress, totalOf } from "@/pages/admin/reviewParts";
 
 type Filter = "pending" | "silent";
 
 type Listing =
 	| { state: "loading" }
 	| { state: "failed" }
-	| { state: "ready"; lessons: LessonSummary[]; totals: ReviewTotals };
+	| { state: "ready"; lessons: LessonSummary[] };
 
 interface UnitGroup {
 	unit: LessonSummary["unit"];
 	lessons: LessonSummary[];
 }
 
-function groupByUnit(lessons: LessonSummary[]): UnitGroup[] {
-	const groups: UnitGroup[] = [];
+interface TrackGroup {
+	track: Track;
+	units: UnitGroup[];
+}
+
+/** Lessons come in the order of the tracks, so each group is a run. */
+function groupByTrack(lessons: LessonSummary[]): TrackGroup[] {
+	const tracks: TrackGroup[] = [];
 	for (const lesson of lessons) {
-		const last = groups[groups.length - 1];
-		if (last?.unit.id === lesson.unit.id) {
-			last.lessons.push(lesson);
+		let track = tracks[tracks.length - 1];
+		if (track?.track !== lesson.unit.track) {
+			track = { track: lesson.unit.track, units: [] };
+			tracks.push(track);
+		}
+		const unit = track.units[track.units.length - 1];
+		if (unit?.unit.id === lesson.unit.id) {
+			unit.lessons.push(lesson);
 		} else {
-			groups.push({ unit: lesson.unit, lessons: [lesson] });
+			track.units.push({ unit: lesson.unit, lessons: [lesson] });
 		}
 	}
-	return groups;
+	return tracks;
 }
 
 const emptyMessages: Record<Filter, string> = {
@@ -39,10 +51,16 @@ const emptyMessages: Record<Filter, string> = {
 	silent: "Toutes les cartes ont leur audio.",
 };
 
-/** The lessons with something to review or to record, by unit. */
+const leftNouns: Record<Filter, [string, string]> = {
+	pending: ["carte à relire", "cartes à relire"],
+	silent: ["carte sans audio", "cartes sans audio"],
+};
+
+/** The lessons with something to review or to record, by track and unit. */
 export function ReviewQueuePage() {
 	const [filter, setFilter] = useState<Filter>("pending");
 	const [listing, setListing] = useState<Listing>({ state: "loading" });
+	const [totals, setTotals] = useState<ReviewTotals | undefined>();
 
 	useEffect(() => {
 		let current = true;
@@ -50,9 +68,10 @@ export function ReviewQueuePage() {
 		listAllLessons(
 			filter === "pending" ? { pendingReview: true } : { missingAudio: true },
 		).then(
-			({ lessons, totals }) => {
+			(result) => {
 				if (current) {
-					setListing({ state: "ready", lessons, totals });
+					setListing({ state: "ready", lessons: result.lessons });
+					setTotals(result.totals);
 				}
 			},
 			(failure: unknown) => {
@@ -71,39 +90,22 @@ export function ReviewQueuePage() {
 		<div className="admin-content review-queue">
 			<header className="admin-header">
 				<h1 className="admin-title">Relecture</h1>
-				{listing.state === "ready" ? (
-					<p className="admin-lead">
-						{countOf(
-							listing.totals.itemsToReview,
-							"élément à relire",
-							"éléments à relire",
-						)}{" "}
-						·{" "}
-						{countOf(
-							listing.totals.cardsWithoutAudio,
-							"carte sans audio",
-							"cartes sans audio",
-						)}
-					</p>
-				) : null}
 			</header>
 
 			<fieldset className="status-filter review-filter">
 				<legend className="visually-hidden">Leçons</legend>
-				<button
-					type="button"
-					aria-pressed={filter === "pending"}
-					onClick={() => setFilter("pending")}
-				>
-					À relire
-				</button>
-				<button
-					type="button"
-					aria-pressed={filter === "silent"}
-					onClick={() => setFilter("silent")}
-				>
-					Sans audio
-				</button>
+				<FilterButton
+					label="À relire"
+					count={totals?.itemsToReview}
+					pressed={filter === "pending"}
+					onPress={() => setFilter("pending")}
+				/>
+				<FilterButton
+					label="Sans audio"
+					count={totals?.cardsWithoutAudio}
+					pressed={filter === "silent"}
+					onPress={() => setFilter("silent")}
+				/>
 			</fieldset>
 
 			{listing.state === "loading" ? (
@@ -125,9 +127,18 @@ export function ReviewQueuePage() {
 				</div>
 			) : null}
 			{listing.state === "ready" ? (
-				<div className="review-groups">
-					{groupByUnit(listing.lessons).map((group) => (
-						<UnitSection key={group.unit.id} group={group} />
+				<div className="review-tracks">
+					{groupByTrack(listing.lessons).map((group) => (
+						<section
+							key={group.track}
+							className="review-track"
+							aria-label={trackLabels[group.track]}
+						>
+							<h2 className="review-track-title">{trackLabels[group.track]}</h2>
+							{group.units.map((unit) => (
+								<UnitSection key={unit.unit.id} group={unit} filter={filter} />
+							))}
+						</section>
 					))}
 				</div>
 			) : null}
@@ -135,38 +146,41 @@ export function ReviewQueuePage() {
 	);
 }
 
-function UnitSection({ group }: { group: UnitGroup }) {
+interface FilterButtonProps {
+	label: string;
+	count: number | undefined;
+	pressed: boolean;
+	onPress: () => void;
+}
+
+function FilterButton({ label, count, pressed, onPress }: FilterButtonProps) {
+	return (
+		<button type="button" aria-pressed={pressed} onClick={onPress}>
+			{label}
+			{count === undefined ? null : (
+				<>
+					{" "}
+					<span className="review-filter-count">{count}</span>
+				</>
+			)}
+		</button>
+	);
+}
+
+function UnitSection({ group, filter }: { group: UnitGroup; filter: Filter }) {
 	const { unit, lessons } = group;
 	return (
 		<section className="review-group" aria-label={unit.title}>
 			<div className="review-group-head">
-				<h2 className="review-group-title">
-					{trackLabels[unit.track]} · {unit.title}
-				</h2>
-				<span className="review-group-status">
-					{unit.status === "validated" ? "Unité validée" : "Unité à relire"}
-				</span>
+				<h3 className="review-group-title">{unit.title}</h3>
+				{filter === "pending" && unit.status === "to_review" ? (
+					<span className="status-pill status-pill-to_review">À valider</span>
+				) : null}
 			</div>
 			<ul className="review-lessons">
 				{lessons.map((lesson) => (
 					<li key={lesson.id}>
-						<Link
-							to="/admin/review/lessons/$lessonId"
-							params={{ lessonId: lesson.id }}
-							className="review-lesson"
-						>
-							<span className="review-lesson-text">
-								<span className="review-lesson-title">{lesson.title}</span>
-								<span className="review-lesson-meta">
-									<Progress
-										done={lesson.cardCounts.validated}
-										total={totalOf(lesson.cardCounts)}
-									/>
-									<span>{describeLesson(lesson)}</span>
-								</span>
-							</span>
-							<ChevronIcon />
-						</Link>
+						<LessonRow lesson={lesson} filter={filter} />
 					</li>
 				))}
 			</ul>
@@ -174,13 +188,66 @@ function UnitSection({ group }: { group: UnitGroup }) {
 	);
 }
 
-function describeLesson(lesson: LessonSummary): string {
-	if (totalOf(lesson.cardCounts) === 0) {
-		return lesson.status === "validated"
-			? "Aucune carte"
-			: "Aucune carte · leçon à relire";
-	}
-	return describeCounts(lesson.cardCounts);
+/** A lesson with the one count its filter is about, and what else waits. */
+function LessonRow({
+	lesson,
+	filter,
+}: {
+	lesson: LessonSummary;
+	filter: Filter;
+}) {
+	const counts = lesson.cardCounts;
+	const total = totalOf(counts);
+	const left =
+		filter === "pending"
+			? counts.toReview + counts.flagged
+			: counts.withoutAudio;
+	const started = filter === "pending" && left > 0 && counts.validated > 0;
+	const flagged = filter === "pending" && counts.flagged > 0;
+	const [singular, plural] = leftNouns[filter];
+	return (
+		<Link
+			to="/admin/review/lessons/$lessonId"
+			params={{ lessonId: lesson.id }}
+			className="review-lesson"
+		>
+			<span className="review-lesson-text">
+				<span className="review-lesson-title">{lesson.title}</span>
+				{started || flagged ? (
+					<span className="review-lesson-meta">
+						{started ? (
+							<>
+								<Progress done={counts.validated} total={total} />
+								<span>{`${counts.validated}/${total} validées`}</span>
+							</>
+						) : null}
+						{flagged ? (
+							<span className="review-lesson-flagged">
+								<FlagIcon />
+								{countOf(counts.flagged, "signalée", "signalées")}
+							</span>
+						) : null}
+					</span>
+				) : null}
+			</span>
+			{left > 0 ? (
+				<>
+					<span className="review-count" aria-hidden="true">
+						{left}
+					</span>
+					<span className="visually-hidden">
+						{countOf(left, singular, plural)}
+					</span>
+				</>
+			) : null}
+			{left === 0 && filter === "pending" && lesson.status === "to_review" ? (
+				<span className="status-pill status-pill-to_review">
+					Leçon à valider
+				</span>
+			) : null}
+			<ChevronIcon />
+		</Link>
+	);
 }
 
 function ChevronIcon() {

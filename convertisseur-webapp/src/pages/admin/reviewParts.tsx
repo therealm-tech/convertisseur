@@ -52,21 +52,6 @@ export function totalOf(counts: CardCounts): number {
 	return counts.validated + counts.flagged + counts.toReview;
 }
 
-/** "3/7 validées · 3 à relire · 1 signalée · 2 sans audio", in short. */
-export function describeCounts(counts: CardCounts): string {
-	const parts = [`${counts.validated}/${totalOf(counts)} validées`];
-	if (counts.toReview > 0) {
-		parts.push(`${counts.toReview} à relire`);
-	}
-	if (counts.flagged > 0) {
-		parts.push(countOf(counts.flagged, "signalée", "signalées"));
-	}
-	if (counts.withoutAudio > 0) {
-		parts.push(`${counts.withoutAudio} sans audio`);
-	}
-	return parts.join(" · ");
-}
-
 /** "2 validées · 1 signalée · 4 à relire", for a lesson's summary. */
 export function describeReview(counts: CardCounts): string {
 	return [

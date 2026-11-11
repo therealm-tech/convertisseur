@@ -138,24 +138,32 @@ function calls(api: FakeApi, method: string, path: string) {
 }
 
 describe("review queue", () => {
-	it("lists the lessons left to review by unit, with their counts", async () => {
+	it("lists the lessons left to review by track and unit, with what is left", async () => {
 		await open("/admin/review");
 
 		await screen.findByRole("heading", { name: "Relecture", level: 1 });
 		expect(
-			await screen.findByText("4 éléments à relire · 3 cartes sans audio"),
-		).toBeInTheDocument();
-		const unit = screen.getByRole("region", { name: "Salutations" });
+			await screen.findByRole("button", { name: "À relire 4" }),
+		).toHaveAttribute("aria-pressed", "true");
 		expect(
-			within(unit).getByRole("heading", { name: "Arabe · Salutations" }),
+			screen.getByRole("button", { name: "Sans audio 3" }),
 		).toBeInTheDocument();
-		expect(within(unit).getByText("Unité à relire")).toBeInTheDocument();
-		const links = within(unit).getAllByRole("link");
-		expect(links.map((link) => link.textContent)).toEqual([
-			"Saluer1/3 validées · 1 à relire · 1 signalée · 2 sans audio",
-			"Politesse1/1 validées",
-		]);
-		expect(links[0]).toHaveAttribute("href", "/admin/review/lessons/l-saluer");
+		const arabe = screen.getByRole("region", { name: "Arabe" });
+		expect(
+			within(arabe).getByRole("heading", { name: "Arabe", level: 2 }),
+		).toBeInTheDocument();
+		const unit = within(arabe).getByRole("region", { name: "Salutations" });
+		expect(
+			within(unit).getByRole("heading", { name: "Salutations", level: 3 }),
+		).toBeInTheDocument();
+		expect(within(unit).getByText("À valider")).toBeInTheDocument();
+		const [saluer, politesse] = within(unit).getAllByRole("link");
+		expect(saluer).toHaveAttribute("href", "/admin/review/lessons/l-saluer");
+		expect(saluer).toHaveTextContent("2 cartes à relire");
+		expect(saluer).toHaveTextContent("1/3 validées");
+		expect(saluer).toHaveTextContent("1 signalée");
+		expect(saluer).not.toHaveTextContent("sans audio");
+		expect(politesse).toHaveTextContent(/^Politesse$/);
 		expect(
 			screen.queryByRole("region", { name: "L'alphabet" }),
 		).not.toBeInTheDocument();
@@ -165,20 +173,41 @@ describe("review queue", () => {
 		const { user } = await open("/admin/review");
 		await screen.findByRole("region", { name: "Salutations" });
 
-		await user.click(screen.getByRole("button", { name: "Sans audio" }));
+		await user.click(screen.getByRole("button", { name: /^Sans audio/ }));
 
 		const alphabet = await screen.findByRole("region", { name: "L'alphabet" });
 		expect(
 			within(alphabet).getByRole("link", { name: /Les lettres/ }),
-		).toHaveTextContent("1/1 validées · 1 sans audio");
-		expect(screen.getByRole("link", { name: /Saluer/ })).toBeInTheDocument();
+		).toHaveTextContent(/^Les lettres11 carte sans audio$/);
+		const saluer = screen.getByRole("link", { name: /Saluer/ });
+		expect(saluer).toHaveTextContent("2 cartes sans audio");
+		expect(saluer).not.toHaveTextContent("signalée");
 		expect(
 			screen.queryByRole("link", { name: /Politesse/ }),
 		).not.toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Sans audio" })).toHaveAttribute(
+		expect(screen.queryByText("À valider")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /^Sans audio/ })).toHaveAttribute(
 			"aria-pressed",
 			"true",
 		);
+	});
+
+	it("says when the lesson alone is left to validate", async () => {
+		const { api } = await open("/admin/review");
+		api.content.seed("lesson", {
+			id: "l-vide",
+			parentId: "u-salutations",
+			title: "Au revoir",
+		});
+		await screen.findByRole("region", { name: "Salutations" });
+		await userEvent.click(screen.getByRole("link", { name: "Contenu" }));
+		await userEvent.click(
+			await screen.findByRole("link", { name: /^Relecture/ }),
+		);
+
+		expect(
+			await screen.findByRole("link", { name: /Au revoir/ }),
+		).toHaveTextContent(/^Au revoirLeçon à valider$/);
 	});
 
 	it("says when nothing is left to review", async () => {

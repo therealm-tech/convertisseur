@@ -2217,11 +2217,47 @@ button.button-primary {
 	white-space: normal;
 }
 
-.review-groups {
+.review-tracks {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
 	align-items: start;
-	gap: 24px;
+	gap: 32px;
+	max-width: 40rem;
+}
+
+@media (min-width: 1024px) {
+	.review-tracks {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 48px;
+		max-width: 84rem;
+	}
+}
+
+.review-track {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
+}
+
+.review-track-title {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 900;
+}
+
+.review-filter-count {
+	margin-inline-start: 4px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: var(--color-border);
+	color: var(--color-text-muted);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+
+.review-filter button[aria-pressed="true"] .review-filter-count {
+	background: var(--color-primary-soft);
+	color: var(--color-on-primary-soft);
 }
 
 .review-group,
@@ -2236,10 +2272,14 @@ button.button-primary {
 
 .review-group-head {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
+	align-items: center;
 	justify-content: space-between;
-	gap: 4px 8px;
+	gap: 8px;
+}
+
+.review-group-head .status-pill,
+.review-lesson .status-pill {
+	flex: none;
 }
 
 .review-group-title,
@@ -2250,7 +2290,11 @@ button.button-primary {
 	color: var(--color-text-muted);
 }
 
-.review-group-status,
+.review-group-title {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 .review-crumb,
 .review-lesson-meta,
 .review-switch-label,
@@ -2329,6 +2373,33 @@ button.button-primary {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 4px 8px;
+}
+
+.review-lesson-flagged {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--color-error-text);
+}
+
+.review-lesson-flagged svg {
+	width: 14px;
+	height: 14px;
+}
+
+.review-count {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	min-width: 36px;
+	height: 28px;
+	padding: 0 10px;
+	border-radius: 999px;
+	background: var(--color-surface-muted);
+	font-size: 15px;
+	font-weight: 900;
+	font-variant-numeric: tabular-nums;
 }
 
 .review-progress {
