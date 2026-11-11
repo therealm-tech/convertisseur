@@ -90,6 +90,30 @@ then open the URL Vite prints. The server alone, on <http://localhost:3000>,
 serves the last `npm run build` of the webapp. See the
 [README](README.md#getting-started) for running the whole app in containers.
 
+## Editing the starter content
+
+The starter units, lessons and cards live in [`content/`](content/), one YAML
+file per unit under the directory of its track, `arabe/` or `islam/`; files
+sort by name, which is the order of the units. Each unit, lesson and card has
+a `key`, lowercase words joined by `-`, unique among its siblings; the path of
+keys, such as `islam/coran/al-fatiha/aya-3`, identifies the row the import
+creates, so a key never changes once merged. A unit sets the `variety` of all
+its cards, and the `islam` track is `classique` only.
+
+The files are built into the binary, so a change takes a rebuild. The tests
+check that they follow the model:
+
+```sh
+cargo test --lib import
+```
+
+Import them into the compose PostgreSQL, once `cargo run -- serve` has
+created the super admin:
+
+```sh
+cargo run -- import-content
+```
+
 ## Running the tests
 
 The API tests need the compose PostgreSQL and SeaweedFS. Each `#[sqlx::test]`

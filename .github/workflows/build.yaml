@@ -10,6 +10,7 @@ on:
       - Cargo.toml
       - Cargo.lock
       - assets/**
+      - content/**
       - convertisseur-api/**
       - convertisseur-webapp/**
       - .github/workflows/build.yaml
@@ -20,6 +21,7 @@ on:
       - Cargo.toml
       - Cargo.lock
       - assets/**
+      - content/**
       - convertisseur-api/**
       - convertisseur-webapp/**
       - .github/workflows/build.yaml

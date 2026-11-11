@@ -1,0 +1,153 @@
+key: priere
+title: Les ablutions et la prière (rite malikite)
+variety: classique
+lessons:
+  - key: ablutions
+    title: Les ablutions, dans l'ordre
+    cards:
+      - key: wudu
+        arabic: الْوُضُوءُ
+        transliteration: al-wuḍūʾ
+        meaning_fr: Les ablutions
+      - key: niyya
+        arabic: النِّيَّةُ
+        transliteration: an-niyya
+        meaning_fr: L'intention, dans le cœur
+      - key: mains
+        arabic: غَسْلُ الْيَدَيْنِ إِلَى الْكُوعَيْنِ
+        transliteration: ghaslu l-yadayni ilā l-kūʿayn
+        meaning_fr: Se laver les mains jusqu'aux poignets
+      - key: madmada
+        arabic: الْمَضْمَضَةُ
+        transliteration: al-maḍmaḍa
+        meaning_fr: Se rincer la bouche
+      - key: istinshaq
+        arabic: الِاسْتِنْشَاقُ
+        transliteration: al-istinshāq
+        meaning_fr: Aspirer l'eau par le nez
+      - key: istinthar
+        arabic: الِاسْتِنْثَارُ
+        transliteration: al-istinthār
+        meaning_fr: Rejeter l'eau du nez
+      - key: visage
+        arabic: غَسْلُ الْوَجْهِ
+        transliteration: ghaslu l-wajh
+        meaning_fr: Se laver le visage
+      - key: bras
+        arabic: غَسْلُ الْيَدَيْنِ إِلَى الْمِرْفَقَيْنِ
+        transliteration: ghaslu l-yadayni ilā l-mirfaqayn
+        meaning_fr: Se laver les bras jusqu'aux coudes
+      - key: tete
+        arabic: مَسْحُ الرَّأْسِ
+        transliteration: masḥu r-raʾs
+        meaning_fr: Passer les mains mouillées sur toute la tête
+      - key: oreilles
+        arabic: مَسْحُ الْأُذُنَيْنِ
+        transliteration: masḥu l-udhunayn
+        meaning_fr: Passer les doigts mouillés dans les oreilles
+      - key: pieds
+        arabic: غَسْلُ الرِّجْلَيْنِ إِلَى الْكَعْبَيْنِ
+        transliteration: ghaslu r-rijlayni ilā l-kaʿbayn
+        meaning_fr: Se laver les pieds jusqu'aux chevilles
+      - key: dalk
+        arabic: الدَّلْكُ
+        transliteration: ad-dalk
+        meaning_fr: Frotter chaque membre lavé (obligatoire chez les malikites)
+      - key: muwalat
+        arabic: الْمُوَالَاةُ
+        transliteration: al-muwālāh
+        meaning_fr: Enchaîner les étapes sans interruption
+  - key: priere
+    title: Les étapes de la prière
+    cards:
+      - key: qibla
+        arabic: اسْتِقْبَالُ الْقِبْلَةِ
+        transliteration: istiqbālu l-qibla
+        meaning_fr: Se tourner vers la qibla
+      - key: niyya
+        arabic: النِّيَّةُ
+        transliteration: an-niyya
+        meaning_fr: L'intention de la prière, dans le cœur
+      - key: takbir
+        arabic: اللَّهُ أَكْبَرُ
+        transliteration: Allāhu akbar
+        meaning_fr: Dieu est le plus grand (takbir d'entrée)
+      - key: sadl
+        arabic: السَّدْلُ
+        transliteration: as-sadl
+        meaning_fr: Les bras le long du corps (rite malikite)
+      - key: fatiha
+        arabic: قِرَاءَةُ الْفَاتِحَةِ
+        transliteration: qirāʾatu l-fātiḥa
+        meaning_fr: Réciter la Fatiha, sans basmala dans les prières obligatoires
+      - key: amin
+        arabic: آمِينَ
+        transliteration: āmīn
+        meaning_fr: Amine, après la Fatiha
+      - key: sourate
+        arabic: قِرَاءَةُ السُّورَةِ
+        transliteration: qirāʾatu s-sūra
+        meaning_fr: Réciter une sourate, dans les deux premières rakʿa
+      - key: ruku
+        arabic: الرُّكُوعُ
+        transliteration: ar-rukūʿ
+        meaning_fr: L'inclinaison
+      - key: tasbih-ruku
+        arabic: سُبْحَانَ رَبِّيَ الْعَظِيمِ
+        transliteration: subḥāna rabbiya l-ʿaẓīm
+        meaning_fr: Gloire à mon Seigneur l'Immense (incliné)
+      - key: samia-allah
+        arabic: سَمِعَ اللَّهُ لِمَنْ حَمِدَهُ
+        transliteration: samiʿa llāhu liman ḥamidah
+        meaning_fr: Dieu entend qui Le loue (en se redressant)
+      - key: rabbana-wa-laka-lhamd
+        arabic: رَبَّنَا وَلَكَ الْحَمْدُ
+        transliteration: rabbanā wa laka l-ḥamd
+        meaning_fr: Notre Seigneur, à Toi la louange
+      - key: sujud
+        arabic: السُّجُودُ
+        transliteration: as-sujūd
+        meaning_fr: La prosternation
+      - key: tasbih-sujud
+        arabic: سُبْحَانَ رَبِّيَ الْأَعْلَى
+        transliteration: subḥāna rabbiya l-aʿlā
+        meaning_fr: Gloire à mon Seigneur le Très-Haut (prosterné)
+      - key: julus
+        arabic: الْجُلُوسُ لِلتَّشَهُّدِ
+        transliteration: al-julūsu li-t-tashahhud
+        meaning_fr: S'asseoir pour le tashahhud
+      - key: taslim
+        arabic: السَّلَامُ عَلَيْكُمْ
+        transliteration: as-salāmu ʿalaykum
+        meaning_fr: Un seul salut final, vers la droite
+  - key: tashahhud
+    title: Le tashahhud d'Omar
+    cards:
+      - key: tahiyyat
+        arabic: التَّحِيَّاتُ لِلَّهِ
+        transliteration: at-taḥiyyātu lillāh
+        meaning_fr: Les salutations sont à Dieu
+      - key: zakiyat
+        arabic: الزَّاكِيَاتُ لِلَّهِ
+        transliteration: az-zākiyātu lillāh
+        meaning_fr: Les œuvres pures sont à Dieu
+      - key: tayyibat
+        arabic: الطَّيِّبَاتُ الصَّلَوَاتُ لِلَّهِ
+        transliteration: aṭ-ṭayyibātu ṣ-ṣalawātu lillāh
+        meaning_fr: Les bonnes paroles et les prières sont à Dieu
+      - key: salam-nabi
+        arabic: السَّلَامُ عَلَيْكَ أَيُّهَا النَّبِيُّ وَرَحْمَةُ اللَّهِ وَبَرَكَاتُهُ
+        transliteration: as-salāmu ʿalayka ayyuhā n-nabiyyu wa raḥmatu llāhi wa barakātuh
+        meaning_fr: Paix sur toi, ô Prophète, ainsi que la miséricorde de Dieu et Ses bénédictions
+      - key: salam-salihin
+        arabic: السَّلَامُ عَلَيْنَا وَعَلَى عِبَادِ اللَّهِ الصَّالِحِينَ
+        transliteration: as-salāmu ʿalaynā wa ʿalā ʿibādi llāhi ṣ-ṣāliḥīn
+        meaning_fr: Paix sur nous et sur les vertueux serviteurs de Dieu
+      - key: shahada
+        arabic: أَشْهَدُ أَنْ لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ
+        transliteration: ashhadu an lā ilāha illā llāhu waḥdahū lā sharīka lah
+        meaning_fr: J'atteste qu'il n'y a de divinité que Dieu, seul, sans associé
+      - key: abduhu-wa-rasuluh
+        arabic: وَأَشْهَدُ أَنَّ مُحَمَّدًا عَبْدُهُ وَرَسُولُهُ
+        transliteration: wa ashhadu anna Muḥammadan ʿabduhū wa rasūluh
+        meaning_fr: Et j'atteste que Muhammad est Son serviteur et Son messager

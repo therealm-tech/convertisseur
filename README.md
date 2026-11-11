@@ -105,6 +105,27 @@ record.
 | `/readyz` | Readiness probe: `200` when PostgreSQL and the object store answer, `503` otherwise |
 | anything else | The webapp |
 
+### Importing the starter content
+
+The image carries the starter units, lessons and cards written in
+[`content/`](content/). `import-content` creates those the database lacks, all
+"to review", authored by the super admin, and logs what it creates and what it
+skips. It never changes nor deletes existing content, so a correction made in
+the admin area stays; a unit, lesson or card deleted there comes back on the
+next import. It needs only `DATABASE_URL`, and the server to have started once
+on that database, which creates the super admin.
+
+With the local stack running, rebuild the app so that it carries the content,
+then import:
+
+```sh
+docker compose --profile app up --build --detach
+```
+
+```sh
+docker compose --profile app run --rm app import-content
+```
+
 ### Deployment
 
 Build the image:
@@ -132,6 +153,14 @@ docker run --rm -p 3000:3000 \
 `-e SUPER_ADMIN_PASSWORD` with no value passes the variable from your shell,
 so the password stays out of the command line; the same goes for the object
 store's keys.
+
+Once the server has started, import the starter content with the same image:
+
+```sh
+docker run --rm \
+  -e DATABASE_URL=postgres://user:password@db.example.com/convertisseur \
+  convertisseur import-content
+```
 
 Back up the database and the bucket together: rows point at objects, and a
 restore of one without the other leaves broken references or orphaned files.
@@ -196,6 +225,13 @@ convertisseur:
 
 ```sh
 helm install convertisseur charts/convertisseur --namespace convertisseur --create-namespace -f values.yaml
+```
+
+Once the pod is ready, import the starter content from inside it, where
+`DATABASE_URL` is already set:
+
+```sh
+kubectl exec --namespace convertisseur deploy/convertisseur -- /usr/local/bin/convertisseur-api import-content
 ```
 
 The chart's [README](charts/convertisseur/README.md) lists every value. The

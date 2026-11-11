@@ -39,6 +39,7 @@ pub trait Ordered: Send {
     /// Whether a parent row exists; `None` when the parent is not a row.
     const PARENT_EXISTS: Option<&'static str>;
     const SET_STATUS: &'static str;
+    const FIND_BY_IMPORT_KEY: &'static str;
     /// Whether rows of the next level hang off this one; `None` for cards.
     const HAS_CHILDREN: Option<&'static str>;
 }
@@ -54,6 +55,8 @@ impl Ordered for Units {
     const DELETE: &'static str = include_str!("../../queries/units/delete.sql");
     const PARENT_EXISTS: Option<&'static str> = None;
     const SET_STATUS: &'static str = include_str!("../../queries/units/set_status.sql");
+    const FIND_BY_IMPORT_KEY: &'static str =
+        include_str!("../../queries/units/find_by_import_key.sql");
     const HAS_CHILDREN: Option<&'static str> =
         Some(include_str!("../../queries/units/has_children.sql"));
 }
@@ -70,6 +73,8 @@ impl Ordered for Lessons {
     const PARENT_EXISTS: Option<&'static str> =
         Some(include_str!("../../queries/units/exists.sql"));
     const SET_STATUS: &'static str = include_str!("../../queries/lessons/set_status.sql");
+    const FIND_BY_IMPORT_KEY: &'static str =
+        include_str!("../../queries/lessons/find_by_import_key.sql");
     const HAS_CHILDREN: Option<&'static str> =
         Some(include_str!("../../queries/lessons/has_children.sql"));
 }
@@ -102,6 +107,8 @@ impl Ordered for Cards {
     const PARENT_EXISTS: Option<&'static str> =
         Some(include_str!("../../queries/lessons/exists.sql"));
     const SET_STATUS: &'static str = include_str!("../../queries/cards/set_status.sql");
+    const FIND_BY_IMPORT_KEY: &'static str =
+        include_str!("../../queries/cards/find_by_import_key.sql");
     const HAS_CHILDREN: Option<&'static str> = None;
 }
 
@@ -181,6 +188,17 @@ pub async fn parent_exists<O: Ordered>(
     }
 }
 
+/// The row imported under `key`, if it still exists.
+pub async fn find_by_import_key<O: Ordered>(
+    exec: impl PgExecutor<'_>,
+    key: &str,
+) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar(O::FIND_BY_IMPORT_KEY)
+        .bind(key)
+        .fetch_optional(exec)
+        .await
+}
+
 pub async fn has_children<O: Ordered>(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<bool> {
     match O::HAS_CHILDREN {
         Some(query) => sqlx::query_scalar(query).bind(id).fetch_one(exec).await,
@@ -233,16 +251,20 @@ pub async fn set_audio<O: WithAudio>(
     Ok(())
 }
 
+/// Inserts the row at `position`; `import_key` names the content file entry
+/// it comes from, `None` for what staff write.
 pub async fn insert_unit(
     exec: impl PgExecutor<'_>,
     fields: &UnitFields,
     position: i32,
+    import_key: Option<&str>,
     author: Uuid,
 ) -> sqlx::Result<Uuid> {
     sqlx::query_scalar(include_str!("../../queries/units/insert.sql"))
         .bind(fields.track)
         .bind(position)
         .bind(&fields.title)
+        .bind(import_key)
         .bind(author)
         .fetch_one(exec)
         .await
@@ -275,16 +297,20 @@ pub async fn find_unit(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<Opti
         .await
 }
 
+/// Inserts the row at `position`; `import_key` names the content file entry
+/// it comes from, `None` for what staff write.
 pub async fn insert_lesson(
     exec: impl PgExecutor<'_>,
     fields: &LessonFields,
     position: i32,
+    import_key: Option<&str>,
     author: Uuid,
 ) -> sqlx::Result<Uuid> {
     sqlx::query_scalar(include_str!("../../queries/lessons/insert.sql"))
         .bind(fields.unit_id)
         .bind(position)
         .bind(&fields.title)
+        .bind(import_key)
         .bind(author)
         .fetch_one(exec)
         .await
@@ -317,10 +343,13 @@ pub async fn find_lesson(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<Op
         .await
 }
 
+/// Inserts the row at `position`; `import_key` names the content file entry
+/// it comes from, `None` for what staff write.
 pub async fn insert_card(
     exec: impl PgExecutor<'_>,
     fields: &CardFields,
     position: i32,
+    import_key: Option<&str>,
     author: Uuid,
 ) -> sqlx::Result<Uuid> {
     sqlx::query_scalar(include_str!("../../queries/cards/insert.sql"))
@@ -330,6 +359,7 @@ pub async fn insert_card(
         .bind(&fields.transliteration)
         .bind(&fields.meaning_fr)
         .bind(fields.variety)
+        .bind(import_key)
         .bind(author)
         .fetch_one(exec)
         .await

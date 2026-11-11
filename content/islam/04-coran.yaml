@@ -1,0 +1,108 @@
+key: coran
+title: Le Coran, lecture de Warsh
+variety: classique
+lessons:
+  - key: al-fatiha
+    title: Al-Fātiḥa (sourate 1)
+    cards:
+      - key: basmala
+        arabic: بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+        transliteration: bismi llāhi r-raḥmāni r-raḥīm
+        meaning_fr: Au nom de Dieu, le Tout Miséricordieux, le Très Miséricordieux (pas un verset dans le comptage madani)
+      - key: aya-1
+        arabic: الْحَمْدُ لِلَّهِ رَبِّ الْعَٰلَمِينَ
+        transliteration: al-ḥamdu lillāhi rabbi l-ʿālamīn
+        meaning_fr: Louange à Dieu, Seigneur des mondes
+      - key: aya-2
+        arabic: الرَّحْمَٰنِ الرَّحِيمِ
+        transliteration: ar-raḥmāni r-raḥīm
+        meaning_fr: Le Tout Miséricordieux, le Très Miséricordieux
+      - key: aya-3
+        arabic: مَلِكِ يَوْمِ الدِّينِ
+        transliteration: maliki yawmi d-dīn
+        meaning_fr: Roi du Jour de la rétribution
+      - key: aya-4
+        arabic: إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ
+        transliteration: iyyāka naʿbudu wa iyyāka nastaʿīn
+        meaning_fr: C'est Toi que nous adorons, Toi dont nous implorons l'aide
+      - key: aya-5
+        arabic: اهْدِنَا الصِّرَٰطَ الْمُسْتَقِيمَ
+        transliteration: ihdinā ṣ-ṣirāṭa l-mustaqīm
+        meaning_fr: Guide-nous sur le droit chemin
+      - key: aya-6
+        arabic: صِرَٰطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ
+        transliteration: ṣirāṭa lladhīna anʿamta ʿalayhim
+        meaning_fr: Le chemin de ceux que Tu as comblés de bienfaits
+      - key: aya-7
+        arabic: غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّآلِّينَ
+        transliteration: ghayri l-maghḍūbi ʿalayhim wa lā ḍ-ḍāllīn
+        meaning_fr: Non de ceux qui ont encouru la colère, ni des égarés
+  - key: al-ikhlas
+    title: Al-Ikhlāṣ (sourate 112)
+    cards:
+      - key: aya-1
+        arabic: قُلْ هُوَ اللَّهُ أَحَدٌ
+        transliteration: qul huwa llāhu aḥad
+        meaning_fr: 'Dis : Il est Dieu, Unique'
+      - key: aya-2
+        arabic: اللَّهُ الصَّمَدُ
+        transliteration: Allāhu ṣ-ṣamad
+        meaning_fr: Dieu, l'Absolu, que l'on implore
+      - key: aya-3
+        arabic: لَمْ يَلِدْ وَلَمْ يُولَدْ
+        transliteration: lam yalid wa lam yūlad
+        meaning_fr: Il n'a pas engendré et n'a pas été engendré
+      - key: aya-4
+        arabic: وَلَمْ يَكُن لَّهُۥ كُفُؤًا اَحَدٌ
+        transliteration: wa lam yakun lahū kufuʾanaḥad
+        meaning_fr: Et nul n'est égal à Lui
+  - key: al-falaq
+    title: Al-Falaq (sourate 113)
+    cards:
+      - key: aya-1
+        arabic: قُلَ اَعُوذُ بِرَبِّ الْفَلَقِ
+        transliteration: qula ʿūdhu bi-rabbi l-falaq
+        meaning_fr: 'Dis : je cherche refuge auprès du Seigneur de l''aube'
+      - key: aya-2
+        arabic: مِن شَرِّ مَا خَلَقَ
+        transliteration: min sharri mā khalaq
+        meaning_fr: Contre le mal de ce qu'Il a créé
+      - key: aya-3
+        arabic: وَمِن شَرِّ غَاسِقٍ اِذَا وَقَبَ
+        transliteration: wa min sharri ghāsiqinidhā waqab
+        meaning_fr: Contre le mal de la nuit quand elle s'étend
+      - key: aya-4
+        arabic: وَمِن شَرِّ النَّفَّٰثَٰتِ فِي الْعُقَدِ
+        transliteration: wa min sharri n-naffāthāti fi l-ʿuqad
+        meaning_fr: Contre le mal de celles qui soufflent sur les nœuds
+      - key: aya-5
+        arabic: وَمِن شَرِّ حَاسِدٍ اِذَا حَسَدَ
+        transliteration: wa min sharri ḥāsidinidhā ḥasad
+        meaning_fr: Et contre le mal de l'envieux quand il envie
+  - key: an-nas
+    title: An-Nās (sourate 114)
+    cards:
+      - key: aya-1
+        arabic: قُلَ اَعُوذُ بِرَبِّ النَّاسِ
+        transliteration: qula ʿūdhu bi-rabbi n-nās
+        meaning_fr: 'Dis : je cherche refuge auprès du Seigneur des hommes'
+      - key: aya-2
+        arabic: مَلِكِ النَّاسِ
+        transliteration: maliki n-nās
+        meaning_fr: Le Roi des hommes
+      - key: aya-3
+        arabic: إِلَٰهِ النَّاسِ
+        transliteration: ilāhi n-nās
+        meaning_fr: Le Dieu des hommes
+      - key: aya-4
+        arabic: مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ
+        transliteration: min sharri l-waswāsi l-khannās
+        meaning_fr: Contre le mal du tentateur furtif
+      - key: aya-5
+        arabic: الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ
+        transliteration: alladhī yuwaswisu fī ṣudūri n-nās
+        meaning_fr: Qui souffle le mal dans le cœur des hommes
+      - key: aya-6
+        arabic: مِنَ الْجِنَّةِ وَالنَّاسِ
+        transliteration: mina l-jinnati wa n-nās
+        meaning_fr: Qu'il soit djinn ou humain

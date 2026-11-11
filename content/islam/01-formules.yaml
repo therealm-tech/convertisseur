@@ -1,0 +1,55 @@
+key: formules
+title: Les formules du quotidien
+variety: classique
+lessons:
+  - key: formules
+    title: Les formules à connaître
+    cards:
+      - key: bismillah
+        arabic: بِسْمِ اللَّهِ
+        transliteration: bismi llāh
+        meaning_fr: Au nom de Dieu
+      - key: alhamdulillah
+        arabic: الْحَمْدُ لِلَّهِ
+        transliteration: al-ḥamdu lillāh
+        meaning_fr: Louange à Dieu
+      - key: inshallah
+        arabic: إِنْ شَاءَ اللَّهُ
+        transliteration: in shāʾa llāh
+        meaning_fr: Si Dieu le veut
+      - key: mashallah
+        arabic: مَا شَاءَ اللَّهُ
+        transliteration: mā shāʾa llāh
+        meaning_fr: Ce que Dieu a voulu (pour admirer)
+      - key: subhanallah
+        arabic: سُبْحَانَ اللَّهِ
+        transliteration: subḥāna llāh
+        meaning_fr: Gloire à Dieu
+      - key: astaghfirullah
+        arabic: أَسْتَغْفِرُ اللَّهَ
+        transliteration: astaghfiru llāh
+        meaning_fr: Je demande pardon à Dieu
+      - key: allahu-akbar
+        arabic: اللَّهُ أَكْبَرُ
+        transliteration: Allāhu akbar
+        meaning_fr: Dieu est le plus grand
+      - key: salam
+        arabic: السَّلَامُ عَلَيْكُمْ
+        transliteration: as-salāmu ʿalaykum
+        meaning_fr: La paix soit sur vous
+      - key: salam-reponse
+        arabic: وَعَلَيْكُمُ السَّلَامُ
+        transliteration: wa ʿalaykumu s-salām
+        meaning_fr: Et sur vous la paix
+      - key: salam-complet
+        arabic: السَّلَامُ عَلَيْكُمْ وَرَحْمَةُ اللَّهِ وَبَرَكَاتُهُ
+        transliteration: as-salāmu ʿalaykum wa raḥmatu llāhi wa barakātuh
+        meaning_fr: La paix soit sur vous, ainsi que la miséricorde de Dieu et Ses bénédictions
+      - key: salam-complet-reponse
+        arabic: وَعَلَيْكُمُ السَّلَامُ وَرَحْمَةُ اللَّهِ وَبَرَكَاتُهُ
+        transliteration: wa ʿalaykumu s-salāmu wa raḥmatu llāhi wa barakātuh
+        meaning_fr: Et sur vous la paix, la miséricorde de Dieu et Ses bénédictions
+      - key: jazak-allah
+        arabic: جَزَاكَ اللَّهُ خَيْرًا
+        transliteration: jazāka llāhu khayran
+        meaning_fr: Que Dieu te récompense en bien

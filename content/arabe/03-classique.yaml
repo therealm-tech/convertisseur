@@ -1,0 +1,102 @@
+key: classique
+title: 'L''arabe classique : nombres et mots courants'
+variety: classique
+lessons:
+  - key: nombres
+    title: Les nombres de 1 à 10
+    cards:
+      - key: wahid
+        arabic: وَاحِدٌ
+        transliteration: wāḥid
+        meaning_fr: Un (1)
+      - key: ithnan
+        arabic: اِثْنَانِ
+        transliteration: ithnān
+        meaning_fr: Deux (2)
+      - key: thalatha
+        arabic: ثَلَاثَةٌ
+        transliteration: thalātha
+        meaning_fr: Trois (3)
+      - key: arbaa
+        arabic: أَرْبَعَةٌ
+        transliteration: arbaʿa
+        meaning_fr: Quatre (4)
+      - key: khamsa
+        arabic: خَمْسَةٌ
+        transliteration: khamsa
+        meaning_fr: Cinq (5)
+      - key: sitta
+        arabic: سِتَّةٌ
+        transliteration: sitta
+        meaning_fr: Six (6)
+      - key: sabaa
+        arabic: سَبْعَةٌ
+        transliteration: sabʿa
+        meaning_fr: Sept (7)
+      - key: thamaniya
+        arabic: ثَمَانِيَةٌ
+        transliteration: thamāniya
+        meaning_fr: Huit (8)
+      - key: tisaa
+        arabic: تِسْعَةٌ
+        transliteration: tisʿa
+        meaning_fr: Neuf (9)
+      - key: ashara
+        arabic: عَشَرَةٌ
+        transliteration: ʿashara
+        meaning_fr: Dix (10)
+  - key: mots-courants
+    title: Des mots courants
+    cards:
+      - key: naam
+        arabic: نَعَمْ
+        transliteration: naʿam
+        meaning_fr: Oui
+      - key: la
+        arabic: لَا
+        transliteration: lā
+        meaning_fr: Non
+      - key: shukran
+        arabic: شُكْرًا
+        transliteration: shukran
+        meaning_fr: Merci
+      - key: afwan
+        arabic: عَفْوًا
+        transliteration: ʿafwan
+        meaning_fr: De rien ; pardon
+      - key: kitab
+        arabic: كِتَابٌ
+        transliteration: kitāb
+        meaning_fr: Un livre
+      - key: bayt
+        arabic: بَيْتٌ
+        transliteration: bayt
+        meaning_fr: Une maison
+      - key: ma
+        arabic: مَاءٌ
+        transliteration: māʾ
+        meaning_fr: De l'eau
+      - key: khubz
+        arabic: خُبْزٌ
+        transliteration: khubz
+        meaning_fr: Du pain
+      - key: shams
+        arabic: شَمْسٌ
+        transliteration: shams
+        meaning_fr: Le soleil
+      - key: qamar
+        arabic: قَمَرٌ
+        transliteration: qamar
+        meaning_fr: La lune
+      - key: qalb
+        arabic: قَلْبٌ
+        transliteration: qalb
+        meaning_fr: Le cœur
+      - key: sadiq
+        arabic: صَدِيقٌ
+        transliteration: ṣadīq
+        meaning_fr: Un ami
+      - key: masjid
+        arabic: مَسْجِدٌ
+        transliteration: masjid
+        meaning_fr: Une mosquée

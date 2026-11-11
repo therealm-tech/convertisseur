@@ -41,6 +41,13 @@ pub async fn upsert_super_admin(
         .await
 }
 
+/// The id of the super admin, when the server has created it.
+pub async fn find_super_admin(exec: impl PgExecutor<'_>) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar(include_str!("../../queries/users/find_super_admin.sql"))
+        .fetch_optional(exec)
+        .await
+}
+
 /// Creates a `user` account; fails with a unique violation when the
 /// username is taken, whatever its case.
 pub async fn insert(

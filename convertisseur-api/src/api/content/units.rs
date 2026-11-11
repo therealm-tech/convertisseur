@@ -148,7 +148,9 @@ async fn create_unit(
         &actor,
         fields.track,
         request.position,
-        async |conn, position| db::content::insert_unit(conn, &fields, position, actor.id).await,
+        async |conn, position| {
+            db::content::insert_unit(conn, &fields, position, None, actor.id).await
+        },
     )
     .await?;
     let unit = UnitResponse::find(&state, id).await?;

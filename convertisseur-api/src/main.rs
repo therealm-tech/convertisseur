@@ -4,7 +4,7 @@ use anyhow::{Context, bail};
 use clap::Parser;
 use convertisseur_api::{
     AppState, ClientSettings,
-    config::{Cli, Command, HealthcheckArgs, LogFormat, ServeArgs},
+    config::{Cli, Command, HealthcheckArgs, ImportContentArgs, LogFormat, ServeArgs},
     storage::{S3Store, Storage},
 };
 use sqlx::postgres::PgPoolOptions;
@@ -29,6 +29,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Command::Serve(args) => serve(*args).await,
         Command::Healthcheck(args) => healthcheck(&args).await,
+        Command::ImportContent(args) => import_content(&args).await,
     }
 }
 
@@ -87,6 +88,25 @@ async fn serve(args: ServeArgs) -> anyhow::Result<()> {
     .await?;
     pool.close().await;
     tracing::info!("server stopped");
+    Ok(())
+}
+
+async fn import_content(args: &ImportContentArgs) -> anyhow::Result<()> {
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&args.database_url)
+        .await
+        .context("failed to connect to the database")?;
+    convertisseur_api::MIGRATOR
+        .run(&pool)
+        .await
+        .context("failed to apply the database migrations")?;
+    tracing::info!("database migrations applied");
+    let imported = convertisseur_api::import_content(&pool)
+        .await
+        .context("failed to import the content");
+    pool.close().await;
+    imported?;
     Ok(())
 }
 
