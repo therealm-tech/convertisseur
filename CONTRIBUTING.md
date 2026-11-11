@@ -103,6 +103,24 @@ creation, and the row loses its review status, its note and its recording.
 Reordering entries among their siblings keeps them. A unit sets the `variety`
 of all its cards, and the `islam` track is `classique` only.
 
+A card of a letter of the alphabet also lists the letter's other `forms`, the
+letter with the tatweel `ـ` (U+0640) on the side it joins. A letter that joins
+the next one has all three; one that never does (ا د ذ ر ز و) or that only
+ends a word (ة ى) has the final form alone:
+
+```yaml
+- key: ba
+  arabic: ب
+  forms:
+    initial: بـ
+    medial: ـبـ
+    final: ـب
+- key: dal
+  arabic: د
+  forms:
+    final: ـد
+```
+
 The files are built into the binary, so a change takes a rebuild. The tests
 check that they follow the model:
 

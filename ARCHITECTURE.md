@@ -72,7 +72,8 @@ staff write and review the learning content, beside `/admin/utilisateurs`.
 Learners start on `/`, which shows both tracks; `/parcours/{track}` draws a
 track's units and their lessons as a path, and
 `/parcours/{track}/lecons/{lessonId}` shows a lesson's cards one at a time,
-with the transliteration and the meaning hidden until asked for. These pages
+with the transliteration and the meaning hidden until asked for, and a letter's
+shapes in a row under it (see [The forms of a letter](#the-forms-of-a-letter)). These pages
 load their data in the router's loaders, so a lesson the API does not serve
 renders the page not found rather than an empty screen.
 
@@ -159,6 +160,9 @@ erDiagram
         text transliteration
         text meaning_fr
         arabic_variety variety "classique or darija"
+        text initial_form "a letter's, NULL for any other card"
+        text medial_form "NULL with initial_form"
+        text final_form "set whenever initial_form is"
         text import_key "unique, NULL unless imported"
         text review_note "NULL unless a reviewer wrote one"
     }
@@ -289,12 +293,12 @@ sequenceDiagram
   the `islam` track is in classical Arabic only.
 - **Every file is checked before anything is written**: unknown fields,
   malformed or repeated keys, blank or non-Arabic `arabic`, a variety that
-  does not fit the track. One problem stops the start-up, and the error lists
+  does not fit the track, forms that are not those of the card's letter. One problem stops the start-up, and the error lists
   them all. A unit test runs the same checks on the files of the build.
 - **The sync makes every imported row match its entry.** An entry no row
   carries the key of is created, `to_review`, authored by the super admin. A
   row whose text differs from its entry's (title, Arabic, transliteration,
-  meaning, variety, track) is rewritten, sent back to `to_review` with its
+  meaning, variety, forms, track) is rewritten, sent back to `to_review` with its
   validation cleared, and its review note is cleared too, since the change
   answers it. A row whose text matches keeps its status and note. A row whose
   parent or place differs is moved, keeping its status, as a move in the admin
@@ -318,6 +322,45 @@ sequenceDiagram
   was created, updated, moved, deleted and left unchanged per kind. A row
   both rewritten and moved counts as updated, and a row that only shifts for
   a sibling created, deleted or moved counts as unchanged.
+
+## The forms of a letter
+
+A card of the alphabet carries, beside its isolated letter in `arabic`, the
+shapes the letter takes at the start, in the middle and at the end of a word,
+in [`letters.rs`](convertisseur-api/src/letters.rs). The lesson screen shows
+them in a row, "Isolée · Début · Milieu · Fin", and the admin area shows them
+read-only.
+
+- **The forms are written out in the content files, not computed.** Each is
+  the letter with the tatweel `ـ` on the side it joins: `بـ`, `ـبـ`, `ـب`.
+  They follow from the letter, but written out they are reviewed like the
+  rest of the text by a reader of Arabic, and they are what the screen
+  shows, character for character.
+- **The checks derive what is right from the letter.** A table of the
+  letters sorts each by how it joins: both sides, which takes all three
+  forms; the previous letter only (ا د ذ ر ز و, and أ إ آ ٱ ؤ),
+  which takes the final form alone; or the end of a word only (ة ى), which
+  takes the final form alone as well. Every form must be the letter with the
+  tatweel in its place; forms on anything but a single letter of the table,
+  the hamza `ء` included, are refused.
+- **What cannot happen cannot be written.** `LetterForms` is either the three
+  forms or the final one alone, so a medial form without an initial one, or
+  an initial form without a final one, has no value to hold it; the YAML
+  reader turns the three optional keys into one of the two, or into an error.
+  The table holds three nullable columns with a check constraint allowing
+  exactly those two shapes and none, rather than a JSON column the database
+  could not check.
+- **The API names the shape, so the webapp never guesses.** `forms` is
+  `null` on a card without them, or an object whose `kind` is `joining`,
+  `non_joining` or `word_final`. The last two carry the same final form; the
+  API tells them apart from the letter, and the webapp says why the initial
+  and medial forms are missing rather than leave the cells empty.
+- **Only the content files write forms.** The admin area creates and edits
+  cards without them: the alphabet is starter content, locked like the rest
+  of it, so a card written by hand is vocabulary, and a letter added by hand
+  would duplicate an entry of the files where the review of letters happens.
+  A form changed in the files rewrites the card and sends it back to review,
+  like any other change of its text.
 
 ## Recordings
 
