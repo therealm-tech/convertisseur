@@ -7,5 +7,8 @@ SELECT
     transliteration,
     meaning_fr,
     variety,
+    initial_form,
+    medial_form,
+    final_form,
     review_note
 FROM cards;

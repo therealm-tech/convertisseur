@@ -17,6 +17,7 @@ use crate::{
         audio::NewAudio,
         content::{Ordered, WithAudio},
     },
+    letters::FormColumns,
     storage::{ObjectStore, Storage},
     users::User,
 };
@@ -105,6 +106,8 @@ pub struct Card {
     pub transliteration: Option<String>,
     pub meaning_fr: Option<String>,
     pub variety: Variety,
+    #[sqlx(flatten)]
+    pub forms: FormColumns,
     #[sqlx(flatten)]
     pub audio: AudioColumns,
     #[sqlx(flatten)]

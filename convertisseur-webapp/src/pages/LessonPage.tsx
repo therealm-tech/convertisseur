@@ -2,6 +2,7 @@ import { Link, useLoaderData } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Arabic } from "@/components/Arabic";
 import { BackIcon, CloseIcon } from "@/components/icons";
+import { LetterFormsRow } from "@/components/LetterFormsRow";
 import { PlayButton } from "@/components/PlayButton";
 import { countOf, varietyLabels } from "@/lib/contentLabels";
 import type { StudyCard, StudyLesson } from "@/lib/tracks";
@@ -60,6 +61,9 @@ function Card({
 					<span className="study-hint">Voir la traduction</span>
 				)}
 			</button>
+			{card.forms ? (
+				<LetterFormsRow arabic={card.arabic} forms={card.forms} />
+			) : null}
 		</article>
 	);
 }

@@ -336,6 +336,7 @@ async fn gives_a_lesson_with_its_cards_and_recordings(pool: PgPool) {
                     "transliteration": "wach rak ?",
                     "meaningFr": "ça va ?",
                     "variety": "darija",
+                    "forms": null,
                     "audio": null,
                 },
                 {
@@ -344,6 +345,7 @@ async fn gives_a_lesson_with_its_cards_and_recordings(pool: PgPool) {
                     "transliteration": null,
                     "meaningFr": null,
                     "variety": "classique",
+                    "forms": null,
                     "audio": { "url": card_audio, "durationMs": null },
                 },
             ],

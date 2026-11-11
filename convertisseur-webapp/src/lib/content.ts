@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { expectOk, send, sendForm } from "@/lib/api";
+import { LetterFormsSchema } from "@/lib/letterForms";
 
 const TrackSchema = z.enum(["arabe", "islam"]);
 export type Track = z.infer<typeof TrackSchema>;
@@ -68,6 +69,7 @@ const CardSchema = ReviewSchema.extend({
 	transliteration: z.string().nullable(),
 	meaningFr: z.string().nullable(),
 	variety: VarietySchema,
+	forms: LetterFormsSchema.nullable(),
 	audio: AudioSchema.nullable(),
 });
 export type Card = z.infer<typeof CardSchema>;

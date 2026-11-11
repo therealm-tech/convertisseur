@@ -1,9 +1,12 @@
 use sqlx::{PgExecutor, Postgres};
 use uuid::Uuid;
 
-use crate::content::{
-    Card, CardFields, ContentItem, ContentKind, ContentQuery, Lesson, LessonFields, Status,
-    StatusChange, Track, Unit, UnitFields,
+use crate::{
+    content::{
+        Card, CardFields, ContentItem, ContentKind, ContentQuery, Lesson, LessonFields, Status,
+        StatusChange, Track, Unit, UnitFields,
+    },
+    letters::LetterForms,
 };
 
 /// Key of the transaction-level advisory lock that serialises every write to
@@ -346,14 +349,17 @@ pub async fn find_lesson(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<Op
 }
 
 /// Inserts the row at `position`; `import_key` names the content file entry
-/// it comes from, `None` for what staff write.
+/// it comes from, `None` for what staff write, and `forms` is only ever
+/// written by the content files.
 pub async fn insert_card(
     exec: impl PgExecutor<'_>,
     fields: &CardFields,
+    forms: Option<&LetterForms>,
     position: i32,
     import_key: Option<&str>,
     author: Uuid,
 ) -> sqlx::Result<Uuid> {
+    let [initial, medial, last] = LetterForms::columns(forms);
     sqlx::query_scalar(include_str!("../../queries/cards/insert.sql"))
         .bind(fields.lesson_id)
         .bind(position)
@@ -361,6 +367,9 @@ pub async fn insert_card(
         .bind(&fields.transliteration)
         .bind(&fields.meaning_fr)
         .bind(fields.variety)
+        .bind(initial)
+        .bind(medial)
+        .bind(last)
         .bind(import_key)
         .bind(author)
         .fetch_one(exec)

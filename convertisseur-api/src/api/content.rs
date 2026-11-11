@@ -36,6 +36,7 @@ use crate::{
     },
     db::{self, content::Ordered},
     error::ApiError,
+    letters::{FormColumns, Joining, LetterForms},
     router::AppState,
 };
 
@@ -133,6 +134,52 @@ impl From<Variety> for VarietyJson {
             Variety::Classique => Self::Classique,
             Variety::Darija => Self::Darija,
         }
+    }
+}
+
+/// The shapes of a letter within a word, the tatweel `ـ` standing on the
+/// side it joins; its isolated shape is the card's `arabic`. `kind` says
+/// which shapes the letter has.
+#[derive(Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[schemars(extend("example" = serde_json::json!({
+    "kind": "joining",
+    "initial": "بـ",
+    "medial": "ـبـ",
+    "final": "ـب",
+})))]
+pub enum LetterFormsResponse {
+    /// Joins the letters on both sides.
+    Joining {
+        initial: String,
+        medial: String,
+        r#final: String,
+    },
+    /// Never joins the next letter (ا د ذ ر ز و): no initial or medial
+    /// form.
+    NonJoining { r#final: String },
+    /// Only ever ends a word (ة ى): no initial or medial form.
+    WordFinal { r#final: String },
+}
+
+impl LetterFormsResponse {
+    /// The forms of the letter `arabic`, `None` for a card without them.
+    pub fn of(arabic: &str, forms: FormColumns) -> Option<Self> {
+        Some(match forms.into_forms()? {
+            LetterForms::Joining {
+                initial,
+                medial,
+                r#final,
+            } => Self::Joining {
+                initial,
+                medial,
+                r#final,
+            },
+            LetterForms::FinalOnly { r#final } => match Joining::of(arabic) {
+                Some(Joining::WordFinal) => Self::WordFinal { r#final },
+                _ => Self::NonJoining { r#final },
+            },
+        })
     }
 }
 

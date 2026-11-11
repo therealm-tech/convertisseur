@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { Dialog } from "@/components/Dialog";
+import { LetterFormsRow } from "@/components/LetterFormsRow";
 import { ApiError, problemTypes } from "@/lib/api";
 import {
 	type ContentItem,
@@ -386,6 +387,15 @@ export function ContentDetail({
 				}}
 			>
 				<DraftFields draft={draft} readOnly={imported} onChange={setDraft} />
+				{loaded?.kind === "card" && loaded.item.forms ? (
+					<div className="field">
+						<span className="field-label">Formes</span>
+						<LetterFormsRow
+							arabic={loaded.item.arabic}
+							forms={loaded.item.forms}
+						/>
+					</div>
+				) : null}
 				{loaded ? (
 					<div className="field">
 						<label htmlFor="contenu-position" className="field-label">

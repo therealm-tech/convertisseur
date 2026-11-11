@@ -5,7 +5,10 @@ use std::{collections::HashSet, fmt};
 
 use serde::Deserialize;
 
-use crate::content::{Track, Variety};
+use crate::{
+    content::{Track, Variety},
+    letters::{LetterForms, WrittenForms},
+};
 
 /// The content files, embedded at build time by `build.rs`.
 static FILES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/content_files.rs"));
@@ -36,6 +39,7 @@ pub struct CardEntry {
     pub transliteration: Option<String>,
     pub meaning_fr: Option<String>,
     pub variety: Variety,
+    pub forms: Option<LetterForms>,
 }
 
 /// Every problem found in the content files, each prefixed with its file.
@@ -78,6 +82,16 @@ struct CardFile {
     arabic: String,
     transliteration: Option<String>,
     meaning_fr: Option<String>,
+    forms: Option<FormsFile>,
+}
+
+/// The shapes of a letter within a word, beside its isolated `arabic`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FormsFile {
+    initial: Option<String>,
+    medial: Option<String>,
+    r#final: String,
 }
 
 impl Catalogue {
@@ -181,12 +195,16 @@ fn check_unit(
                             check_text(field, value, &card_key, report);
                         }
                     }
+                    let forms = card
+                        .forms
+                        .and_then(|forms| check_forms(&card.arabic, &forms, &card_key, report));
                     CardEntry {
                         key: card_key,
                         arabic: card.arabic,
                         transliteration: card.transliteration,
                         meaning_fr: card.meaning_fr,
                         variety: file.variety,
+                        forms,
                     }
                 })
                 .collect();
@@ -254,6 +272,26 @@ fn check_arabic(value: &str, key: &str, report: &mut impl FnMut(String)) {
     }
 }
 
+fn check_forms(
+    arabic: &str,
+    forms: &FormsFile,
+    key: &str,
+    report: &mut impl FnMut(String),
+) -> Option<LetterForms> {
+    let written = WrittenForms {
+        initial: forms.initial.as_deref(),
+        medial: forms.medial.as_deref(),
+        r#final: &forms.r#final,
+    };
+    LetterForms::check(arabic, &written)
+        .map_err(|problems| {
+            for problem in problems {
+                report(format!("{key}: forms: {problem}"));
+            }
+        })
+        .ok()
+}
+
 fn is_arabic_letter(c: char) -> bool {
     matches!(c, '\u{0621}'..='\u{064A}' | '\u{0671}'..='\u{06D3}')
 }
@@ -261,7 +299,10 @@ fn is_arabic_letter(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{Catalogue, FILES};
-    use crate::content::{Track, Variety};
+    use crate::{
+        content::{Track, Variety},
+        letters::LetterForms,
+    };
 
     const CARD: &str = "
 key: unit
@@ -413,6 +454,134 @@ lessons:
             "01-unit.yaml: a content file sits",
         );
         assert_refused(&[("divers/01-unit.yaml", CARD)], "divers/01-unit.yaml");
+    }
+
+    const LETTERS: &str = "
+key: unit
+title: Unit
+variety: classique
+lessons:
+  - key: lesson
+    title: Lesson
+    cards:
+      - key: ba
+        arabic: ب
+        forms:
+          initial: بـ
+          medial: ـبـ
+          final: ـب
+      - key: dal
+        arabic: د
+        forms:
+          final: ـد
+      - key: ta-marbuta
+        arabic: ة
+        forms:
+          final: ـة
+";
+
+    #[test]
+    fn reads_the_forms_of_a_letter() {
+        let catalogue = Catalogue::parse(&[("arabe/01-unit.yaml", LETTERS)]).unwrap();
+        let cards = &catalogue.units[0].lessons[0].cards;
+        assert_eq!(
+            cards[0].forms,
+            Some(LetterForms::Joining {
+                initial: "بـ".into(),
+                medial: "ـبـ".into(),
+                r#final: "ـب".into(),
+            })
+        );
+        assert_eq!(
+            cards[1].forms,
+            Some(LetterForms::FinalOnly {
+                r#final: "ـد".into()
+            })
+        );
+        assert_eq!(
+            cards[2].forms,
+            Some(LetterForms::FinalOnly {
+                r#final: "ـة".into()
+            })
+        );
+        let plain = Catalogue::parse(&[("arabe/01-unit.yaml", CARD)]).unwrap();
+        assert_eq!(plain.units[0].lessons[0].cards[0].forms, None);
+    }
+
+    #[test]
+    fn refuses_an_initial_form_for_a_letter_that_does_not_join_the_next() {
+        assert_refused(
+            &[(
+                "arabe/01-unit.yaml",
+                &LETTERS.replace("final: ـد", "initial: دـ\n          final: ـد"),
+            )],
+            "arabe/unit/lesson/dal: forms: د never joins the next letter",
+        );
+    }
+
+    #[test]
+    fn refuses_a_medial_form_without_an_initial_one() {
+        assert_refused(
+            &[(
+                "arabe/01-unit.yaml",
+                &LETTERS.replace("          initial: بـ\n", ""),
+            )],
+            "arabe/unit/lesson/ba: forms: ب joins the next letter",
+        );
+    }
+
+    #[test]
+    fn refuses_a_misplaced_tatweel_or_another_letter() {
+        assert_refused(
+            &[(
+                "arabe/01-unit.yaml",
+                &LETTERS.replace("final: ـب\n", "final: بـ\n"),
+            )],
+            "arabe/unit/lesson/ba: forms: the final form of ب is «ـب»",
+        );
+        assert_refused(
+            &[(
+                "arabe/01-unit.yaml",
+                &LETTERS.replace("final: ـة", "final: ـه"),
+            )],
+            "arabe/unit/lesson/ta-marbuta: forms: the final form of ة is «ـة»",
+        );
+    }
+
+    #[test]
+    fn refuses_forms_on_a_word_or_without_a_final_form() {
+        assert_refused(
+            &[(
+                "arabe/01-unit.yaml",
+                &CARD.replace(
+                    "        meaning_fr: Une maison\n",
+                    "        meaning_fr: Une maison\n        forms:\n          final: ـبيت\n",
+                ),
+            )],
+            "arabe/unit/lesson/card: forms: forms belong to a single letter",
+        );
+        assert_refused(
+            &[(
+                "arabe/01-unit.yaml",
+                &LETTERS.replace("final: ـد", "initial: دـ"),
+            )],
+            "final",
+        );
+    }
+
+    #[test]
+    fn the_letters_of_the_alphabet_have_their_forms() {
+        let catalogue = Catalogue::embedded().unwrap_or_else(|invalid| panic!("{invalid}"));
+        let alphabet = catalogue
+            .units
+            .iter()
+            .find(|unit| unit.key == "arabe/alphabet")
+            .expect("the alphabet unit");
+        let letters: Vec<_> = alphabet.lessons.iter().flat_map(|l| &l.cards).collect();
+        assert_eq!(letters.len(), 28);
+        for letter in letters {
+            assert!(letter.forms.is_some(), "{} has no forms", letter.key);
+        }
     }
 
     #[test]
