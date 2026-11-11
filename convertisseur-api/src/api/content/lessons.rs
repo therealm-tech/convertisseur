@@ -186,7 +186,9 @@ async fn create_lesson(
         &actor,
         fields.unit_id,
         request.position,
-        async |conn, position| db::content::insert_lesson(conn, &fields, position, actor.id).await,
+        async |conn, position| {
+            db::content::insert_lesson(conn, &fields, position, None, actor.id).await
+        },
     )
     .await
     .map_err(|refusal| refused(refusal, "unit_id", "unit_not_found"))?;

@@ -28,6 +28,7 @@ FROM chef AS builder
 COPY --from=planner /usr/local/src/convertisseur/recipe.json recipe.json
 RUN cargo chef cook --release --locked --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
+COPY content/ content/
 COPY convertisseur-api/ convertisseur-api/
 RUN cargo build --release --locked --bin convertisseur-api
 

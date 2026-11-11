@@ -224,7 +224,9 @@ async fn create_card(
         &actor,
         fields.lesson_id,
         request.position,
-        async |conn, position| db::content::insert_card(conn, &fields, position, actor.id).await,
+        async |conn, position| {
+            db::content::insert_card(conn, &fields, position, None, actor.id).await
+        },
     )
     .await
     .map_err(|refusal| refused(refusal, "lesson_id", "lesson_not_found"))?;

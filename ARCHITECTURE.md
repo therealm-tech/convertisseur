@@ -29,9 +29,11 @@ flowchart LR
 
 The Rust server: [axum](https://docs.rs/axum) with
 [aide](https://docs.rs/aide) for the `OpenAPI` document, sqlx for PostgreSQL,
-tokio for the runtime. One binary with two subcommands: `serve`, and
+tokio for the runtime. One binary with three subcommands: `serve`;
 `healthcheck`, which probes `/healthz` of a server on the same host and is the
-container's health check, since the runtime image has no shell or HTTP client.
+container's health check, since the runtime image has no shell or HTTP client;
+and `import-content`, which applies the migrations then imports the starter
+content (see [The starter content](#the-starter-content)).
 
 On `serve`, it connects to PostgreSQL, applies the embedded migrations, runs
 the super admin bootstrap, creates the object store's bucket if it does not
@@ -78,6 +80,14 @@ renders the page not found rather than an empty screen.
 The interface is in French. The visual identity lives in CSS custom properties
 in [`styles.css`](convertisseur-webapp/src/styles.css), with a light and a dark
 set switched by `prefers-color-scheme`.
+
+### `content/`
+
+The starter content: one YAML file per unit, under the directory of its track.
+[`build.rs`](convertisseur-api/build.rs) lists the files and
+[`import/catalogue.rs`](convertisseur-api/src/import/catalogue.rs) embeds them
+with `include_str!`, so they are part of the binary; nothing reads the
+directory at run time.
 
 ### `assets/`
 
@@ -135,10 +145,12 @@ erDiagram
         content_track track "arabe or islam"
         integer position
         text title
+        text import_key "unique, NULL unless imported"
     }
     lessons {
         integer position
         text title
+        text import_key "unique, NULL unless imported"
     }
     cards {
         integer position
@@ -146,6 +158,7 @@ erDiagram
         text transliteration
         text meaning_fr
         arabic_variety variety "classique or darija"
+        text import_key "unique, NULL unless imported"
     }
     audio {
         text object_key "in the object store"
@@ -166,6 +179,9 @@ erDiagram
   its `audio_id`. The row holds the key of the object in the object store,
   `audio/<the row's id>`, its content type, its size, its length when known,
   and who uploaded it.
+- **A row created by `import-content` carries its `import_key`**, the path
+  of keys of its entry in `content/`, unique in its table; a row written in
+  the admin area has none.
 - **`content_items` is a view** over the three tables, in the shape of the
   review list: kind, track, title, parent title, status, last edit.
 
@@ -228,6 +244,37 @@ gets the same `403` as everywhere else.
 - **The endpoints serve content, nothing about the learner.** They hold no
   progress, score or history; the webapp shows a lesson as a sequence of
   cards and keeps nothing once it is left.
+
+## The starter content
+
+The units, lessons and cards a fresh database starts with are written in
+[`content/`](content/), reviewed in pull requests, and created by
+`import-content`, in [`import.rs`](convertisseur-api/src/import.rs). After
+that, the admin area owns them like any other row.
+
+- **A file is one unit, its lessons and their cards, in order.** Units sort
+  by file name within their track's directory. Every entry has a key unique
+  among its siblings, and its full key is the path from the track:
+  `arabe/darija/salutations/wach-rak`. A unit sets the variety of its cards;
+  the `islam` track is in classical Arabic only.
+- **Every file is checked before anything is written**: unknown fields,
+  malformed or repeated keys, blank or non-Arabic `arabic`, a variety that
+  does not fit the track. One problem stops the import, and the error lists
+  them all. A unit test runs the same checks on the files of the build.
+- **The import creates what is missing, and touches nothing else.** An entry
+  whose key a row carries is skipped, whatever its parent, position, text or
+  status; an entry without one is created last among its siblings, under the
+  row of its parent's key, `to_review`, with the super admin as author. Skipped
+  rows keep their content, validation and place, so a correction or a
+  validation made in the admin area always wins, and a second run creates
+  nothing.
+- **One transaction, under the content lock**, for the whole import: a
+  failure leaves nothing half imported, and an admin's concurrent edit waits
+  for it rather than shifting the positions it computes.
+- **The super admin must exist**: the import authors the content with that
+  account, which only `serve` creates, and refuses to run before it.
+- **Every created and skipped entry is logged**, at `info`, with its key, then
+  a summary of both counts per kind.
 
 ## Recordings
 
@@ -598,6 +645,24 @@ store need not be AWS.
 ship in the build, so the installed app renders offline and no font request
 leaves for a third party. Amiri is only downloaded when a page shows Arabic.
 
+**The starter content is built into the binary, not shipped beside it.**
+The import runs wherever the server runs, including the distroless image
+through `docker compose run`, with no directory to mount or configure, and
+the content it imports is always the one the binary's migrations and checks
+were built for. The price is a rebuild for a content change, which goes
+through a pull request and a release anyway.
+
+**Imported rows are found by a key, never by their text.** The text is what
+the reviewer corrects, so matching on it would import a second copy of every
+corrected card. A key survives edits and moves, at the cost of a column per
+table that the admin area never shows.
+
+**The import never updates a row.** Once imported, a row belongs to the
+admin area, where its review status means something; rewriting it from a file
+would undo a reviewer's correction or validation in silence. A fix to a
+content file therefore reaches databases that have not imported that entry
+yet, and nothing else; on an existing database, it is made in the admin area.
+
 **Icons are generated, not committed.** The build rasterises `logo.svg` into
 the favicon, the PWA icons and the Apple touch icon, so there is one logo file
 and no raster that can drift from it.
@@ -653,3 +718,7 @@ and no raster that can drift from it.
   the parent of a new lesson or card.
 - A recording's length is known for WAV and Ogg files only; the others would
   need their whole stream parsed.
+- The import keeps no record of deletions: a unit, lesson or card deleted in
+  the admin area is created again, to review, by the next import.
+- A key changed in `content/` reads as a new entry: the import creates it
+  beside the row of the old key.

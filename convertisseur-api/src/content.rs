@@ -36,8 +36,9 @@ pub enum Status {
     Validated,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, sqlx::Type)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, sqlx::Type, serde::Deserialize)]
 #[sqlx(type_name = "arabic_variety", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum Variety {
     Classique,
     Darija,
@@ -239,7 +240,7 @@ impl From<anyhow::Error> for ContentRefusal {
 /// Makes room for a row under `parent` and returns its position: the one
 /// requested, kept between first and last, or last. `moving` is the row
 /// itself when it is already in the table.
-async fn place<O: Ordered>(
+pub(crate) async fn place<O: Ordered>(
     conn: &mut PgConnection,
     parent: O::Parent,
     requested: Option<i32>,

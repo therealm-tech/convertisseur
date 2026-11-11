@@ -11,6 +11,7 @@ mod content;
 mod db;
 mod error;
 mod health;
+pub mod import;
 mod password;
 mod rate_limit;
 mod router;
@@ -21,6 +22,7 @@ mod users;
 mod webapp;
 
 pub use bootstrap::ensure_super_admin;
+pub use import::import_content;
 pub use router::{AppState, ClientSettings, app};
 pub use sessions::COOKIE_NAME;
 
