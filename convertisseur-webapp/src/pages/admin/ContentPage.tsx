@@ -189,27 +189,29 @@ export function ContentPage() {
 						</button>
 					))}
 				</fieldset>
-				<label htmlFor="content-parcours" className="admin-filter-label">
-					Parcours
-				</label>
-				<select
-					id="content-parcours"
-					className="admin-select"
-					value={track}
-					onChange={(event) => {
-						const chosen = trackOptions.find(
-							(option) => option.value === event.target.value,
-						);
-						setTrack(chosen?.value ?? "");
-						setPageNumber(1);
-					}}
-				>
-					{trackOptions.map((option) => (
-						<option key={option.value} value={option.value}>
-							{option.label}
-						</option>
-					))}
-				</select>
+				<div className="admin-filter">
+					<label htmlFor="content-parcours" className="admin-filter-label">
+						Parcours
+					</label>
+					<select
+						id="content-parcours"
+						className="admin-select"
+						value={track}
+						onChange={(event) => {
+							const chosen = trackOptions.find(
+								(option) => option.value === event.target.value,
+							);
+							setTrack(chosen?.value ?? "");
+							setPageNumber(1);
+						}}
+					>
+						{trackOptions.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</select>
+				</div>
 				<label htmlFor="content-recherche" className="visually-hidden">
 					Rechercher du contenu
 				</label>
