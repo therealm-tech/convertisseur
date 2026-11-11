@@ -46,9 +46,9 @@ pub fn routes() -> ApiRouter<AppState> {
     ApiRouter::new().api_route("/api/v1/audio/{audioId}", get_with(play, play_docs))
 }
 
-fn invalid(code: &'static str) -> ApiError {
+fn invalid(field: &'static str, code: &'static str) -> ApiError {
     let mut errors = ValidationErrors::new();
-    errors.add("file", ValidationError::new(code));
+    errors.add(field, ValidationError::new(code));
     ApiError::Validation(errors)
 }
 
@@ -61,32 +61,56 @@ fn multipart_failure(error: &MultipartError) -> ApiError {
     }
 }
 
-/// The `file` part of the body, recognised from its first bytes.
+/// A `durationMs` part: a whole number of milliseconds, from 1 ms to
+/// [`audio::MAX_CLAIMED_DURATION_MS`].
+fn parse_duration(text: &str) -> Result<u32, ApiError> {
+    text.trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|ms| (1..=audio::MAX_CLAIMED_DURATION_MS).contains(ms))
+        .ok_or_else(|| invalid("durationMs", "duration_invalid"))
+}
+
+/// The `file` part of the body, recognised from its first bytes, and the
+/// optional `durationMs` part, in whatever order they come.
 async fn read_upload(ApiMultipart(mut multipart): ApiMultipart) -> Result<Upload, ApiError> {
+    let mut file = None;
+    let mut claimed_duration_ms = None;
     while let Some(field) = multipart
         .next_field()
         .await
         .map_err(|e| multipart_failure(&e))?
     {
-        if field.name() != Some("file") {
-            continue;
+        match field.name() {
+            Some("file") if file.is_none() => {
+                let claimed = field.content_type().map(str::to_owned);
+                let bytes = field.bytes().await.map_err(|e| multipart_failure(&e))?;
+                if bytes.len() > audio::MAX_BYTES {
+                    return Err(ApiError::TooLarge);
+                }
+                if bytes.is_empty() {
+                    return Err(invalid("file", "file_empty"));
+                }
+                let Some(format) = Format::sniff(&bytes) else {
+                    tracing::debug!(?claimed, size = bytes.len(), "upload is no known audio");
+                    return Err(ApiError::UnsupportedAudio);
+                };
+                tracing::debug!(?claimed, ?format, size = bytes.len(), "upload recognised");
+                file = Some((format, bytes));
+            }
+            Some("durationMs") if claimed_duration_ms.is_none() => {
+                let text = field.text().await.map_err(|e| multipart_failure(&e))?;
+                claimed_duration_ms = Some(parse_duration(&text)?);
+            }
+            _ => {}
         }
-        let claimed = field.content_type().map(str::to_owned);
-        let bytes = field.bytes().await.map_err(|e| multipart_failure(&e))?;
-        if bytes.len() > audio::MAX_BYTES {
-            return Err(ApiError::TooLarge);
-        }
-        if bytes.is_empty() {
-            return Err(invalid("file_empty"));
-        }
-        let Some(format) = Format::sniff(&bytes) else {
-            tracing::debug!(?claimed, size = bytes.len(), "upload is no known audio");
-            return Err(ApiError::UnsupportedAudio);
-        };
-        tracing::debug!(?claimed, ?format, size = bytes.len(), "upload recognised");
-        return Ok(Upload { format, bytes });
     }
-    Err(invalid("file_missing"))
+    let (format, bytes) = file.ok_or_else(|| invalid("file", "file_missing"))?;
+    Ok(Upload {
+        format,
+        bytes,
+        claimed_duration_ms,
+    })
 }
 
 pub async fn put_audio<R: Resource<Rows: WithAudio>>(
@@ -110,7 +134,10 @@ pub fn put_audio_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOpera
              Ogg (Opus or Vorbis), WebM (Opus) or WAV file of at most 10 MB. The type is read \
              from the file's first bytes, whatever the client says, and the file is stored \
              as is. It replaces the recording the item had, which is deleted, and sends the \
-             item back to `to_review`.",
+             item back to `to_review`. The optional `durationMs` part is the length the client measured, \
+             a whole number of milliseconds from 1 to 600000; it is stored only when the server \
+             cannot read the length from the file itself (MP3, MP4 and WebM), and a length the \
+             server reads wins over it.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<AudioResponse>, _>(|r| r.description("The new recording"))
@@ -128,7 +155,9 @@ pub fn put_audio_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOpera
             )
         })
         .response_with::<422, ApiError, _>(|r| {
-            r.description("`file_missing`: no `file` part; `file_empty`: it is empty")
+            r.description("`file_missing`: no `file` part; `file_empty`: it is empty; \
+                 `duration_invalid`: `durationMs` is not a whole number from 1 to 600000",
+            )
         })
 }
 

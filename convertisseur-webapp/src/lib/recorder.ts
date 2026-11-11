@@ -3,10 +3,17 @@ import { logger } from "@/lib/logger";
 /** Why the device cannot record here, or `null` when it can try. */
 export type RecordingObstacle = "insecure" | "unsupported";
 
+/** What a finished recording yields. */
+export interface Recorded {
+	blob: Blob;
+	/** Wall-clock time between the start and the stop. */
+	elapsedMs: number;
+}
+
 /** A recording under way. */
 export interface Recording {
-	/** Stops it and gives back what was recorded. */
-	stop(): Promise<Blob>;
+	/** Stops it and gives back what was recorded, and for how long. */
+	stop(): Promise<Recorded>;
 	/** Stops it and drops what was recorded. */
 	cancel(): void;
 }
@@ -100,18 +107,24 @@ export async function startRecording(): Promise<Recording> {
 		}
 	};
 	recorder.start();
+	const startedAt = performance.now();
 	logger.debug("recorder.started", { mimeType: recorder.mimeType });
 	return {
 		stop: () =>
-			new Promise<Blob>((resolve) => {
+			new Promise<Recorded>((resolve) => {
 				recorder.addEventListener(
 					"stop",
 					() => {
 						release();
 						const type = recorder.mimeType || mimeType || "audio/webm";
 						const blob = new Blob(chunks, { type });
-						logger.debug("recorder.stopped", { type, size: blob.size });
-						resolve(blob);
+						const elapsedMs = Math.round(performance.now() - startedAt);
+						logger.debug("recorder.stopped", {
+							type,
+							size: blob.size,
+							elapsedMs,
+						});
+						resolve({ blob, elapsedMs });
 					},
 					{ once: true },
 				);

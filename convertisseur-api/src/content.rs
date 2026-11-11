@@ -157,6 +157,9 @@ pub struct Playable {
 pub struct Upload {
     pub format: audio::Format,
     pub bytes: Bytes,
+    /// The length the client measured; used only when the file does not
+    /// give its own.
+    pub claimed_duration_ms: Option<u32>,
 }
 
 /// What an author writes in a unit; its position is set apart.
@@ -381,6 +384,7 @@ pub async fn attach_audio<O: WithAudio>(
     let duration_ms = upload
         .format
         .duration_ms(&upload.bytes)
+        .or(upload.claimed_duration_ms)
         .and_then(|ms| i32::try_from(ms).ok());
     storage
         .put(&key, content_type, upload.bytes)

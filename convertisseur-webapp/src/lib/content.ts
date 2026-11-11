@@ -225,15 +225,23 @@ export function audioUrl(audioId: string): string {
 	return `/api/v1/audio/${encodeURIComponent(audioId)}`;
 }
 
-/** Uploads a recording for a card or a lesson, in place of its own. */
+/**
+ * Uploads a recording for a card or a lesson, in place of its own.
+ * `durationMs` is the length the browser measured; the server keeps it only
+ * for the formats whose length it cannot read itself.
+ */
 export async function uploadAudio(
 	kind: "card" | "lesson",
 	id: string,
 	file: Blob,
 	filename: string,
+	durationMs?: number,
 ): Promise<Audio> {
 	const body = new FormData();
 	body.append("file", file, filename);
+	if (durationMs !== undefined) {
+		body.append("durationMs", String(durationMs));
+	}
 	const response = await sendForm("PUT", `${itemPath(kind, id)}/audio`, body);
 	await expectOk(response);
 	return AudioSchema.parse(await response.json());

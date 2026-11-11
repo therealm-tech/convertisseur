@@ -10,6 +10,7 @@ import { type Audio, audioUrl } from "@/lib/content";
 import { describeAudio, formatDuration } from "@/lib/contentLabels";
 import { formatDay } from "@/lib/dates";
 import { logger } from "@/lib/logger";
+import { readDuration } from "@/lib/mediaDuration";
 import {
 	extensionOf,
 	MicrophoneError,
@@ -20,8 +21,15 @@ import {
 
 interface AudioBlockProps {
 	audio: Audio | null;
-	/** Stores the file in place of the current recording. */
-	onUpload: (file: Blob, filename: string) => Promise<void>;
+	/**
+	 * Stores the file in place of the current recording, with the length
+	 * measured in the browser when there is one.
+	 */
+	onUpload: (
+		file: Blob,
+		filename: string,
+		durationMs: number | undefined,
+	) => Promise<void>;
 	onRemove: () => Promise<void>;
 }
 
@@ -88,11 +96,12 @@ export function AudioBlock({ audio, onUpload, onRemove }: AudioBlockProps) {
 	// Leaving the panel mid-recording releases the microphone.
 	useEffect(() => () => recording.current?.cancel(), []);
 
-	async function send(file: Blob, filename: string) {
+	async function send(file: Blob, filename: string, fallbackMs?: number) {
 		setState({ mode: "sending" });
 		setError(undefined);
 		try {
-			await onUpload(file, filename);
+			const durationMs = (await readDuration(file)) ?? fallbackMs;
+			await onUpload(file, filename, durationMs);
 			setState({ mode: "idle" });
 		} catch (failure) {
 			logger.warn("audio.upload_failed", { error: failure });
@@ -136,8 +145,8 @@ export function AudioBlock({ audio, onUpload, onRemove }: AudioBlockProps) {
 		if (!current) {
 			return;
 		}
-		const blob = await current.stop();
-		await send(blob, `enregistrement.${extensionOf(blob.type)}`);
+		const { blob, elapsedMs } = await current.stop();
+		await send(blob, `enregistrement.${extensionOf(blob.type)}`, elapsedMs);
 	}
 
 	async function remove() {
