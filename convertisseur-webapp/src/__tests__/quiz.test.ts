@@ -1,4 +1,13 @@
-import { buildQuiz, hasQuiz, type Random } from "@/lib/quiz";
+import {
+	buildQuiz,
+	gradeQuiz,
+	hasQuiz,
+	PASS_PERCENT,
+	QUIZ_LENGTH,
+	type Question,
+	type Random,
+	requeue,
+} from "@/lib/quiz";
 import type { StudyCard } from "@/lib/tracks";
 
 function card(
@@ -46,18 +55,95 @@ const letters = [
 	card("dal", "د", "« d »", { forms: { kind: "non_joining", final: "ـد" } }),
 ];
 
+function idsOf(questions: readonly Question[]): string[] {
+	return questions.map((question) => question.id);
+}
+
+function neverTwiceInARow(questions: readonly Question[]) {
+	for (const [index, question] of questions.entries()) {
+		expect(question.id).not.toBe(questions[index + 1]?.id);
+	}
+}
+
+const recorded = (id: string) => ({
+	audio: { url: `/api/v1/audio/${id}`, durationMs: 900 },
+});
+
+const manyWords = [
+	...words,
+	card("chokran", "شكرا", "Merci"),
+	card("afak", "عافاك", "S'il te plaît"),
+	card("labas", "لاباس", "Ça va"),
+];
+
 describe("quiz", () => {
-	it("asks one question per card, with the answer among distinct choices", () => {
+	it("asks every question the cards allow, with the answer among distinct choices", () => {
 		for (let seed = 1; seed <= 50; seed++) {
 			const questions = buildQuiz(words, seeded(seed));
 
-			expect(questions.map((question) => question.id).sort()).toEqual(
-				words.map((word) => word.id).sort(),
-			);
+			expect(questions).toHaveLength(10);
+			for (const word of words) {
+				expect(
+					questions
+						.filter((question) => question.id === word.id)
+						.map((question) => question.kind)
+						.sort(),
+				).toEqual(["arabic", "meaning"]);
+			}
 			for (const question of questions) {
 				expect(question.choices).toContain(question.answer);
 				expect(new Set(question.choices).size).toBe(question.choices.length);
 				expect(question.choices).toHaveLength(4);
+			}
+		}
+	});
+
+	it("stops at twelve questions, every card asked at least once", () => {
+		for (let seed = 1; seed <= 50; seed++) {
+			const questions = buildQuiz(manyWords, seeded(seed));
+
+			expect(questions).toHaveLength(QUIZ_LENGTH);
+			expect(new Set(idsOf(questions))).toEqual(
+				new Set(manyWords.map((word) => word.id)),
+			);
+		}
+	});
+
+	it("asks every card once when there are more cards than twelve", () => {
+		const cards = Array.from({ length: 15 }, (_, index) =>
+			card(`w${index}`, `كلمة${index}`, `Mot ${index}`),
+		);
+
+		const questions = buildQuiz(cards, seeded(3));
+
+		expect(questions).toHaveLength(15);
+		expect(new Set(idsOf(questions)).size).toBe(15);
+	});
+
+	it("never asks about the same card twice in a row", () => {
+		for (let seed = 1; seed <= 100; seed++) {
+			neverTwiceInARow(buildQuiz(words.slice(0, 3), seeded(seed)));
+			neverTwiceInARow(buildQuiz(manyWords, seeded(seed)));
+			neverTwiceInARow(buildQuiz(letters, seeded(seed)));
+		}
+	});
+
+	it("asks to recognise a recording among the Arabic of the other cards", () => {
+		const cards = [
+			card("salam", "السلام عليكم", "Bonjour", recorded("salam")),
+			...words.slice(1),
+		];
+
+		for (let seed = 1; seed <= 20; seed++) {
+			const listen = buildQuiz(cards, seeded(seed)).filter(
+				(question) => question.kind === "listen",
+			);
+
+			expect(listen).toHaveLength(1);
+			expect(listen[0]?.prompt).toBe("/api/v1/audio/salam");
+			expect(listen[0]?.answer).toBe("السلام عليكم");
+			for (const choice of listen[0]?.choices ?? []) {
+				expect(cards.map((each) => each.arabic)).toContain(choice);
 			}
 		}
 	});
@@ -140,5 +226,52 @@ describe("quiz", () => {
 		for (const question of buildQuiz(words.slice(0, 3))) {
 			expect(question.choices).toHaveLength(3);
 		}
+	});
+});
+
+describe("requeue", () => {
+	const ask = (id: string, kind: Question["kind"] = "meaning"): Question => ({
+		id,
+		kind,
+		ofLetter: false,
+		prompt: id,
+		choices: ["a", "b", "c", "d"],
+		answer: "a",
+	});
+
+	it("puts a missed question back at the end, its choices reshuffled", () => {
+		const queue = requeue([ask("x"), ask("y")], ask("z"), seeded(4));
+
+		expect(idsOf(queue)).toEqual(["x", "y", "z"]);
+		expect(new Set(queue[2]?.choices)).toEqual(new Set(["a", "b", "c", "d"]));
+	});
+
+	it("keeps it away from a question about the same card", () => {
+		const queue = requeue(
+			[ask("x"), ask("y"), ask("z", "arabic")],
+			ask("z"),
+			seeded(4),
+		);
+
+		expect(idsOf(queue)).toEqual(["x", "z", "y", "z"]);
+	});
+
+	it("asks it again at once when nothing else is left", () => {
+		expect(idsOf(requeue([], ask("z")))).toEqual(["z"]);
+	});
+});
+
+describe("gradeQuiz", () => {
+	it("passes from ninety percent answered right the first time", () => {
+		expect(PASS_PERCENT).toBe(90);
+		expect(gradeQuiz(12, 12)).toEqual({ percent: 100, passed: true });
+		expect(gradeQuiz(12, 11)).toEqual({ percent: 91, passed: true });
+		expect(gradeQuiz(12, 10)).toEqual({ percent: 83, passed: false });
+		expect(gradeQuiz(10, 9)).toEqual({ percent: 90, passed: true });
+		expect(gradeQuiz(6, 0)).toEqual({ percent: 0, passed: false });
+	});
+
+	it("never shows a near miss as ninety percent", () => {
+		expect(gradeQuiz(29, 26)).toEqual({ percent: 89, passed: false });
 	});
 });

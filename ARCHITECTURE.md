@@ -324,21 +324,31 @@ An exercise asks questions about the cards of one lesson, in
 asks them one at a time, with three or four choices each. Nothing about it
 reaches the server: it is built from the lesson the page already loads.
 
-- **Three kinds of question**: the Arabic of a card, pick its meaning; the
-  meaning, pick the Arabic; and for a letter of the alphabet, one of its
-  initial, medial or final forms, pick the isolated letter. On a letter, the
-  meaning is its sound, and the page words the question that way.
-- **One question per card**, of a kind drawn among those the card allows, in
-  a random order. A card without a meaning and without forms asks nothing.
+- **Four kinds of question**: the Arabic of a card, pick its meaning; the
+  meaning, pick the Arabic; for a letter of the alphabet, one of its initial,
+  medial or final forms, pick the isolated letter; and for a card with a
+  recording, the recording, pick the Arabic. On a letter, the meaning is its
+  sound, and the page words the question that way.
+- **Twelve questions, every card asked**: each card asks one question of a
+  kind drawn among those it allows, then the cards ask their other kinds, one
+  card at a time, until the exercise holds twelve. A lesson whose cards allow
+  fewer asks them all; one of more than twelve cards asks each once. A card
+  without a meaning, forms or recording asks nothing.
+- **Two questions about one card never follow each other**, in the order
+  drawn or once a missed question comes back.
 - **The distractors are the other cards of the lesson**, up to three, drawn
   at random. A distractor never reads like the answer: two cards that share a
   meaning are never offered against each other, nor two that share their
   Arabic. A question needs three choices, so a lesson of fewer than three
   cards has no exercise, and the end of the lesson does not offer one.
-- **A question answered wrong comes back at the end**, its choices
+- **A question answered wrong comes back near the end**, its choices
   reshuffled, until it is answered right. The progress bar counts the
-  questions answered right, and the score at the end those answered right the
-  first time.
+  questions answered right.
+- **The grade counts the first try only**: the share of questions answered
+  right the first time, as a percentage rounded down, from `gradeQuiz`. An
+  exercise is passed from 90 %, so a grade that shows 90 % is always a pass.
+  `gradeQuiz` is a pure function and stores nothing, so whatever records a
+  learner's result computes the same grade.
 
 ## The starter content
 

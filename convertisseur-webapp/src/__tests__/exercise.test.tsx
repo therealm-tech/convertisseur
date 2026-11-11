@@ -118,7 +118,7 @@ describe("exercise", () => {
 		expect(screen.getByText("Exercice")).toBeInTheDocument();
 		expect(screen.getByRole("progressbar")).toHaveAttribute(
 			"aria-valuetext",
-			"0 sur 3",
+			"0 sur 6",
 		);
 	});
 
@@ -138,36 +138,37 @@ describe("exercise", () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("asks every card once, then gives the score", async () => {
+	it("asks each card both ways, then grades a pass", async () => {
 		loggedIn();
 		await renderAt("/tracks/arabe/lessons/l-greetings/exercise");
 		await screen.findByRole("heading", { level: 2 });
 		const asked = new Set<string>();
 
-		for (let i = 0; i < 3; i++) {
+		for (let i = 0; i < 6; i++) {
 			const { prompt, answer: expected } = question();
-			asked.add(greetings[prompt] ?? prompt);
+			asked.add(prompt);
 			await answer(true);
 			expect(screen.getByText("Bonne réponse !")).toBeInTheDocument();
 			const right = screen.getByRole("button", { name: /\(bonne réponse\)$/ });
 			expect(right).toHaveTextContent(expected);
 			expect(right).toBeDisabled();
 			await userEvent.click(
-				screen.getByRole("button", { name: i < 2 ? "Continuer" : "Terminer" }),
+				screen.getByRole("button", { name: i < 5 ? "Continuer" : "Terminer" }),
 			);
 		}
 
-		expect(asked).toEqual(new Set(Object.values(greetings)));
+		expect(asked).toEqual(new Set(Object.keys(answers)));
 		expect(
-			screen.getByRole("heading", { name: "Exercice terminé" }),
+			screen.getByRole("heading", { name: "Exercice réussi" }),
 		).toBeInTheDocument();
-		expect(screen.getByText("3 sur 3 du premier coup")).toBeInTheDocument();
+		expect(screen.getByText("100 %")).toBeInTheDocument();
+		expect(screen.getByText("6 sur 6 du premier coup")).toBeInTheDocument();
 		expect(
 			screen.getByRole("link", { name: "Retour au parcours" }),
 		).toHaveAttribute("href", "/tracks/arabe");
 	});
 
-	it("brings a missed question back at the end, and counts it missed", async () => {
+	it("brings a missed question back, and fails under ninety percent", async () => {
 		loggedIn();
 		await renderAt("/tracks/arabe/lessons/l-greetings/exercise");
 		await screen.findByRole("heading", { level: 2 });
@@ -187,24 +188,32 @@ describe("exercise", () => {
 		await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
 		expect(screen.getByRole("progressbar")).toHaveAttribute(
 			"aria-valuetext",
-			"0 sur 3",
+			"0 sur 6",
 		);
 
-		for (let i = 0; i < 2; i++) {
+		const after: string[] = [];
+		while (!screen.queryByRole("heading", { name: /^Exercice / })) {
+			after.push(question().prompt);
 			await answer(true);
-			await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
+			await userEvent.click(
+				screen.getByRole("button", { name: /^(Continuer|Terminer)$/ }),
+			);
 		}
-		expect(question().prompt).toBe(missed);
-		await answer(true);
-		await userEvent.click(screen.getByRole("button", { name: "Terminer" }));
 
-		expect(screen.getByText("2 sur 3 du premier coup")).toBeInTheDocument();
+		expect(after).toHaveLength(6);
+		expect(after).toContain(missed);
+		expect(
+			screen.getByRole("heading", { name: "Exercice à refaire" }),
+		).toBeInTheDocument();
+		expect(screen.getByText("83 %")).toBeInTheDocument();
+		expect(screen.getByText("5 sur 6 du premier coup")).toBeInTheDocument();
+		expect(screen.getByText("Il faut 90 % pour réussir.")).toBeInTheDocument();
 
 		await userEvent.click(screen.getByRole("button", { name: "Recommencer" }));
 
 		expect(screen.getByRole("progressbar")).toHaveAttribute(
 			"aria-valuetext",
-			"0 sur 3",
+			"0 sur 6",
 		);
 		expect(question().choices).toHaveLength(3);
 	});
@@ -242,6 +251,55 @@ describe("exercise", () => {
 		expect(
 			(await screen.findByRole("heading", { level: 2 })).textContent,
 		).toMatch(/^(Quel son \?|Quelle lettre \?|Quelle est cette lettre \?)$/);
+	});
+
+	it("asks to recognise a card's recording", async () => {
+		const api = loggedIn();
+		api.content.seed("lesson", {
+			id: "l-heard",
+			parentId: "u-darija",
+			title: "Entendre",
+			...validated,
+		});
+		for (const [index, [arabic, meaningFr]] of Object.entries(
+			greetings,
+		).entries()) {
+			api.content.seed("card", {
+				id: `h-${index}`,
+				parentId: "l-heard",
+				arabic,
+				meaningFr,
+				audio: {
+					id: `a-${index}`,
+					contentType: "audio/mpeg",
+					sizeBytes: 1000,
+					durationMs: 1200,
+					createdAt: "2026-10-01T09:00:00Z",
+				},
+				...validated,
+			});
+		}
+
+		await renderAt("/tracks/arabe/lessons/l-heard/exercise");
+		await screen.findByRole("heading", { level: 2 });
+		while (!screen.queryByRole("heading", { name: "Qu'entends-tu ?" })) {
+			const [first] = question().choices;
+			if (first) {
+				await userEvent.click(first);
+			}
+			await userEvent.click(
+				screen.getByRole("button", { name: /^(Continuer|Terminer)$/ }),
+			);
+		}
+
+		expect(screen.getByRole("button", { name: "Écouter" })).toBeInTheDocument();
+		expect(document.querySelector("audio")?.getAttribute("src")).toMatch(
+			/^\/api\/v1\/audio\/a-[0-2]$/,
+		);
+		const group = screen.getByRole("group", { name: "Qu'entends-tu ?" });
+		for (const choice of within(group).getAllByRole("button")) {
+			expect(Object.keys(greetings)).toContain(choice.textContent);
+		}
 	});
 
 	it("says when a lesson is too short for one", async () => {

@@ -2145,6 +2145,14 @@ a.button-secondary {
 	color: var(--color-on-error-soft);
 }
 
+.quiz-grade {
+	margin: 4px 0 0;
+	font-size: 52px;
+	font-weight: 900;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+
 .quiz-feedback-slot {
 	margin-top: auto;
 }
