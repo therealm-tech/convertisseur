@@ -19,7 +19,9 @@ SELECT
     cards.updated_at,
     cards.updated_by,
     cards.validated_at,
-    cards.validated_by
+    cards.validated_by,
+    cards.import_key,
+    cards.review_note
 FROM cards
 INNER JOIN lessons ON cards.lesson_id = lessons.id
 INNER JOIN units ON lessons.unit_id = units.id

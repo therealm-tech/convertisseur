@@ -47,6 +47,58 @@ function ClockIcon() {
 	);
 }
 
+export function NoteIcon() {
+	return (
+		<svg
+			width="16"
+			height="16"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2.4"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M5 5h14v10H10l-5 4z" />
+			<path d="M9 9h6M9 12h4" />
+		</svg>
+	);
+}
+
+/** Marks a row of the list whose item carries a review note. */
+export function NoteFlag() {
+	return (
+		<span className="note-flag">
+			<NoteIcon />
+			Remarque
+		</span>
+	);
+}
+
+/** Marks an item whose text and place live in the repository's files. */
+export function RepoBadge() {
+	return (
+		<span className="repo-badge">
+			<svg
+				width="14"
+				height="14"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="2.6"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				aria-hidden="true"
+			>
+				<rect x="5" y="11" width="14" height="9" rx="2" />
+				<path d="M8 11V8a4 4 0 0 1 8 0v3" />
+			</svg>
+			Géré dans le repo
+		</span>
+	);
+}
+
 /** A card's Arabic, then its transliteration; any other item's title. */
 export function ItemTitle({
 	title,

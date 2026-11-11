@@ -9,6 +9,8 @@ SELECT
     updated_at,
     updated_by,
     validated_at,
-    validated_by
+    validated_by,
+    import_key,
+    review_note
 FROM units
 WHERE id = $1;

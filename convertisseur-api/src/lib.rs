@@ -11,20 +11,20 @@ mod content;
 mod db;
 mod error;
 mod health;
-pub mod import;
 mod password;
 mod rate_limit;
 mod router;
 mod sessions;
 pub mod storage;
+pub mod sync;
 mod tracks;
 mod users;
 mod webapp;
 
 pub use bootstrap::ensure_super_admin;
-pub use import::import_content;
 pub use router::{AppState, ClientSettings, app};
 pub use sessions::COOKIE_NAME;
+pub use sync::sync_content;
 
 /// The schema migrations, embedded at compile time.
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();

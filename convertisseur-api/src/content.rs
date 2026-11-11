@@ -21,7 +21,7 @@ use crate::{
     users::User,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, sqlx::Type)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, sqlx::Type)]
 #[sqlx(type_name = "content_track", rename_all = "snake_case")]
 pub enum Track {
     Arabe,
@@ -62,6 +62,11 @@ pub struct Review {
     pub updated_by: Option<Uuid>,
     pub validated_at: Option<DateTime<Utc>>,
     pub validated_by: Option<Uuid>,
+    /// The content file entry the row comes from; `None` for what staff
+    /// write in the admin area.
+    pub import_key: Option<String>,
+    #[sqlx(rename = "review_note")]
+    pub note: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -190,6 +195,8 @@ pub struct ContentQuery<'a> {
     /// Part of the title or the text, compared case-insensitively and
     /// without Arabic diacritics.
     pub text: Option<&'a str>,
+    /// Whether the item carries a review note.
+    pub has_review_note: Option<bool>,
 }
 
 /// A unit, lesson or card as the review list shows it.
@@ -203,6 +210,8 @@ pub struct ContentItem {
     pub parent_title: Option<String>,
     pub status: Status,
     pub updated_at: DateTime<Utc>,
+    pub import_key: Option<String>,
+    pub review_note: Option<String>,
 }
 
 /// The review state of a row after a status change.
@@ -222,6 +231,9 @@ pub enum ContentRefusal {
     ParentNotFound,
     /// The unit still has lessons, or the lesson still has cards.
     NotEmpty,
+    /// The row comes from the content files, which alone change its text and
+    /// place, and delete it.
+    Imported,
     Failed(anyhow::Error),
 }
 
@@ -292,6 +304,10 @@ pub async fn update<O: Ordered>(
     let Some(current) = db::content::lock_row::<O>(&mut *tx, id).await? else {
         return Err(ContentRefusal::NotFound);
     };
+    if current.imported {
+        tracing::debug!(kind = ?O::KIND, %id, "update refused: imported");
+        return Err(ContentRefusal::Imported);
+    }
     db::content::shift::<O>(
         &mut *tx,
         current.parent,
@@ -312,8 +328,8 @@ pub async fn update<O: Ordered>(
 }
 
 /// Deletes a row, its recording with it, and closes the gap it leaves;
-/// succeeds when it is already gone. A unit with lessons or a lesson with
-/// cards stays.
+/// succeeds when it is already gone. An imported row, a unit with lessons
+/// and a lesson with cards stay.
 pub async fn delete<O: Ordered>(
     pool: &PgPool,
     storage: &Storage,
@@ -322,6 +338,14 @@ pub async fn delete<O: Ordered>(
 ) -> Result<(), ContentRefusal> {
     let mut tx = pool.begin().await?;
     db::content::lock(&mut *tx).await?;
+    let Some(current) = db::content::lock_row::<O>(&mut *tx, id).await? else {
+        tracing::debug!(kind = ?O::KIND, %id, "already deleted");
+        return Ok(());
+    };
+    if current.imported {
+        tracing::debug!(kind = ?O::KIND, %id, "deletion refused: imported");
+        return Err(ContentRefusal::Imported);
+    }
     if db::content::has_children::<O>(&mut *tx, id).await? {
         tracing::debug!(kind = ?O::KIND, %id, "deletion refused: not empty");
         return Err(ContentRefusal::NotEmpty);
@@ -352,7 +376,7 @@ pub async fn delete<O: Ordered>(
 
 /// Deletes an object whose row is gone. A failure leaves an orphan, which
 /// takes no space anyone reads: it is logged, not raised.
-async fn delete_object(storage: &Storage, key: &str) {
+pub(crate) async fn delete_object(storage: &Storage, key: &str) {
     if let Err(error) = storage.delete(key).await {
         tracing::warn!(
             key,
@@ -479,6 +503,23 @@ pub async fn set_status<O: Ordered>(
         .ok_or(ContentRefusal::NotFound)?;
     tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, ?status, "review status set");
     Ok(change)
+}
+
+/// Writes the row's review note, or clears it with `None`. The note
+/// leaves the status as it is: sending the row back to review is a
+/// decision of its own.
+pub async fn set_review_note<O: Ordered>(
+    pool: &PgPool,
+    actor: &User,
+    id: Uuid,
+    note: Option<String>,
+) -> Result<Option<String>, ContentRefusal> {
+    let chars = note.as_deref().map_or(0, |note| note.chars().count());
+    let note = db::content::set_review_note::<O>(pool, id, note.as_deref())
+        .await?
+        .ok_or(ContentRefusal::NotFound)?;
+    tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, chars, "review note set");
+    Ok(note)
 }
 
 /// The usernames of the accounts `ids` name, for those that still exist.

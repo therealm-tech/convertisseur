@@ -11,6 +11,7 @@ import {
 	type ItemOf,
 	type Kind,
 	listContent,
+	setReviewNote,
 	setStatus,
 	type Track,
 	updateItem,
@@ -19,7 +20,7 @@ import {
 } from "@/lib/content";
 import { kindLabels, trackLabels, varietyLabels } from "@/lib/contentLabels";
 import { AudioBlock } from "@/pages/admin/AudioBlock";
-import { ItemTitle, StatusPill } from "@/pages/admin/contentParts";
+import { ItemTitle, RepoBadge, StatusPill } from "@/pages/admin/contentParts";
 
 export type Selection =
 	| { mode: "edit"; kind: Kind; id: string }
@@ -53,7 +54,12 @@ const fieldMessages: Record<string, string> = {
 	unit_not_found: "Cette unité n'existe plus.",
 	lesson_not_found: "Cette leçon n'existe plus.",
 	range: "La position doit être un nombre à partir de 1.",
+	review_note_length: "La remarque ne doit pas dépasser 2000 caractères.",
 };
+
+const MAX_NOTE_CHARS = 2000;
+
+const IMPORTED = "Ce contenu se corrige dans les fichiers du dépôt.";
 
 const notEmptyMessages: Record<Kind, string> = {
 	unit: "Cette unité contient encore des leçons : déplace-les ou supprime-les d'abord.",
@@ -152,6 +158,9 @@ function describeFailure(failure: unknown, kind: Kind): string {
 		if (failure.type === problemTypes.notEmpty) {
 			return notEmptyMessages[kind];
 		}
+		if (failure.type === problemTypes.importedContent) {
+			return IMPORTED;
+		}
 		const messages = failure.fieldProblems
 			.map((problem) => fieldMessages[problem.code])
 			.filter((message) => message !== undefined);
@@ -178,6 +187,7 @@ export function ContentDetail({
 			: { phase: "loading" },
 	);
 	const [position, setPosition] = useState("");
+	const [note, setNote] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | undefined>();
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -192,6 +202,7 @@ export function ContentDetail({
 				if (current) {
 					setState({ phase: "ready", loaded, draft: draftOf(loaded) });
 					setPosition(String(loaded.item.position));
+					setNote(loaded.item.reviewNote ?? "");
 				}
 			},
 			(failure: unknown) => {
@@ -225,6 +236,7 @@ export function ContentDetail({
 
 	const { loaded, draft } = state;
 	const kind = draft.kind;
+	const imported = loaded?.item.importKey != null;
 
 	function setDraft(next: Draft) {
 		if (state.phase === "ready") {
@@ -299,6 +311,32 @@ export function ContentDetail({
 		}
 	}
 
+	async function saveNote(current: Loaded) {
+		setBusy(true);
+		setError(undefined);
+		try {
+			const reviewNote = await setReviewNote(
+				current.kind,
+				current.item.id,
+				note,
+			);
+			const item = { ...current.item, reviewNote };
+			setState({
+				phase: "ready",
+				// The spread keeps the item of the same kind it came from.
+				loaded: { ...current, item } as Loaded,
+				draft,
+			});
+			setNote(reviewNote ?? "");
+			onChanged(reviewNote ? "Remarque enregistrée." : "Remarque effacée.");
+		} catch (failure) {
+			onFailure("admin.content_note_failed", failure);
+			setError(describeFailure(failure, current.kind));
+		} finally {
+			setBusy(false);
+		}
+	}
+
 	async function confirmDelete(current: Loaded) {
 		setConfirmingDelete(false);
 		setBusy(true);
@@ -321,12 +359,23 @@ export function ContentDetail({
 						? `${kindLabels[kind]} · ${trackLabels[loaded.item.track]}`
 						: `Nouvelle ${kindLabels[kind].toLowerCase()}`}
 				</span>
-				{loaded ? <StatusPill status={loaded.item.status} /> : null}
+				{loaded ? (
+					<span className="content-detail-badges">
+						{imported ? <RepoBadge /> : null}
+						<StatusPill status={loaded.item.status} />
+					</span>
+				) : null}
 			</div>
 			{loaded ? (
 				<h2 className="content-detail-title">
 					<LoadedTitle loaded={loaded} />
 				</h2>
+			) : null}
+			{imported ? (
+				<p className="content-locked">
+					Texte et place se corrigent dans le dépôt. Signale une erreur par une
+					remarque.
+				</p>
 			) : null}
 
 			<form
@@ -336,7 +385,7 @@ export function ContentDetail({
 					void submit();
 				}}
 			>
-				<DraftFields draft={draft} onChange={setDraft} />
+				<DraftFields draft={draft} readOnly={imported} onChange={setDraft} />
 				{loaded ? (
 					<div className="field">
 						<label htmlFor="contenu-position" className="field-label">
@@ -348,6 +397,7 @@ export function ContentDetail({
 							type="number"
 							inputMode="numeric"
 							min={1}
+							readOnly={imported}
 							value={position}
 							onChange={(event) => setPosition(event.target.value)}
 						/>
@@ -379,7 +429,37 @@ export function ContentDetail({
 					</p>
 				) : null}
 
-				{loaded ? <ReviewNote loaded={loaded} /> : null}
+				{loaded ? (
+					<div className="field">
+						<label htmlFor="contenu-remarque" className="field-label">
+							Remarque de relecture
+						</label>
+						<textarea
+							id="contenu-remarque"
+							className="field-input field-textarea"
+							rows={3}
+							maxLength={MAX_NOTE_CHARS}
+							placeholder="Ex. : vocalisation fausse sur le 2e mot"
+							value={note}
+							onChange={(event) => setNote(event.target.value)}
+						/>
+						<div className="note-actions">
+							<span className="field-hint">
+								{note.length} / {MAX_NOTE_CHARS}
+							</span>
+							<button
+								type="button"
+								className="button-small"
+								disabled={busy || note === (loaded.item.reviewNote ?? "")}
+								onClick={() => void saveNote(loaded)}
+							>
+								Enregistrer la remarque
+							</button>
+						</div>
+					</div>
+				) : null}
+
+				{loaded ? <ReviewState loaded={loaded} /> : null}
 
 				{error ? (
 					<p role="alert" className="form-error">
@@ -388,9 +468,11 @@ export function ContentDetail({
 				) : null}
 
 				<div className="content-actions">
-					<button type="submit" className="button-outline" disabled={busy}>
-						{loaded ? "Sauvegarder" : "Créer"}
-					</button>
+					{imported ? null : (
+						<button type="submit" className="button-outline" disabled={busy}>
+							{loaded ? "Sauvegarder" : "Créer"}
+						</button>
+					)}
 					{loaded ? (
 						<button
 							type="button"
@@ -408,7 +490,7 @@ export function ContentDetail({
 						</button>
 					) : null}
 				</div>
-				{loaded ? (
+				{loaded && !imported ? (
 					<button
 						type="button"
 						className="button-small button-danger content-delete"
@@ -463,7 +545,7 @@ function LoadedTitle({ loaded }: { loaded: Loaded }) {
 	return <>{loaded.item.title}</>;
 }
 
-function ReviewNote({ loaded }: { loaded: Loaded }) {
+function ReviewState({ loaded }: { loaded: Loaded }) {
 	const { status, validatedBy } = loaded.item;
 	return (
 		<p className="review-note">
@@ -476,15 +558,18 @@ function ReviewNote({ loaded }: { loaded: Loaded }) {
 
 interface DraftFieldsProps {
 	draft: Draft;
+	/** An imported item's fields are shown, not edited. */
+	readOnly: boolean;
 	onChange: (draft: Draft) => void;
 }
 
-function DraftFields({ draft, onChange }: DraftFieldsProps) {
+function DraftFields({ draft, readOnly, onChange }: DraftFieldsProps) {
 	switch (draft.kind) {
 		case "unit":
 			return (
 				<>
 					<SelectField
+						disabled={readOnly}
 						id="contenu-parcours"
 						label="Parcours"
 						value={draft.fields.track}
@@ -497,6 +582,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 						}
 					/>
 					<InputField
+						readOnly={readOnly}
 						id="contenu-titre"
 						label="Titre"
 						value={draft.fields.title}
@@ -510,6 +596,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 			return (
 				<>
 					<ParentField
+						disabled={readOnly}
 						kind="unit"
 						value={draft.fields.unitId}
 						onChange={(unitId) =>
@@ -517,6 +604,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 						}
 					/>
 					<InputField
+						readOnly={readOnly}
 						id="contenu-titre"
 						label="Titre"
 						value={draft.fields.title}
@@ -530,6 +618,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 			return (
 				<>
 					<ParentField
+						disabled={readOnly}
 						kind="lesson"
 						value={draft.fields.lessonId}
 						onChange={(lessonId) =>
@@ -537,6 +626,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 						}
 					/>
 					<InputField
+						readOnly={readOnly}
 						id="contenu-arabe"
 						label="Recto (arabe, avec voyelles)"
 						arabic
@@ -547,6 +637,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 					/>
 					<div className="content-form-pair">
 						<InputField
+							readOnly={readOnly}
 							id="contenu-translitteration"
 							label="Translittération"
 							value={draft.fields.transliteration}
@@ -558,6 +649,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 							}
 						/>
 						<InputField
+							readOnly={readOnly}
 							id="contenu-sens"
 							label="Sens"
 							value={draft.fields.meaningFr}
@@ -570,6 +662,7 @@ function DraftFields({ draft, onChange }: DraftFieldsProps) {
 						/>
 					</div>
 					<SelectField
+						disabled={readOnly}
 						id="contenu-variete"
 						label="Variété"
 						value={draft.fields.variety}
@@ -591,10 +684,18 @@ interface InputFieldProps {
 	label: string;
 	value: string;
 	arabic?: boolean;
+	readOnly: boolean;
 	onChange: (value: string) => void;
 }
 
-function InputField({ id, label, value, arabic, onChange }: InputFieldProps) {
+function InputField({
+	id,
+	label,
+	value,
+	arabic,
+	readOnly,
+	onChange,
+}: InputFieldProps) {
 	return (
 		<div className="field">
 			<label htmlFor={id} className="field-label">
@@ -606,6 +707,7 @@ function InputField({ id, label, value, arabic, onChange }: InputFieldProps) {
 				type="text"
 				autoComplete="off"
 				{...(arabic ? { lang: "ar", dir: "rtl" } : {})}
+				readOnly={readOnly}
 				value={value}
 				onChange={(event) => onChange(event.target.value)}
 			/>
@@ -618,6 +720,7 @@ interface SelectFieldProps<T extends string> {
 	label: string;
 	value: T;
 	options: readonly { value: T; label: string }[];
+	disabled: boolean;
 	onChange: (value: T) => void;
 }
 
@@ -626,6 +729,7 @@ function SelectField<T extends string>({
 	label,
 	value,
 	options,
+	disabled,
 	onChange,
 }: SelectFieldProps<T>) {
 	return (
@@ -637,6 +741,7 @@ function SelectField<T extends string>({
 				id={id}
 				className="admin-select"
 				value={value}
+				disabled={disabled}
 				onChange={(event) => {
 					const chosen = options.find(
 						(option) => option.value === event.target.value,
@@ -662,10 +767,12 @@ const PARENT_PAGE = 100;
 function ParentField({
 	kind,
 	value,
+	disabled,
 	onChange,
 }: {
 	kind: "unit" | "lesson";
 	value: string;
+	disabled: boolean;
 	onChange: (id: string) => void;
 }) {
 	const id = useId();
@@ -700,7 +807,7 @@ function ParentField({
 				id={id}
 				className="admin-select"
 				value={value}
-				disabled={parents === undefined}
+				disabled={disabled || parents === undefined}
 				onChange={(event) => onChange(event.target.value)}
 			>
 				<option value="" disabled>

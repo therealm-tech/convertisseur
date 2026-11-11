@@ -96,23 +96,32 @@ The starter units, lessons and cards live in [`content/`](content/), one YAML
 file per unit under the directory of its track, `arabe/` or `islam/`; files
 sort by name, which is the order of the units. Each unit, lesson and card has
 a `key`, lowercase words joined by `-`, unique among its siblings; the path of
-keys, such as `islam/coran/al-fatiha/aya-3`, identifies the row the import
-creates, so a key never changes once merged. A unit sets the `variety` of all
-its cards, and the `islam` track is `classique` only.
+keys, such as `islam/coran/al-fatiha/aya-3`, identifies the row the sync
+keeps in step with the entry, so a key never changes once merged: a new key,
+or an entry moved to another unit or lesson, reads as a deletion and a
+creation, and the row loses its review status, its note and its recording.
+Reordering entries among their siblings keeps them. A unit sets the `variety`
+of all its cards, and the `islam` track is `classique` only.
 
 The files are built into the binary, so a change takes a rebuild. The tests
 check that they follow the model:
 
 ```sh
-cargo test --lib import
+cargo test --lib sync
 ```
 
-Import them into the compose PostgreSQL, once `cargo run -- serve` has
-created the super admin:
+`cargo run -- serve` syncs them into the compose PostgreSQL as it starts, and
+logs every row it creates, rewrites, moves or deletes.
+
+Reviewers report errors in review notes. The admin list gives them with the
+key of each entry, which names the file and the entry to correct:
 
 ```sh
-cargo run -- import-content
+curl --cookie "convertisseur_session=<session token>" "http://localhost:3000/api/v1/content-items?hasReviewNote=true&perPage=100"
 ```
+
+Correcting an entry's text sends its row back to review and clears its note
+on the next start-up.
 
 ## Running the tests
 

@@ -29,15 +29,14 @@ flowchart LR
 
 The Rust server: [axum](https://docs.rs/axum) with
 [aide](https://docs.rs/aide) for the `OpenAPI` document, sqlx for PostgreSQL,
-tokio for the runtime. One binary with three subcommands: `serve`;
+tokio for the runtime. One binary with two subcommands: `serve`, and
 `healthcheck`, which probes `/healthz` of a server on the same host and is the
-container's health check, since the runtime image has no shell or HTTP client;
-and `import-content`, which applies the migrations then imports the starter
-content (see [The starter content](#the-starter-content)).
+container's health check, since the runtime image has no shell or HTTP client.
 
 On `serve`, it connects to PostgreSQL, applies the embedded migrations, runs
 the super admin bootstrap, creates the object store's bucket if it does not
-exist, then listens. `SIGTERM` and `SIGINT` stop it
+exist, syncs the starter content (see [The starter content](#the-starter-content)),
+then listens. `SIGTERM` and `SIGINT` stop it
 accepting connections and let in-flight requests finish before it exits.
 
 It owns the whole URL space, split by path:
@@ -85,7 +84,7 @@ set switched by `prefers-color-scheme`.
 
 The starter content: one YAML file per unit, under the directory of its track.
 [`build.rs`](convertisseur-api/build.rs) lists the files and
-[`import/catalogue.rs`](convertisseur-api/src/import/catalogue.rs) embeds them
+[`sync/catalogue.rs`](convertisseur-api/src/sync/catalogue.rs) embeds them
 with `include_str!`, so they are part of the binary; nothing reads the
 directory at run time.
 
@@ -146,11 +145,13 @@ erDiagram
         integer position
         text title
         text import_key "unique, NULL unless imported"
+        text review_note "NULL unless a reviewer wrote one"
     }
     lessons {
         integer position
         text title
         text import_key "unique, NULL unless imported"
+        text review_note "NULL unless a reviewer wrote one"
     }
     cards {
         integer position
@@ -159,6 +160,7 @@ erDiagram
         text meaning_fr
         arabic_variety variety "classique or darija"
         text import_key "unique, NULL unless imported"
+        text review_note "NULL unless a reviewer wrote one"
     }
     audio {
         text object_key "in the object store"
@@ -179,11 +181,14 @@ erDiagram
   its `audio_id`. The row holds the key of the object in the object store,
   `audio/<the row's id>`, its content type, its size, its length when known,
   and who uploaded it.
-- **A row created by `import-content` carries its `import_key`**, the path
+- **A row created by the content sync carries its `import_key`**, the path
   of keys of its entry in `content/`, unique in its table; a row written in
   the admin area has none.
+- **A `review_note` is what a reviewer reports about a row**, up to 2000
+  characters, on any unit, lesson or card.
 - **`content_items` is a view** over the three tables, in the shape of the
-  review list: kind, track, title, parent title, status, last edit.
+  review list: kind, track, title, parent title, status, last edit, import
+  key and review note.
 
 ## Content and its review
 
@@ -209,15 +214,26 @@ Staff write units, lessons and cards in the admin area; a reviewer, any
 - **A unit with lessons or a lesson with cards is not deleted**: the request
   answers `409` `not-empty`, and its children have to be moved or deleted
   first. A deletion never takes more than the row named.
+- **An imported row's text and place belong to the content files.** Its
+  `PUT` and `DELETE` answer `409` `imported-content`, whatever they would
+  change, so that no edit is made in the admin area that the next sync would
+  undo. Its status, its recording and its review note stay open, and so do
+  its children written in the admin area: a card added to an imported lesson
+  is edited, moved and deleted like any other.
+- **A review note is not a status.** `PUT …/review-note` writes or clears it
+  on any row, imported or not, and leaves the status alone: a reviewer who
+  wants the row hidden again sends it back to review as well.
 - **The admin endpoints are for staff alone.** Every endpoint of `/units`,
   `/lessons`, `/cards` and `/content-items` takes `RequireRole<Admin>`, and
   shows content whatever its status. Learners read through their own
   endpoints, described below.
 
 The review list (`GET /api/v1/content-items`) spans the three kinds, the most
-recently edited first, filtered by status, track, kind and text. Its
-`statusCounts` count each status under the other filters, for the filter's
-badges. The text search compares through `content_search_key`, a SQL function
+recently edited first, filtered by status, track, kind, text and presence of
+a review note. Its `statusCounts` count each status under the other filters,
+and its `reviewNoteCount` the rows with a note, for the filters' badges. Each
+item carries its `importKey` and its `reviewNote`, so that the list of notes
+is also the list of entries of `content/` to correct. The text search compares through `content_search_key`, a SQL function
 that lowercases and strips the Arabic short vowels, other diacritics and the
 tatweel, so `شكرا` finds `شُكْرًا`.
 
@@ -247,10 +263,24 @@ gets the same `403` as everywhere else.
 
 ## The starter content
 
-The units, lessons and cards a fresh database starts with are written in
-[`content/`](content/), reviewed in pull requests, and created by
-`import-content`, in [`import.rs`](convertisseur-api/src/import.rs). After
-that, the admin area owns them like any other row.
+The units, lessons and cards a database starts with are written in
+[`content/`](content/), reviewed in pull requests, and brought into the
+database by the sync in [`sync.rs`](convertisseur-api/src/sync.rs), at every
+start-up of `serve`. The files are the only source of what they hold: an
+imported row follows them in text, place and existence, and the admin area
+reviews it, records it and annotates it.
+
+```mermaid
+sequenceDiagram
+    participant R as Reviewer
+    participant S as convertisseur-api
+    participant G as content/ in the repository
+    R->>S: PUT …/review-note "wrong vowel on the 2nd word"
+    Note over G: a pull request corrects the entry the importKey names
+    G->>S: the next image, at start-up
+    S->>S: rewrite the row, back to to_review, note cleared
+    R->>S: PUT …/status validated
+```
 
 - **A file is one unit, its lessons and their cards, in order.** Units sort
   by file name within their track's directory. Every entry has a key unique
@@ -259,22 +289,35 @@ that, the admin area owns them like any other row.
   the `islam` track is in classical Arabic only.
 - **Every file is checked before anything is written**: unknown fields,
   malformed or repeated keys, blank or non-Arabic `arabic`, a variety that
-  does not fit the track. One problem stops the import, and the error lists
+  does not fit the track. One problem stops the start-up, and the error lists
   them all. A unit test runs the same checks on the files of the build.
-- **The import creates what is missing, and touches nothing else.** An entry
-  whose key a row carries is skipped, whatever its parent, position, text or
-  status; an entry without one is created last among its siblings, under the
-  row of its parent's key, `to_review`, with the super admin as author. Skipped
-  rows keep their content, validation and place, so a correction or a
-  validation made in the admin area always wins, and a second run creates
-  nothing.
-- **One transaction, under the content lock**, for the whole import: a
-  failure leaves nothing half imported, and an admin's concurrent edit waits
-  for it rather than shifting the positions it computes.
-- **The super admin must exist**: the import authors the content with that
-  account, which only `serve` creates, and refuses to run before it.
-- **Every created and skipped entry is logged**, at `info`, with its key, then
-  a summary of both counts per kind.
+- **The sync makes every imported row match its entry.** An entry no row
+  carries the key of is created, `to_review`, authored by the super admin. A
+  row whose text differs from its entry's (title, Arabic, transliteration,
+  meaning, variety, track) is rewritten, sent back to `to_review` with its
+  validation cleared, and its review note is cleared too, since the change
+  answers it. A row whose text matches keeps its status and note. A row whose
+  parent or place differs is moved, keeping its status, as a move in the admin
+  area does. A row whose key no entry has any more is deleted, with its
+  recording.
+- **Imported siblings take the order of the files; a row written in the
+  admin area keeps its neighbour.** It stays right after the imported sibling
+  it followed, or first when no imported sibling came before it, and rows
+  that followed the same one keep their order among themselves. When that
+  sibling leaves, it follows the previous imported one that stays.
+- **A sync never deletes work done in the admin area.** When a unit or lesson
+  gone from the files still holds a lesson or card written in the admin area,
+  the sync fails and names each of them, rather than delete them with it.
+- **One transaction, under the content lock**, for the whole sync: a failure
+  leaves nothing half done, an admin's concurrent edit waits for it, and
+  replicas starting together sync one after the other, the later ones finding
+  nothing to change. The objects of the deleted recordings are deleted after
+  the commit, like any other deletion's.
+- **Every change is logged at `info`**, with its key: created, rewritten,
+  note cleared, moved, deleted; then one `content synced` line counts what
+  was created, updated, moved, deleted and left unchanged per kind. A row
+  both rewritten and moved counts as updated, and a row that only shifts for
+  a sibling created, deleted or moved counts as unchanged.
 
 ## Recordings
 
@@ -524,16 +567,21 @@ it holds their addresses, never their servers.
   key. The chart creates no Secret, so no credential passes through a values
   file or a release's stored manifest.
 - **The probes follow the server's start-up**: it applies the migrations,
-  bootstraps the super admin and sets up the bucket before it listens, so a
-  startup probe on `/healthz` holds the liveness probe back, and readiness
-  follows `/readyz`, which checks PostgreSQL and the object store.
+  bootstraps the super admin, sets up the bucket and syncs the content before
+  it listens, so a startup probe on `/healthz` holds the liveness probe back,
+  and readiness follows `/readyz`, which checks PostgreSQL and the object
+  store.
+- **A refused sync holds a rollout, not the service.** The Deployment rolls
+  out with a surge and no unavailable pod, so while a new pod exits on a sync
+  it refuses, the previous one keeps serving, and its admin area is where the
+  content the log names is moved or deleted; the restarted pod then syncs.
 - **Each pod counts the rate limits on its own.** The limits live in the
   process's memory (see [Design decisions](#design-decisions)), so `n` replicas
   allow `n` times the attempts per client IP, spread by the Service's balancing;
   sessions, in PostgreSQL, work across pods. Brute-force protection then
   weakens in proportion to the replica count, which is why the chart defaults
-  to one. The super admin bootstrap is safe with several pods starting
-  together, thanks to its advisory lock.
+  to one. The super admin bootstrap and the content sync are safe with several
+  pods starting together, thanks to their advisory locks.
 - **A PodDisruptionBudget is off by default**: with one replica it would block
   every node drain.
 
@@ -646,22 +694,41 @@ ship in the build, so the installed app renders offline and no font request
 leaves for a third party. Amiri is only downloaded when a page shows Arabic.
 
 **The starter content is built into the binary, not shipped beside it.**
-The import runs wherever the server runs, including the distroless image
-through `docker compose run`, with no directory to mount or configure, and
-the content it imports is always the one the binary's migrations and checks
-were built for. The price is a rebuild for a content change, which goes
-through a pull request and a release anyway.
+The sync runs wherever the server runs, with no directory to mount or
+configure, and the content it syncs is always the one the binary's migrations
+and checks were built for. The price is a rebuild for a content change, which
+goes through a pull request and a release anyway.
 
 **Imported rows are found by a key, never by their text.** The text is what
-the reviewer corrects, so matching on it would import a second copy of every
-corrected card. A key survives edits and moves, at the cost of a column per
-table that the admin area never shows.
+the files correct, so matching on it would read every correction as a
+deletion and a creation, and lose the row's status, note and recording. A key
+survives corrections and moves.
 
-**The import never updates a row.** Once imported, a row belongs to the
-admin area, where its review status means something; rewriting it from a file
-would undo a reviewer's correction or validation in silence. A fix to a
-content file therefore reaches databases that have not imported that entry
-yet, and nothing else; on an existing database, it is made in the admin area.
+**The content files are the only source of the content they hold.** A
+correction is reviewed in a pull request and lands in every database the same
+way, where an edit in the admin area would exist in one database only and
+drift from the files, which a later sync could not tell from a stale row. So
+the admin area does not edit imported text at all, rather than let the sync
+undo it in silence, and a reviewer reports an error in a review note. The
+status, the recording and the note stay in the database: the files say what
+the content is, the database what the review made of it.
+
+**The sync runs inside `serve`, not as a command of its own.** Every database
+then holds the content of the image that serves it, with no step to forget
+after a deployment, and the content lock serialises it against admins and
+other replicas as it would any write.
+
+**A sync that would delete work done in the admin area stops the start-up.**
+Deleting the entry would take that work with it, and skipping the deletion
+would leave the database disagreeing with the files with nobody told. A
+failed start-up is loud where a log line is not: in development the server
+exits with the names to fix, and in Kubernetes the rollout waits while the
+previous pod serves the admin area where the fix is made.
+
+**Handwritten rows anchor to the imported sibling before them.** It is the
+order an admin set by placing the row, and it survives any reordering of the
+files without a position of its own in them; positions alone would not, since
+every creation or deletion in the files shifts them.
 
 **Icons are generated, not committed.** The build rasterises `logo.svg` into
 the favicon, the PWA icons and the Apple touch icon, so there is one logo file
@@ -718,7 +785,9 @@ and no raster that can drift from it.
   the parent of a new lesson or card.
 - A recording's length is known for WAV and Ogg files only; the others would
   need their whole stream parsed.
-- The import keeps no record of deletions: a unit, lesson or card deleted in
-  the admin area is created again, to review, by the next import.
-- A key changed in `content/` reads as a new entry: the import creates it
-  beside the row of the old key.
+- A key changed in `content/` reads as a deletion and a creation: the row
+  loses its status, its review note and its recording. Keys are paths, so
+  moving an entry to another unit or lesson in the files changes its key too;
+  only an entry's place among its siblings changes without one.
+- Rolling back to an image with older content files brings the content back
+  to those files: the entries they lack are deleted, with their recordings.

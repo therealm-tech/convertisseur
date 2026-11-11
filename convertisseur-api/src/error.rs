@@ -36,6 +36,7 @@ pub enum ApiError {
     InvalidCredentials,
     UsernameTaken,
     NotEmpty,
+    Imported,
     RateLimited { retry_after: Duration },
     Internal(anyhow::Error),
 }
@@ -195,6 +196,13 @@ impl ApiError {
                 "urn:convertisseur:problem:not-empty",
                 "Not empty",
                 "it still holds lessons or cards; delete or move them first",
+            ),
+            Self::Imported => (
+                StatusCode::CONFLICT,
+                "urn:convertisseur:problem:imported-content",
+                "Imported content",
+                "it comes from the content files, where its text and place are changed; its \
+                 status, recording and review note stay editable here",
             ),
             Self::RateLimited { .. } => (
                 StatusCode::TOO_MANY_REQUESTS,

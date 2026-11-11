@@ -13,7 +13,12 @@ import { kindLabels, statusLabels, trackLabels } from "@/lib/contentLabels";
 import { formatShortDay } from "@/lib/dates";
 import { logger } from "@/lib/logger";
 import { ContentDetail, type Selection } from "@/pages/admin/ContentDetail";
-import { ItemTitle, StatusPill } from "@/pages/admin/contentParts";
+import {
+	ItemTitle,
+	NoteFlag,
+	NoteIcon,
+	StatusPill,
+} from "@/pages/admin/contentParts";
 
 const PER_PAGE = 50;
 const SEARCH_DELAY_MS = 250;
@@ -45,6 +50,7 @@ export function ContentPage() {
 	const router = useRouter();
 	const [status, setStatusFilter] = useState<StatusFilter>("");
 	const [track, setTrack] = useState<TrackFilter>("");
+	const [noted, setNoted] = useState(false);
 	const [search, setSearch] = useState("");
 	const [pageNumber, setPageNumber] = useState(1);
 	const [listing, setListing] = useState<Listing>({ state: "loading" });
@@ -81,6 +87,7 @@ export function ContentPage() {
 			status: status || undefined,
 			track: track || undefined,
 			q,
+			hasReviewNote: noted || undefined,
 		}).then(
 			(page) => {
 				if (current) {
@@ -97,7 +104,7 @@ export function ContentPage() {
 		return () => {
 			current = false;
 		};
-	}, [pageNumber, status, track, q, reloads, onFailure]);
+	}, [pageNumber, status, track, noted, q, reloads, onFailure]);
 
 	function reload(message?: string) {
 		setToast(message);
@@ -189,6 +196,19 @@ export function ContentPage() {
 						</button>
 					))}
 				</fieldset>
+				<button
+					type="button"
+					className="note-filter"
+					aria-pressed={noted}
+					onClick={() => {
+						setNoted((on) => !on);
+						setPageNumber(1);
+					}}
+				>
+					<NoteIcon />
+					Avec remarque
+					{page ? ` · ${page.reviewNoteCount}` : null}
+				</button>
 				<div className="admin-filter">
 					<label htmlFor="content-parcours" className="admin-filter-label">
 						Parcours
@@ -354,6 +374,7 @@ function ContentTable({ items, selected, onSelect }: ContentTableProps) {
 								{item.parentTitle ? (
 									<span className="content-parent">{item.parentTitle}</span>
 								) : null}
+								{item.reviewNote ? <NoteFlag /> : null}
 							</th>
 							<td>{trackLabels[item.track]}</td>
 							<td>{kindLabels[item.kind]}</td>

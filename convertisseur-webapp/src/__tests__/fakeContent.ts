@@ -19,6 +19,8 @@ interface Row {
 	updatedAt: string;
 	validatedBy: User | null;
 	validatedAt: string | null;
+	importKey: string | null;
+	reviewNote: string | null;
 }
 
 const collections: Record<string, Kind> = {
@@ -28,7 +30,7 @@ const collections: Record<string, Kind> = {
 };
 
 const memberPath =
-	/^\/api\/v1\/(units|lessons|cards)(?:\/([^/]+))?(\/status|\/audio)?$/;
+	/^\/api\/v1\/(units|lessons|cards)(?:\/([^/]+))?(\/status|\/audio|\/review-note)?$/;
 
 const trackPath = /^\/api\/v1\/tracks(?:\/([^/]+))?(?:\/lessons\/([^/]+))?$/;
 
@@ -82,6 +84,8 @@ export class FakeContent {
 			updatedAt: this.tick(),
 			validatedBy: null,
 			validatedAt: null,
+			importKey: null,
+			reviewNote: null,
 			...fields,
 		});
 		return id;
@@ -100,6 +104,8 @@ export class FakeContent {
 			updatedBy: author(row.createdBy),
 			validatedAt: row.validatedAt,
 			validatedBy: author(row.validatedBy),
+			importKey: row.importKey,
+			reviewNote: row.reviewNote,
 		};
 		const parent = row.parentId ? this.row(row.parentId) : undefined;
 		switch (row.kind) {
@@ -156,12 +162,23 @@ export class FakeContent {
 						.includes(q),
 			)
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-		const counts = {
-			toReview: matching.filter((row) => row.status === "to_review").length,
-			validated: matching.filter((row) => row.status === "validated").length,
-		};
 		const status = params.get("status");
-		const filtered = matching.filter((row) => !status || row.status === status);
+		const noted = params.get("hasReviewNote");
+		const byNote = (row: Row) =>
+			noted === null || (row.reviewNote !== null) === (noted === "true");
+		const byStatus = (row: Row) => !status || row.status === status;
+		const counts = {
+			toReview: matching.filter(
+				(row) => byNote(row) && row.status === "to_review",
+			).length,
+			validated: matching.filter(
+				(row) => byNote(row) && row.status === "validated",
+			).length,
+		};
+		const reviewNoteCount = matching.filter(
+			(row) => byStatus(row) && row.reviewNote !== null,
+		).length;
+		const filtered = matching.filter((row) => byNote(row) && byStatus(row));
 		const items = filtered
 			.slice((page - 1) * perPage, page * perPage)
 			.map((row) => ({
@@ -175,6 +192,8 @@ export class FakeContent {
 					: null,
 				status: row.status,
 				updatedAt: row.updatedAt,
+				importKey: row.importKey,
+				reviewNote: row.reviewNote,
 			}));
 		return json(200, {
 			items,
@@ -182,6 +201,7 @@ export class FakeContent {
 			perPage,
 			total: filtered.length,
 			statusCounts: counts,
+			reviewNoteCount,
 		});
 	}
 
@@ -362,6 +382,19 @@ export class FakeContent {
 		const row = id ? this.row(decodeURIComponent(id)) : undefined;
 		if (row && sub === "/audio") {
 			return this.audio(row, method, body, actor);
+		}
+		if (row && sub === "/review-note" && method === "PUT") {
+			const text = String(fields.text ?? "").trim();
+			if (text.length > 2000) {
+				return problem(422, "validation", {}, [
+					{ field: "text", code: "review_note_length" },
+				]);
+			}
+			row.reviewNote = text || null;
+			return json(200, { text: row.reviewNote });
+		}
+		if (row?.importKey && !sub && (method === "PUT" || method === "DELETE")) {
+			return problem(409, "imported-content");
 		}
 		if (method === "DELETE") {
 			if (row) {

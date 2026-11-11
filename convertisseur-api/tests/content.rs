@@ -659,6 +659,8 @@ async fn documents_the_content_endpoints(pool: PgPool) {
         ("/api/v1/lessons/{lessonId}", "delete"),
         ("/api/v1/cards/{cardId}", "get"),
         ("/api/v1/cards/{cardId}/status", "put"),
+        ("/api/v1/cards/{cardId}/review-note", "put"),
+        ("/api/v1/units/{unitId}/review-note", "put"),
         ("/api/v1/cards/{cardId}/audio", "put"),
         ("/api/v1/lessons/{lessonId}/audio", "delete"),
         ("/api/v1/audio/{audioId}", "get"),

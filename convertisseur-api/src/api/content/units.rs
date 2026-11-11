@@ -12,8 +12,8 @@ use uuid::Uuid;
 use validator::Validate;
 
 use super::{
-    Resource, ReviewResponse, TAG, TrackJson, created, delete, delete_docs, set_status,
-    set_status_docs, validate_title,
+    Resource, ReviewResponse, TAG, TrackJson, created, delete, delete_docs, set_review_note,
+    set_review_note_docs, set_status, set_status_docs, validate_title,
 };
 use crate::{
     api::{
@@ -38,6 +38,13 @@ pub fn routes() -> ApiRouter<AppState> {
         .api_route(
             "/api/v1/units/{unitId}/status",
             put_with(set_status::<UnitResource>, set_status_docs::<UnitResource>),
+        )
+        .api_route(
+            "/api/v1/units/{unitId}/review-note",
+            put_with(
+                set_review_note::<UnitResource>,
+                set_review_note_docs::<UnitResource>,
+            ),
         )
 }
 
@@ -238,6 +245,11 @@ fn update_unit_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
             r.description("`forbidden`: the account is a `user`")
         })
         .response_with::<404, ApiError, _>(|r| r.description(UnitResource::NOT_FOUND_DOCS))
+        .response_with::<409, ApiError, _>(|r| {
+            r.description(
+                "`imported-content`: it comes from the content files, which alone change it",
+            )
+        })
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
         .response_with::<422, ApiError, _>(|r| {
             r.description("A field breaks a rule: `title_length`, `range`")

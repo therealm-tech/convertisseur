@@ -45,6 +45,7 @@ const DEFAULT_PER_PAGE: u32 = 50;
 const MAX_PER_PAGE: u32 = 100;
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_TEXT_CHARS: usize = 500;
+const MAX_REVIEW_NOTE_CHARS: usize = 2000;
 
 pub fn routes() -> ApiRouter<AppState> {
     ApiRouter::new()
@@ -220,6 +221,12 @@ pub struct ReviewResponse {
     /// Set while the item is `validated`.
     validated_at: Option<DateTime<Utc>>,
     validated_by: Option<AuthorResponse>,
+    /// The key of the content file entry the item comes from, e.g.
+    /// `islam/coran/al-fatiha/aya-3`; `null` for an item written in the admin
+    /// area. An imported item's text and place change in the files alone.
+    import_key: Option<String>,
+    /// What a reviewer reports about the item; `null` when nothing is.
+    review_note: Option<String>,
 }
 
 impl ReviewResponse {
@@ -237,6 +244,8 @@ impl ReviewResponse {
             updated_by: author(&usernames, review.updated_by),
             validated_at: review.validated_at,
             validated_by: author(&usernames, review.validated_by),
+            import_key: review.import_key,
+            review_note: review.note,
         })
     }
 }
@@ -249,6 +258,7 @@ impl From<ContentRefusal> for ApiError {
                 "a parent was not found where the request names none"
             )),
             ContentRefusal::NotEmpty => Self::NotEmpty,
+            ContentRefusal::Imported => Self::Imported,
             ContentRefusal::Failed(error) => Self::Internal(error),
         }
     }
@@ -283,6 +293,15 @@ fn validate_text(text: &str) -> Result<(), ValidationError> {
         Ok(())
     } else {
         Err(ValidationError::new("text_length"))
+    }
+}
+
+/// A review note: at most 2000 characters once trimmed.
+fn validate_review_note(note: &str) -> Result<(), ValidationError> {
+    if note.trim().chars().count() <= MAX_REVIEW_NOTE_CHARS {
+        Ok(())
+    } else {
+        Err(ValidationError::new("review_note_length"))
     }
 }
 
@@ -369,6 +388,64 @@ fn set_status_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOperatio
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
 }
 
+/// The review note to keep on an item.
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
+#[schemars(extend("example" = serde_json::json!({
+    "text": "Vocalisation fausse sur le 2e mot",
+})))]
+pub struct SetReviewNoteRequest {
+    /// At most 2000 characters; empty, blank or `null` clears the note.
+    #[validate(custom(function = validate_review_note))]
+    text: Option<String>,
+}
+
+/// An item's review note.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewNoteResponse {
+    /// `null` when the item has none.
+    text: Option<String>,
+}
+
+async fn set_review_note<R: Resource>(
+    State(state): State<AppState>,
+    RequireRole { user: actor, .. }: RequireRole<Admin>,
+    ApiPath(path): ApiPath<R::Path>,
+    ValidJson(request): ValidJson<SetReviewNoteRequest>,
+) -> Result<Json<ReviewNoteResponse>, ApiError> {
+    let text = content::set_review_note::<R::Rows>(
+        &state.pool,
+        &actor,
+        path.into(),
+        optional_text(request.text),
+    )
+    .await?;
+    Ok(Json(ReviewNoteResponse { text }))
+}
+
+fn set_review_note_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    op.tag(TAG)
+        .summary("Set the review note")
+        .description(
+            "Keeps what a reviewer reports about the item, e.g. a wrong vowel, whether it is \
+             imported or not. The note leaves the review status as it is. When the content \
+             files rewrite an imported item, its note is cleared.",
+        )
+        .security_requirement(SESSION_SECURITY)
+        .response_with::<200, Json<ReviewNoteResponse>, _>(|r| r.description("The review note"))
+        .response_with::<400, ApiError, _>(|r| {
+            r.description("The body is not JSON of the expected shape")
+        })
+        .response_with::<401, ApiError, _>(|r| r.description("No live session"))
+        .response_with::<403, ApiError, _>(|r| {
+            r.description("`forbidden`: the account is a `user`")
+        })
+        .response_with::<404, ApiError, _>(|r| r.description(R::NOT_FOUND_DOCS))
+        .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
+        .response_with::<422, ApiError, _>(|r| r.description("`review_note_length`: too long"))
+}
+
 async fn delete<R: Resource>(
     State(state): State<AppState>,
     RequireRole { user: actor, .. }: RequireRole<Admin>,
@@ -389,7 +466,10 @@ fn delete_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOperation<'_
             r.description("`forbidden`: the account is a `user`")
         })
         .response_with::<409, ApiError, _>(|r| {
-            r.description("`not-empty`: it still holds lessons or cards")
+            r.description(
+                "`imported-content`: it comes from the content files, which alone delete it; \
+                 `not-empty`: it still holds lessons or cards",
+            )
         })
 }
 
@@ -409,6 +489,9 @@ pub struct ListItemsQuery {
     /// Part of a title or of a card's text, compared case-insensitively;
     /// Arabic short vowels and other diacritics are ignored on both sides.
     q: Option<String>,
+    /// `true` lists only the items with a review note, `false` only those
+    /// without.
+    has_review_note: Option<bool>,
 }
 
 /// A unit, lesson or card in the review list.
@@ -426,6 +509,10 @@ pub struct ContentItemResponse {
     parent_title: Option<String>,
     status: StatusJson,
     updated_at: DateTime<Utc>,
+    /// The key of the content file entry the item comes from; `null` for an
+    /// item written in the admin area.
+    import_key: Option<String>,
+    review_note: Option<String>,
 }
 
 impl From<ContentItem> for ContentItemResponse {
@@ -439,6 +526,8 @@ impl From<ContentItem> for ContentItemResponse {
             parent_title: item.parent_title,
             status: item.status.into(),
             updated_at: item.updated_at,
+            import_key: item.import_key,
+            review_note: item.review_note,
         }
     }
 }
@@ -461,6 +550,9 @@ pub struct ContentItemPageResponse {
     /// How many items match the filters, across all pages.
     total: u64,
     status_counts: StatusCountsResponse,
+    /// How many items match every filter but `hasReviewNote` and carry a
+    /// review note.
+    review_note_count: u64,
 }
 
 async fn list_items(
@@ -475,23 +567,23 @@ async fn list_items(
         track: query.track.map(Track::from),
         kind: query.kind.map(ContentKind::from),
         text: query.q.as_deref().map(str::trim).filter(|q| !q.is_empty()),
+        has_review_note: query.has_review_note,
     };
     let offset = i64::from(page - 1) * i64::from(per_page);
-    let counts = db::content::count_by_status(&state.pool, &filter).await?;
-    let count_of = |wanted: Status| {
+    let counts = db::content::counts(&state.pool, &filter).await?;
+    let count = |status: Option<Status>, noted: Option<bool>| -> u64 {
         counts
             .iter()
-            .find(|(status, _)| *status == wanted)
-            .map_or(0, |(_, n)| u64::try_from(*n).unwrap_or_default())
+            .filter(|(s, n, _)| status.is_none_or(|w| w == *s) && noted.is_none_or(|w| w == *n))
+            .map(|(_, _, items)| u64::try_from(*items).unwrap_or_default())
+            .sum()
     };
     let status_counts = StatusCountsResponse {
-        to_review: count_of(Status::ToReview),
-        validated: count_of(Status::Validated),
+        to_review: count(Some(Status::ToReview), filter.has_review_note),
+        validated: count(Some(Status::Validated), filter.has_review_note),
     };
-    let total = match filter.status {
-        Some(status) => count_of(status),
-        None => status_counts.to_review + status_counts.validated,
-    };
+    let review_note_count = count(filter.status, Some(true));
+    let total = count(filter.status, filter.has_review_note);
     let items = db::content::list(&state.pool, &filter, per_page.into(), offset).await?;
     tracing::debug!(actor_id = %actor.id, page, per_page, total, "content listed");
     Ok(Json(ContentItemPageResponse {
@@ -500,6 +592,7 @@ async fn list_items(
         per_page,
         total,
         status_counts,
+        review_note_count,
     }))
 }
 
@@ -508,7 +601,9 @@ fn list_items_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .summary("List content for review")
         .description(
             "Units, lessons and cards together, the most recently edited first. \
-             `statusCounts` counts the items matching every filter but `status`.",
+             `statusCounts` counts the items matching every filter but `status`, and \
+             `reviewNoteCount` those with a review note matching every filter but \
+             `hasReviewNote`.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<ContentItemPageResponse>, _>(|r| {
