@@ -248,8 +248,8 @@ pub async fn insert_unit(
         .await
 }
 
-/// Writes the fields; when one of them changes, the unit goes back to
-/// review. Returns whether it changed.
+/// Writes the fields and position; when a field other than the place
+/// changes, the unit goes back to review. Returns whether anything changed.
 pub async fn update_unit(
     exec: impl PgExecutor<'_>,
     id: Uuid,
@@ -290,8 +290,8 @@ pub async fn insert_lesson(
         .await
 }
 
-/// Writes the fields; when one of them changes, the lesson goes back to
-/// review. Returns whether it changed.
+/// Writes the fields and position; when a field other than the place
+/// changes, the lesson goes back to review. Returns whether anything changed.
 pub async fn update_lesson(
     exec: impl PgExecutor<'_>,
     id: Uuid,
@@ -335,8 +335,8 @@ pub async fn insert_card(
         .await
 }
 
-/// Writes the fields; when one of them changes, the card goes back to
-/// review. Returns whether it changed.
+/// Writes the fields and position; when a field other than the place
+/// changes, the card goes back to review. Returns whether anything changed.
 pub async fn update_card(
     exec: impl PgExecutor<'_>,
     id: Uuid,

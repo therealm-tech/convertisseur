@@ -213,7 +213,8 @@ pub struct ReviewResponse {
     status: StatusJson,
     created_at: DateTime<Utc>,
     created_by: Option<AuthorResponse>,
-    /// The last edit; any edit sends the item back to `to_review`.
+    /// The last edit; an edit of content sends the item back to `to_review`,
+    /// a move does not.
     updated_at: DateTime<Utc>,
     updated_by: Option<AuthorResponse>,
     /// Set while the item is `validated`.

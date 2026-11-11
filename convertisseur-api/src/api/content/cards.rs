@@ -121,8 +121,8 @@ pub struct CreateCardRequest {
     position: Option<i32>,
 }
 
-/// A card, rewritten whole: an absent text is cleared. Any change sends it
-/// back to review.
+/// A card, rewritten whole: an absent text is cleared. Any change of content
+/// sends it back to review; a move keeps its status.
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("example" = serde_json::json!({
@@ -306,8 +306,8 @@ fn update_card_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     op.tag(TAG)
         .summary("Edit a card")
         .description(
-            "Rewrites the card, possibly into another lesson or position. When anything \
-             changes, it goes back to `to_review`.",
+            "Rewrites the card, possibly into another lesson or position. A change of \
+             content sends it back to `to_review`; a move alone keeps its status.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<CardResponse>, _>(|r| r.description("The card"))

@@ -276,8 +276,8 @@ pub async fn create<O: Ordered>(
 
 /// Rewrites a row, possibly under another parent or at another position,
 /// and closes the gap it leaves. `write` stores the fields at the position
-/// it is given, and returns whether one of them changed, which sends the row
-/// back to review.
+/// it is given, and returns whether anything changed. Only a change of content
+/// sends the row back to review; a move keeps its status.
 pub async fn update<O: Ordered>(
     pool: &PgPool,
     actor: &User,
@@ -303,7 +303,7 @@ pub async fn update<O: Ordered>(
     let changed = write(&mut tx, position).await?;
     tx.commit().await?;
     if changed {
-        tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, position, "content edited, back to review");
+        tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, position, "content updated");
     } else {
         tracing::debug!(kind = ?O::KIND, %id, actor_id = %actor.id, "content unchanged");
     }

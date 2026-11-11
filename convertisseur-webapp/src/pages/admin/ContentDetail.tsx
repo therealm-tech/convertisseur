@@ -468,7 +468,7 @@ function ReviewNote({ loaded }: { loaded: Loaded }) {
 	return (
 		<p className="review-note">
 			{status === "validated"
-				? `Validé par ${validatedBy?.username ?? "un compte supprimé"}. Toute modification le repasse « à relire ».`
+				? `Validé par ${validatedBy?.username ?? "un compte supprimé"}. Toute modification de contenu le repasse « à relire », pas un simple déplacement.`
 				: "En attente de relecture. Invisible pour les apprenants."}
 		</p>
 	);

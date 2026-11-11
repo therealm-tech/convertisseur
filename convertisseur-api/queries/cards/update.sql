@@ -1,3 +1,12 @@
+WITH edit AS (
+    SELECT id
+    FROM cards
+    WHERE
+        id = $1
+        AND (arabic, transliteration, meaning_fr, variety)
+        IS DISTINCT FROM ($4::text, $5::text, $6::text, $7::arabic_variety)
+)
+
 UPDATE cards
 SET
     lesson_id = $2,
@@ -6,9 +15,9 @@ SET
     transliteration = $5,
     meaning_fr = $6,
     variety = $7,
-    status = 'to_review',
-    validated_by = NULL,
-    validated_at = NULL,
+    status = CASE WHEN EXISTS (SELECT 1 FROM edit) THEN 'to_review' ELSE cards.status END,
+    validated_by = CASE WHEN EXISTS (SELECT 1 FROM edit) THEN NULL ELSE cards.validated_by END,
+    validated_at = CASE WHEN EXISTS (SELECT 1 FROM edit) THEN NULL ELSE cards.validated_at END,
     updated_by = $8,
     updated_at = now()
 WHERE

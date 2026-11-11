@@ -102,7 +102,8 @@ pub struct CreateLessonRequest {
     position: Option<i32>,
 }
 
-/// A lesson, rewritten whole. Any change sends it back to review.
+/// A lesson, rewritten whole. Any change of content sends it back to review;
+/// a move keeps its status.
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("example" = serde_json::json!({
@@ -261,8 +262,9 @@ fn update_lesson_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     op.tag(TAG)
         .summary("Edit a lesson")
         .description(
-            "Rewrites the lesson, possibly into another unit or position. When anything \
-             changes, it goes back to `to_review`; its cards follow it.",
+            "Rewrites the lesson, possibly into another unit or position. A new title \
+             sends it back to `to_review`; a new unit or position alone keeps its status. Its \
+             cards follow it.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<LessonResponse>, _>(|r| r.description("The lesson"))

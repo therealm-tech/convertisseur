@@ -140,7 +140,7 @@ describe("content page", () => {
 		expect(recto).toHaveAttribute("lang", "ar");
 		expect(
 			within(panel).getByText(
-				"Validé par bilal. Toute modification le repasse « à relire ».",
+				"Validé par bilal. Toute modification de contenu le repasse « à relire », pas un simple déplacement.",
 			),
 		).toBeVisible();
 		expect(within(panel).getByText("Téléverser un fichier")).toBeVisible();
@@ -193,7 +193,7 @@ describe("content page", () => {
 
 		expect(
 			await within(panel).findByText(
-				"Validé par nour. Toute modification le repasse « à relire ».",
+				"Validé par nour. Toute modification de contenu le repasse « à relire », pas un simple déplacement.",
 			),
 		).toBeVisible();
 		expect(api.content.row("l-lettres")?.status).toBe("validated");
@@ -211,6 +211,37 @@ describe("content page", () => {
 			),
 		).toBeVisible();
 		expect(api.content.row("l-lettres")?.status).toBe("to_review");
+	});
+
+	it("keeps a validated item validated when it is moved", async () => {
+		const { api, user } = await openContentPage();
+		const row = api.content.row("l-lettres");
+		if (!row) throw new Error("seed missing");
+		row.status = "validated";
+		row.validatedAt = "2026-11-06T09:00:00Z";
+		row.validatedBy = { id: "u-bilal", username: "bilal", role: "admin" };
+
+		await user.click(
+			screen.getByRole("button", { name: "Les 4 formes des lettres" }),
+		);
+		const panel = detail();
+		const position = await within(panel).findByRole("spinbutton", {
+			name: "Position",
+		});
+		await user.clear(position);
+		await user.type(position, "2");
+		await user.click(
+			within(panel).getByRole("button", { name: "Sauvegarder" }),
+		);
+
+		expect(await screen.findByRole("status")).toHaveTextContent(
+			"Modifications enregistrées.",
+		);
+		expect(api.content.row("l-lettres")?.position).toBe(2);
+		expect(api.content.row("l-lettres")?.status).toBe("validated");
+		expect(
+			within(panel).getByRole("button", { name: "Repasser à relire" }),
+		).toBeVisible();
 	});
 
 	it("shows the audio a card has", async () => {

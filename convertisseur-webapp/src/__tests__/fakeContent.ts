@@ -177,7 +177,18 @@ export class FakeContent {
 	}
 
 	private write(row: Row, body: Record<string, unknown>) {
-		const before = JSON.stringify(row);
+		const content = () =>
+			JSON.stringify([
+				row.track,
+				row.title,
+				row.arabic,
+				row.transliteration,
+				row.meaningFr,
+				row.variety,
+			]);
+		const placed = () => JSON.stringify([row.parentId, row.position]);
+		const contentBefore = content();
+		const placedBefore = placed();
 		row.parentId = (body.unitId ?? body.lessonId ?? null) as string | null;
 		row.track = (body.track ??
 			(row.parentId ? this.row(row.parentId)?.track : undefined) ??
@@ -190,10 +201,12 @@ export class FakeContent {
 		if (typeof body.position === "number") {
 			row.position = body.position;
 		}
-		if (JSON.stringify(row) !== before) {
+		if (content() !== contentBefore) {
 			row.status = "to_review";
 			row.validatedBy = null;
 			row.validatedAt = null;
+		}
+		if (content() !== contentBefore || placed() !== placedBefore) {
 			row.updatedAt = this.tick();
 		}
 	}
