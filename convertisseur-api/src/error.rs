@@ -33,6 +33,7 @@ pub enum ApiError {
     Unauthenticated,
     PasswordChangeRequired,
     Forbidden,
+    LessonLocked,
     InvalidCredentials,
     UsernameTaken,
     NotEmpty,
@@ -178,6 +179,12 @@ impl ApiError {
                 "urn:convertisseur:problem:forbidden",
                 "Forbidden",
                 "the account may not do this",
+            ),
+            Self::LessonLocked => (
+                StatusCode::FORBIDDEN,
+                "urn:convertisseur:problem:lesson-locked",
+                "Lesson locked",
+                "the exercise of the lesson before must be passed first",
             ),
             Self::InvalidCredentials => (
                 StatusCode::UNAUTHORIZED,

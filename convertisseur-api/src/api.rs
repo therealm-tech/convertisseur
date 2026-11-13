@@ -1,6 +1,7 @@
 mod content;
 mod extract;
 mod passwords;
+mod progress;
 mod sessions;
 mod tracks;
 mod users;
@@ -53,6 +54,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(users::routes())
         .merge(passwords::routes())
         .merge(tracks::routes())
+        .merge(progress::routes())
         .merge(content::routes())
         .finish_api_with(&mut api, |doc| {
             doc.tag(Tag {
@@ -69,6 +71,15 @@ pub fn routes(state: AppState) -> Router {
                 name: tracks::TAG.to_owned(),
                 description: Some(
                     "What learners study: the validated units, lessons and cards".to_owned(),
+                ),
+                ..Tag::default()
+            })
+            .tag(Tag {
+                name: progress::TAG.to_owned(),
+                description: Some(
+                    "What a learner records as it studies: the cards it sees and its exercise \
+                     attempts"
+                        .to_owned(),
                 ),
                 ..Tag::default()
             })

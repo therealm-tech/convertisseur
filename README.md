@@ -22,7 +22,9 @@ the server's configuration. Every account studies the two tracks, `arabe` and
 `islam`: their units, their lessons, and each lesson's cards one at a time,
 with the transliteration, the meaning and the recording on demand, and the
 initial, medial and final forms of each letter of the alphabet, then a
-multiple-choice exercise on the lesson's cards. Only what
+multiple-choice exercise on the lesson's cards. The app remembers, per
+account, the cards seen and the best score of each exercise, and opens each
+lesson once the exercise of the one before is passed. Only what
 an admin has validated, together with everything above it, is shown. In the
 admin area, admins write and review the
 learning content at `/admin/content`: units, lessons and cards, with audio

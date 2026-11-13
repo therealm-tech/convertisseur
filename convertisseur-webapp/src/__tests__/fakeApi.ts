@@ -202,7 +202,16 @@ export function installFakeApi(): FakeApi {
 		}
 		if (url.pathname.startsWith("/api/v1/tracks") && method === "GET") {
 			const actor = guard("user");
-			return actor instanceof Response ? actor : content.study(url);
+			return actor instanceof Response ? actor : content.study(url, actor.user);
+		}
+		if (
+			url.pathname.startsWith("/api/v1/card-views/") ||
+			url.pathname === "/api/v1/exercise-attempts"
+		) {
+			const actor = guard("user");
+			return actor instanceof Response
+				? actor
+				: content.record(method, url, body, actor.user);
 		}
 		if (contentPath.test(url.pathname)) {
 			const actor = guard("admin");

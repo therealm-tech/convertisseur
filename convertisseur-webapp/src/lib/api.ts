@@ -46,6 +46,7 @@ export const problemTypes = {
 	importedContent: "urn:convertisseur:problem:imported-content",
 	notEmpty: "urn:convertisseur:problem:not-empty",
 	invalidCredentials: "urn:convertisseur:problem:invalid-credentials",
+	lessonLocked: "urn:convertisseur:problem:lesson-locked",
 	passwordChangeRequired: "urn:convertisseur:problem:password-change-required",
 	tooLarge: "urn:convertisseur:problem:too-large",
 	unsupportedAudio: "urn:convertisseur:problem:unsupported-audio",

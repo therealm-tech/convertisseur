@@ -1,12 +1,16 @@
 //! What learners study: the two tracks with their units and lessons, and a
-//! lesson with its cards. Open to every logged-in account, and only ever
-//! showing content validated together with every row above it.
+//! lesson with its cards, each with where the account stands in it. Open to
+//! every logged-in account, and only ever showing content validated together
+//! with every row above it.
 
 use aide::{
     axum::{ApiRouter, routing::get_with},
     transform::TransformOperation,
 };
+use std::collections::{HashMap, HashSet};
+
 use axum::{Json, extract::State};
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -20,8 +24,9 @@ use crate::{
     content::Track,
     db,
     error::ApiError,
+    progress::{self, ExerciseResult, LessonState},
     router::AppState,
-    tracks::{self, Outline, OutlineLesson, OutlineUnit, StudyCard},
+    tracks::{Outline, OutlineLesson, OutlineUnit, StudyCard},
 };
 
 pub const TAG: &str = "Tracks";
@@ -57,6 +62,54 @@ pub struct TrackLessonPath {
     lesson_id: Uuid,
 }
 
+/// A score: questions answered right the first time, of those asked.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreResponse {
+    first_try: u32,
+    total: u32,
+    at: DateTime<Utc>,
+}
+
+/// The account's exercise result in a lesson.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExerciseResultResponse {
+    /// The best share of questions answered right the first time; a tie
+    /// keeps the earlier score.
+    best: ScoreResponse,
+    /// When the account first passed the exercise; `null` until it has.
+    /// A pass is never taken back.
+    passed_at: Option<DateTime<Utc>>,
+    last_attempt_at: DateTime<Utc>,
+}
+
+impl From<ExerciseResult> for ExerciseResultResponse {
+    fn from(result: ExerciseResult) -> Self {
+        Self {
+            best: ScoreResponse {
+                first_try: u32::try_from(result.best_first_try).unwrap_or_default(),
+                total: u32::try_from(result.best_total).unwrap_or_default(),
+                at: result.best_at,
+            },
+            passed_at: result.passed_at,
+            last_attempt_at: result.last_attempt_at,
+        }
+    }
+}
+
+/// Where the account stands in a lesson.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LessonProgressResponse {
+    /// How many of the cards the lesson shows the account has seen.
+    seen_card_count: u64,
+    /// When it last saw one of the lesson's cards; `null` if never.
+    last_seen_at: Option<DateTime<Utc>>,
+    /// `null` until the account sends an exercise result.
+    exercise: Option<ExerciseResultResponse>,
+}
+
 /// A lesson in a unit's outline.
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -65,14 +118,35 @@ pub struct TrackLessonResponse {
     title: String,
     /// How many cards the lesson shows.
     card_count: u64,
+    /// Whether its cards make an exercise.
+    has_exercise: bool,
+    /// Whether the account may not open it yet: the lesson before it is
+    /// locked, or has an exercise the account has not passed. A lesson the
+    /// account has started is never locked.
+    locked: bool,
+    progress: LessonProgressResponse,
 }
 
-impl From<OutlineLesson> for TrackLessonResponse {
-    fn from(lesson: OutlineLesson) -> Self {
+impl TrackLessonResponse {
+    fn new(lesson: OutlineLesson, state: Option<LessonState>) -> Self {
+        let state = state.unwrap_or(LessonState {
+            has_exercise: false,
+            locked: false,
+            seen_card_count: 0,
+            last_seen_at: None,
+            exercise: None,
+        });
         Self {
             id: lesson.id,
             title: lesson.title,
             card_count: u64::try_from(lesson.card_count).unwrap_or_default(),
+            has_exercise: state.has_exercise,
+            locked: state.locked,
+            progress: LessonProgressResponse {
+                seen_card_count: u64::try_from(state.seen_card_count).unwrap_or_default(),
+                last_seen_at: state.last_seen_at,
+                exercise: state.exercise.map(Into::into),
+            },
         }
     }
 }
@@ -86,12 +160,19 @@ pub struct TrackUnitResponse {
     lessons: Vec<TrackLessonResponse>,
 }
 
-impl From<OutlineUnit> for TrackUnitResponse {
-    fn from(unit: OutlineUnit) -> Self {
+impl TrackUnitResponse {
+    fn new(unit: OutlineUnit, states: &mut HashMap<Uuid, LessonState>) -> Self {
         Self {
             id: unit.id,
             title: unit.title,
-            lessons: unit.lessons.into_iter().map(Into::into).collect(),
+            lessons: unit
+                .lessons
+                .into_iter()
+                .map(|lesson| {
+                    let state = states.remove(&lesson.id);
+                    TrackLessonResponse::new(lesson, state)
+                })
+                .collect(),
         }
     }
 }
@@ -109,6 +190,17 @@ impl From<OutlineUnit> for TrackUnitResponse {
             "id": "5d0c1f8e-7a2b-4c3d-9e4f-1a2b3c4d5e6f",
             "title": "Les lettres, 1re partie",
             "cardCount": 7,
+            "hasExercise": true,
+            "locked": false,
+            "progress": {
+                "seenCardCount": 7,
+                "lastSeenAt": "2026-11-10T18:04:12Z",
+                "exercise": {
+                    "best": { "firstTry": 11, "total": 12, "at": "2026-11-10T18:09:40Z" },
+                    "passedAt": "2026-11-10T18:09:40Z",
+                    "lastAttemptAt": "2026-11-10T18:09:40Z",
+                },
+            },
         }],
     }],
 })))]
@@ -117,11 +209,15 @@ pub struct TrackResponse {
     units: Vec<TrackUnitResponse>,
 }
 
-impl From<Outline> for TrackResponse {
-    fn from(outline: Outline) -> Self {
+impl TrackResponse {
+    fn new(outline: Outline, states: &mut HashMap<Uuid, LessonState>) -> Self {
         Self {
             id: outline.track.into(),
-            units: outline.units.into_iter().map(Into::into).collect(),
+            units: outline
+                .units
+                .into_iter()
+                .map(|unit| TrackUnitResponse::new(unit, states))
+                .collect(),
         }
     }
 }
@@ -137,12 +233,13 @@ async fn list_tracks(
     State(state): State<AppState>,
     Authenticated(user): Authenticated,
 ) -> Result<Json<TrackListResponse>, ApiError> {
-    let rows = db::tracks::outline(&state.pool, None).await?;
-    tracing::debug!(user_id = %user.id, rows = rows.len(), "tracks listed");
+    let mut progress = progress::load(&state.pool, user.id, &TRACKS).await?;
+    tracing::debug!(user_id = %user.id, lessons = progress.lessons.len(), "tracks listed");
     Ok(Json(TrackListResponse {
-        items: tracks::outlines(&TRACKS, rows)
+        items: progress
+            .outlines
             .into_iter()
-            .map(Into::into)
+            .map(|outline| TrackResponse::new(outline, &mut progress.lessons))
             .collect(),
     }))
 }
@@ -151,9 +248,10 @@ fn list_tracks_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     op.tag(TAG)
         .summary("List the tracks")
         .description(
-            "Both tracks, each with its units and their lessons, in order. Only what is \
-             validated together with every unit or lesson above it is listed. The list always \
-             holds the two tracks, so it is not paginated.",
+            "Both tracks, each with its units and their lessons, in order, and where the \
+             account stands in each lesson. Only what is validated together with every unit or \
+             lesson above it is listed. The list always holds the two tracks, so it is not \
+             paginated.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<TrackListResponse>, _>(|r| r.description("Both tracks"))
@@ -169,12 +267,13 @@ async fn get_track(
     ApiPath(path): ApiPath<TrackPath>,
 ) -> Result<Json<TrackResponse>, ApiError> {
     let track = Track::from(path.track);
-    let rows = db::tracks::outline(&state.pool, Some(track)).await?;
-    tracing::debug!(user_id = %user.id, ?track, rows = rows.len(), "track read");
-    let outline = tracks::outlines(&[track], rows)
+    let mut progress = progress::load(&state.pool, user.id, &[track]).await?;
+    tracing::debug!(user_id = %user.id, ?track, lessons = progress.lessons.len(), "track read");
+    let outline = progress
+        .outlines
         .pop()
         .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("no outline for {track:?}")))?;
-    Ok(Json(outline.into()))
+    Ok(Json(TrackResponse::new(outline, &mut progress.lessons)))
 }
 
 fn get_track_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
@@ -224,11 +323,14 @@ pub struct StudyCardResponse {
     forms: Option<LetterFormsResponse>,
     /// `null` when the card has no recording.
     audio: Option<PlaybackResponse>,
+    /// Whether the account has seen the card.
+    seen: bool,
 }
 
-impl From<StudyCard> for StudyCardResponse {
-    fn from(card: StudyCard) -> Self {
+impl StudyCardResponse {
+    fn new(card: StudyCard, seen: &HashSet<Uuid>) -> Self {
         Self {
+            seen: seen.contains(&card.id),
             id: card.id,
             forms: LetterFormsResponse::of(&card.arabic, card.forms),
             arabic: card.arabic,
@@ -265,7 +367,9 @@ pub struct StudyUnitResponse {
         "variety": "darija",
         "forms": null,
         "audio": { "url": "/api/v1/audio/3c2b1a09-8f7e-4d6c-b5a4-938271605f4e", "durationMs": 1200 },
+        "seen": true,
     }],
+    "exercise": null,
 })))]
 pub struct StudyLessonResponse {
     id: Uuid,
@@ -275,6 +379,8 @@ pub struct StudyLessonResponse {
     /// `null` when the lesson has no recording.
     audio: Option<PlaybackResponse>,
     cards: Vec<StudyCardResponse>,
+    /// The account's exercise result; `null` until it sends one.
+    exercise: Option<ExerciseResultResponse>,
 }
 
 async fn get_lesson(
@@ -288,7 +394,18 @@ async fn get_lesson(
             tracing::debug!(user_id = %user.id, lesson_id = %path.lesson_id, "lesson not visible");
             ApiError::NotFound
         })?;
+    let progress = progress::load(&state.pool, user.id, &[lesson.track]).await?;
+    let lesson_state = progress.lessons.get(&lesson.id);
+    if lesson_state.is_some_and(|s| s.locked) {
+        tracing::debug!(user_id = %user.id, lesson_id = %lesson.id, "lesson locked");
+        return Err(ApiError::LessonLocked);
+    }
+    let exercise = lesson_state.and_then(|s| s.exercise.clone());
     let cards = db::tracks::cards(&state.pool, lesson.id).await?;
+    let seen: HashSet<Uuid> = db::progress::seen_cards(&state.pool, user.id, lesson.id)
+        .await?
+        .into_iter()
+        .collect();
     tracing::debug!(user_id = %user.id, lesson_id = %lesson.id, cards = cards.len(), "lesson read");
     Ok(Json(StudyLessonResponse {
         id: lesson.id,
@@ -299,7 +416,11 @@ async fn get_lesson(
         },
         title: lesson.title,
         audio: playback(lesson.audio_id, lesson.audio_duration_ms),
-        cards: cards.into_iter().map(Into::into).collect(),
+        cards: cards
+            .into_iter()
+            .map(|card| StudyCardResponse::new(card, &seen))
+            .collect(),
+        exercise: exercise.map(Into::into),
     }))
 }
 
@@ -307,15 +428,18 @@ fn get_lesson_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     op.tag(TAG)
         .summary("Get a lesson to study")
         .description(
-            "The lesson, its recording, and its cards in order. The lesson is found only when \
-             it and its unit are validated and the unit is in this track; only validated cards \
-             are listed.",
+            "The lesson, its recording, its cards in order, which of them the account has seen, \
+             and its exercise result. The lesson is found only when it and its unit are \
+             validated and the unit is in this track; only validated cards are listed.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<StudyLessonResponse>, _>(|r| r.description("The lesson"))
         .response_with::<401, ApiError, _>(|r| r.description("No live session"))
         .response_with::<403, ApiError, _>(|r| {
-            r.description("`password-change-required`: it must change its password first")
+            r.description(
+                "`password-change-required`: it must change its password first; \
+                 `lesson-locked`: the account has not passed the exercise of the lesson before",
+            )
         })
         .response_with::<404, ApiError, _>(|r| {
             r.description("No lesson of this track that learners see has this id")

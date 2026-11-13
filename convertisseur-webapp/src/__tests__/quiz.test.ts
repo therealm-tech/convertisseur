@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
 	buildQuiz,
 	gradeQuiz,
@@ -9,6 +10,7 @@ import {
 	requeue,
 } from "@/lib/quiz";
 import type { StudyCard } from "@/lib/tracks";
+import exerciseCases from "./exerciseCases.json";
 
 function card(
 	id: string,
@@ -24,6 +26,7 @@ function card(
 		variety: "darija",
 		forms: null,
 		audio: null,
+		seen: false,
 		...extra,
 	};
 }
@@ -274,4 +277,48 @@ describe("gradeQuiz", () => {
 	it("never shows a near miss as ninety percent", () => {
 		expect(gradeQuiz(29, 26)).toEqual({ percent: 89, passed: false });
 	});
+});
+
+// The server repeats hasQuiz to lock the lessons after an exercise not
+// passed; it runs the same cases.
+const ExerciseCaseSchema = z.object({
+	name: z.string(),
+	cards: z.array(
+		z.object({
+			arabic: z.string(),
+			meaningFr: z.string().nullable(),
+			forms: z.boolean().optional(),
+			audio: z.boolean().optional(),
+		}),
+	),
+	hasExercise: z.boolean(),
+});
+
+describe("hasQuiz, on the cases shared with the server", () => {
+	const cases = z.array(ExerciseCaseSchema).parse(exerciseCases);
+
+	it.each(cases.map((shared) => [shared.name, shared] as const))(
+		"%s",
+		(_, shared) => {
+			const cards = shared.cards.map((spec, index) =>
+				card(`c-${index}`, spec.arabic, spec.meaningFr, {
+					forms: spec.forms
+						? {
+								kind: "joining",
+								initial: `${spec.arabic}ـ`,
+								medial: `ـ${spec.arabic}ـ`,
+								final: `ـ${spec.arabic}`,
+							}
+						: null,
+					audio: spec.audio
+						? { url: `/api/v1/audio/a-${index}`, durationMs: null }
+						: null,
+				}),
+			);
+
+			for (let draw = 0; draw < 20; draw++) {
+				expect(hasQuiz(cards)).toBe(shared.hasExercise);
+			}
+		},
+	);
 });

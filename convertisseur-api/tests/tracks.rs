@@ -112,6 +112,49 @@ impl Fixture {
             .await
     }
 
+    /// A validated lesson of three validated cards with distinct meanings,
+    /// which make an exercise; returns the lesson and its cards.
+    async fn exercise_lesson(&self, unit: &str, title: &str) -> (String, Vec<String>) {
+        let lesson = self.lesson(unit, title).await;
+        let mut cards = Vec::new();
+        for (arabic, meaning) in [
+            ("صباح الخير", "Bonjour"),
+            ("مسا الخير", "Bonsoir"),
+            ("بسلامة", "Au revoir"),
+        ] {
+            let card = self
+                .create(
+                    "cards",
+                    json!({
+                        "lessonId": lesson,
+                        "arabic": arabic,
+                        "meaningFr": format!("{meaning} ({title})"),
+                        "variety": "darija",
+                    }),
+                )
+                .await;
+            self.validate("cards", &card).await;
+            cards.push(card);
+        }
+        self.validate("lessons", &lesson).await;
+        (lesson, cards)
+    }
+
+    async fn learn(&self, method: Method, uri: &str, body: Option<&Value>) -> Answer {
+        self.server
+            .send(method, uri, Some(&self.learner), body)
+            .await
+    }
+
+    async fn attempt(&self, lesson: &str, first_try: u32, total: u32) -> Answer {
+        self.learn(
+            Method::POST,
+            "/api/v1/exercise-attempts",
+            Some(&json!({ "lessonId": lesson, "firstTry": first_try, "total": total })),
+        )
+        .await
+    }
+
     async fn tracks(&self) -> Value {
         let answer = self.read("/api/v1/tracks").await;
         assert_eq!(answer.status, StatusCode::OK, "{}", answer.body);
@@ -338,6 +381,7 @@ async fn gives_a_lesson_with_its_cards_and_recordings(pool: PgPool) {
                     "variety": "darija",
                     "forms": null,
                     "audio": null,
+                    "seen": false,
                 },
                 {
                     "id": spoken,
@@ -347,8 +391,10 @@ async fn gives_a_lesson_with_its_cards_and_recordings(pool: PgPool) {
                     "variety": "classique",
                     "forms": null,
                     "audio": { "url": card_audio, "durationMs": null },
+                    "seen": false,
                 },
             ],
+            "exercise": null,
         })
     );
     for url in [&lesson_audio, &card_audio] {
@@ -464,7 +510,199 @@ async fn documents_the_endpoints(pool: PgPool) {
             &json!("Sessions"),
             &json!("Users"),
             &json!("Tracks"),
+            &json!("Progress"),
             &json!("Content")
         ]
     );
+}
+
+/// The lessons of the Arabic track, in order, as the outline gives them.
+fn lessons(tracks: &Value) -> Vec<Value> {
+    tracks["items"][0]["units"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|unit| unit["lessons"].as_array().unwrap().clone())
+        .collect()
+}
+
+#[sqlx::test]
+async fn locks_each_lesson_until_the_exercise_before_is_passed(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let greetings = fixture.unit("arabe", "Salutations").await;
+    let (first, _) = fixture.exercise_lesson(&greetings, "Saluer").await;
+    let (second, second_cards) = fixture.exercise_lesson(&greetings, "Remercier").await;
+    fixture.validate("units", &greetings).await;
+    let family = fixture.unit("arabe", "La famille").await;
+    let (third, _) = fixture.exercise_lesson(&family, "Les parents").await;
+    fixture.validate("units", &family).await;
+
+    let outline = lessons(&fixture.tracks().await);
+    let locked: Vec<&Value> = outline.iter().map(|l| &l["locked"]).collect();
+    assert_eq!(locked, [&json!(false), &json!(true), &json!(true)]);
+    assert!(outline.iter().all(|l| l["hasExercise"] == json!(true)));
+    fixture
+        .read(&format!("/api/v1/tracks/arabe/lessons/{second}"))
+        .await
+        .assert_problem(StatusCode::FORBIDDEN, "lesson-locked");
+    fixture
+        .learn(
+            Method::PUT,
+            &format!("/api/v1/card-views/{}", second_cards[0]),
+            None,
+        )
+        .await
+        .assert_problem(StatusCode::FORBIDDEN, "lesson-locked");
+    fixture
+        .attempt(&second, 12, 12)
+        .await
+        .assert_problem(StatusCode::FORBIDDEN, "lesson-locked");
+
+    let missed = fixture.attempt(&first, 10, 12).await;
+    assert_eq!(missed.status, StatusCode::OK, "{}", missed.body);
+    assert_eq!(missed.body["exercise"]["passedAt"], Value::Null);
+    assert_eq!(missed.body["nextLesson"], Value::Null);
+
+    let passed = fixture.attempt(&first, 11, 12).await;
+    assert_eq!(passed.status, StatusCode::OK, "{}", passed.body);
+    assert_eq!(passed.body["exercise"]["best"]["firstTry"], 11);
+    assert!(passed.body["exercise"]["passedAt"].is_string());
+    assert_eq!(
+        passed.body["nextLesson"],
+        json!({ "id": second, "title": "Remercier" })
+    );
+    let lesson = fixture
+        .read(&format!("/api/v1/tracks/arabe/lessons/{second}"))
+        .await;
+    assert_eq!(lesson.status, StatusCode::OK, "{}", lesson.body);
+
+    let passed = fixture.attempt(&second, 12, 12).await;
+    assert_eq!(
+        passed.body["nextLesson"],
+        json!({ "id": third, "title": "Les parents" }),
+        "the path runs on across units"
+    );
+}
+
+#[sqlx::test]
+async fn keeps_the_best_result_and_the_first_pass(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let unit = fixture.unit("arabe", "Salutations").await;
+    let (lesson, _) = fixture.exercise_lesson(&unit, "Saluer").await;
+    fixture.validate("units", &unit).await;
+
+    let first = fixture.attempt(&lesson, 6, 12).await;
+    let passed = fixture.attempt(&lesson, 12, 12).await;
+    let worse = fixture.attempt(&lesson, 2, 3).await;
+    let tie = fixture.attempt(&lesson, 3, 3).await;
+
+    assert_eq!(first.body["exercise"]["passedAt"], Value::Null);
+    let exercise = &tie.body["exercise"];
+    assert_eq!(exercise["best"], passed.body["exercise"]["best"]);
+    assert_eq!(exercise["passedAt"], passed.body["exercise"]["passedAt"]);
+    assert_eq!(worse.body["exercise"]["passedAt"], exercise["passedAt"]);
+    assert_ne!(
+        exercise["lastAttemptAt"],
+        passed.body["exercise"]["lastAttemptAt"]
+    );
+    let read = fixture
+        .read(&format!("/api/v1/tracks/arabe/lessons/{lesson}"))
+        .await;
+    assert_eq!(read.body["exercise"], *exercise);
+    assert_eq!(
+        lessons(&fixture.tracks().await)[0]["progress"]["exercise"],
+        *exercise
+    );
+}
+
+#[sqlx::test]
+async fn refuses_an_attempt_that_does_not_add_up(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let unit = fixture.unit("arabe", "Salutations").await;
+    let (lesson, _) = fixture.exercise_lesson(&unit, "Saluer").await;
+
+    fixture
+        .attempt(&lesson, 4, 3)
+        .await
+        .assert_invalid("firstTry", "first_try_above_total");
+    fixture
+        .attempt(&lesson, 0, 0)
+        .await
+        .assert_invalid("total", "range");
+    fixture
+        .attempt(&lesson, 3, 3)
+        .await
+        .assert_invalid("lessonId", "lesson_not_found");
+}
+
+#[sqlx::test]
+async fn records_the_cards_an_account_sees(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let unit = fixture.unit("arabe", "Salutations").await;
+    let (lesson, cards) = fixture.exercise_lesson(&unit, "Saluer").await;
+    fixture.validate("units", &unit).await;
+    let view = format!("/api/v1/card-views/{}", cards[1]);
+
+    for _ in 0..2 {
+        let answer = fixture.learn(Method::PUT, &view, None).await;
+        assert_eq!(answer.status, StatusCode::NO_CONTENT, "{}", answer.body);
+    }
+
+    let read = fixture
+        .read(&format!("/api/v1/tracks/arabe/lessons/{lesson}"))
+        .await;
+    let seen: Vec<&Value> = read.body["cards"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|card| &card["seen"])
+        .collect();
+    assert_eq!(seen, [&json!(false), &json!(true), &json!(false)]);
+    let progress = &lessons(&fixture.tracks().await)[0]["progress"];
+    assert_eq!(progress["seenCardCount"], 1);
+    assert!(progress["lastSeenAt"].is_string());
+    fixture
+        .learn(
+            Method::PUT,
+            "/api/v1/card-views/00000000-0000-0000-0000-000000000000",
+            None,
+        )
+        .await
+        .assert_problem(StatusCode::NOT_FOUND, "not-found");
+
+    let deleted = fixture
+        .server
+        .send(
+            Method::DELETE,
+            &format!("/api/v1/cards/{}", cards[1]),
+            Some(&fixture.admin),
+            None,
+        )
+        .await;
+    assert_eq!(deleted.status, StatusCode::NO_CONTENT, "{}", deleted.body);
+    assert_eq!(
+        lessons(&fixture.tracks().await)[0]["progress"]["seenCardCount"],
+        0
+    );
+}
+
+#[sqlx::test]
+async fn lets_a_lesson_without_exercise_through(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let unit = fixture.unit("arabe", "Salutations").await;
+    let short = fixture.lesson(&unit, "Remercier").await;
+    let card = fixture.card(&short, "صحة").await;
+    fixture.validate("cards", &card).await;
+    fixture.validate("lessons", &short).await;
+    let (after, _) = fixture.exercise_lesson(&unit, "Saluer").await;
+    fixture.validate("units", &unit).await;
+
+    let outline = lessons(&fixture.tracks().await);
+
+    assert_eq!(outline[0]["hasExercise"], false);
+    assert_eq!(outline[1]["locked"], false);
+    let lesson = fixture
+        .read(&format!("/api/v1/tracks/arabe/lessons/{after}"))
+        .await;
+    assert_eq!(lesson.status, StatusCode::OK, "{}", lesson.body);
 }

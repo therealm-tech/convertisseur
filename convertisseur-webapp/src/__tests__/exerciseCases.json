@@ -1,0 +1,91 @@
+[
+	{
+		"name": "three cards with distinct meanings",
+		"cards": [
+			{ "arabic": "صباح الخير", "meaningFr": "Bonjour" },
+			{ "arabic": "مسا الخير", "meaningFr": "Bonsoir" },
+			{ "arabic": "بسلامة", "meaningFr": "Au revoir" }
+		],
+		"hasExercise": true
+	},
+	{
+		"name": "two cards",
+		"cards": [
+			{ "arabic": "صحة", "meaningFr": "Merci" },
+			{ "arabic": "يعطيك الصحة", "meaningFr": "Merci beaucoup" }
+		],
+		"hasExercise": false
+	},
+	{
+		"name": "three cards without meaning, forms or recording",
+		"cards": [
+			{ "arabic": "بَ", "meaningFr": null },
+			{ "arabic": "تَ", "meaningFr": null },
+			{ "arabic": "ثَ", "meaningFr": null }
+		],
+		"hasExercise": false
+	},
+	{
+		"name": "three cards sharing one meaning",
+		"cards": [
+			{ "arabic": "صحة", "meaningFr": "Merci" },
+			{ "arabic": "صحيت", "meaningFr": "Merci" },
+			{ "arabic": "يعطيك الصحة", "meaningFr": "Merci" }
+		],
+		"hasExercise": false
+	},
+	{
+		"name": "three cards sharing one Arabic",
+		"cards": [
+			{ "arabic": "صحة", "meaningFr": "Merci" },
+			{ "arabic": "صحة", "meaningFr": "Santé" },
+			{ "arabic": "صحة", "meaningFr": "Salut" }
+		],
+		"hasExercise": false
+	},
+	{
+		"name": "a card without meaning still serves as a distractor's Arabic",
+		"cards": [
+			{ "arabic": "صباح الخير", "meaningFr": "Bonjour" },
+			{ "arabic": "مسا الخير", "meaningFr": "Bonsoir" },
+			{ "arabic": "بسلامة", "meaningFr": null }
+		],
+		"hasExercise": true
+	},
+	{
+		"name": "three letters with their forms, without meaning",
+		"cards": [
+			{ "arabic": "ب", "meaningFr": null, "forms": true },
+			{ "arabic": "ت", "meaningFr": null, "forms": true },
+			{ "arabic": "ث", "meaningFr": null, "forms": true }
+		],
+		"hasExercise": true
+	},
+	{
+		"name": "one letter with forms among cards without",
+		"cards": [
+			{ "arabic": "ب", "meaningFr": null, "forms": true },
+			{ "arabic": "ت", "meaningFr": null },
+			{ "arabic": "ث", "meaningFr": null }
+		],
+		"hasExercise": false
+	},
+	{
+		"name": "one recorded card among cards without meaning",
+		"cards": [
+			{ "arabic": "بَ", "meaningFr": null, "audio": true },
+			{ "arabic": "تَ", "meaningFr": null },
+			{ "arabic": "ثَ", "meaningFr": null }
+		],
+		"hasExercise": true
+	},
+	{
+		"name": "a recorded card whose Arabic the others share",
+		"cards": [
+			{ "arabic": "صحة", "meaningFr": null, "audio": true },
+			{ "arabic": "صحة", "meaningFr": null },
+			{ "arabic": "بسلامة", "meaningFr": null }
+		],
+		"hasExercise": false
+	}
+]

@@ -88,9 +88,12 @@ with the transliteration and the meaning hidden until asked for, and a letter's
 shapes in a row under it (see [The forms of a letter](#the-forms-of-a-letter)).
 The lesson offers `/tracks/{track}/lessons/{lessonId}/exercise`, a
 multiple-choice exercise on the same cards (see [Exercises](#exercises)), from
-its first card and at its end; the track's map offers it under every lesson of
-three cards or more, the fewest an exercise needs, since the map does not load
-the cards that decide the rest. These pages
+its first card and at its end, and the track's map offers it under every lesson
+that has one. Each page shows where the learner stands: `/` resumes the last
+lesson touched, or sends to its exercise or to the next lesson; the map marks
+each lesson done, in progress, new or locked, with its best score; a lesson
+opens on the first card not seen yet (see
+[Progress and the lock](#progress-and-the-lock)). These pages
 load their data in the router's loaders, so a lesson the API does not serve
 renders the page not found rather than an empty screen.
 
@@ -149,6 +152,13 @@ a `role` of the `user_role` enum, `user`, `admin` or `super_admin`;
 
 `sessions` holds the logged-in sessions: the SHA-256 of the session token, the
 user it belongs to, and when it expires. Deleting a user deletes its sessions.
+
+`card_views` holds the cards each account has seen, with when it first and
+last saw each; `exercise_results` holds each account's best exercise result
+per lesson: the questions answered right the first time and the questions
+asked, when that score was reached, when the exercise was first passed, and
+the last attempt. Deleting the account, the card or the lesson deletes its
+rows.
 
 The learning content is a tree of three tables:
 
@@ -316,16 +326,19 @@ gets the same `403` as everywhere else.
   their unit, cards in their lesson. The responses carry no position; the
   order of the arrays is the order, and the webapp numbers what it shows, so
   that a hidden unit leaves no gap in "Unité 1, Unité 2".
-- **The endpoints serve content, nothing about the learner.** They hold no
-  progress, score or history; the webapp shows a lesson as a sequence of
-  cards, then its exercise, and keeps nothing once they are left.
+- **The endpoints serve the content with where the account stands in it.**
+  Each lesson of the outline carries `hasExercise`, `locked` and its
+  `progress`: the cards seen, the last one seen, the exercise result. A
+  lesson carries its result, and each card whether the account has seen it.
+  A locked lesson answers `403` `lesson-locked`.
 
 ## Exercises
 
 An exercise asks questions about the cards of one lesson, in
 [`quiz.ts`](convertisseur-webapp/src/lib/quiz.ts), and the exercise page
-asks them one at a time, with three or four choices each. Nothing about it
-reaches the server: it is built from the lesson the page already loads.
+asks them one at a time, with three or four choices each. It is built from
+the lesson the page already loads; only its score reaches the server (see
+[Progress and the lock](#progress-and-the-lock)).
 
 - **Four kinds of question**: the Arabic of a card, pick its meaning; the
   meaning, pick the Arabic; for a letter of the alphabet, one of its initial,
@@ -343,17 +356,57 @@ reaches the server: it is built from the lesson the page already loads.
   at random. A distractor never reads like the answer: two cards that share a
   meaning are never offered against each other, nor two that share their
   Arabic. A question needs three choices, so a lesson of fewer than three
-  cards has no exercise, and neither the lesson nor the map offers one. A
-  lesson whose cards make no question all the same, which the map cannot
-  tell, opens an exercise page that says so.
+  cards has no exercise, and neither the lesson nor the map offers one.
 - **A question answered wrong comes back near the end**, its choices
   reshuffled, until it is answered right. The progress bar counts the
   questions answered right.
 - **The grade counts the first try only**: the share of questions answered
   right the first time, as a percentage rounded down, from `gradeQuiz`. An
   exercise is passed from 90 %, so a grade that shows 90 % is always a pass.
-  `gradeQuiz` is a pure function and stores nothing, so whatever records a
-  learner's result computes the same grade.
+  `gradeQuiz` is a pure function; the server, which records the result,
+  applies the same 90 %.
+
+## Progress and the lock
+
+What an account has done is kept by the server, in `card_views` and
+`exercise_results`, written through two endpoints in
+[`api/progress.rs`](convertisseur-api/src/api/progress.rs) and read back with
+the outline and the lesson. The lock and the state of each lesson are
+computed at every read in [`progress.rs`](convertisseur-api/src/progress.rs);
+nothing about them is stored.
+
+- **A card is seen once the lesson shows it**:
+  `PUT /api/v1/card-views/{cardId}` marks it, again at each showing, which
+  moves its last time. A lesson is done when every card it shows has been
+  seen, so cards added later make it in progress again, and it opens on the
+  first of them.
+- **An exercise attempt keeps the best score**:
+  `POST /api/v1/exercise-attempts` takes the questions answered right the
+  first time and the questions asked, and keeps the best share, a tie keeping
+  the earlier one. 90 % passes, the rule of `gradeQuiz`, and a pass is never
+  taken back, whatever later attempts or content changes.
+- **A track is one path, its units then its lessons in order.** Its first
+  lesson is open; each next one opens when the one before is open and its
+  exercise passed, or has no exercise. Whether a lesson has an exercise
+  follows `hasQuiz`, which [`exercise.rs`](convertisseur-api/src/exercise.rs)
+  repeats; the cases in
+  [`exerciseCases.json`](convertisseur-webapp/src/__tests__/exerciseCases.json)
+  run against both. The two tracks are independent, and the lock applies to
+  every account, staff included.
+- **A lesson the account has started never locks again**: one where it has
+  seen a card or sent an attempt stays open, so a lesson added or validated
+  upstream does not take back what was reached.
+- **The lock holds on the server**: reading a locked lesson, marking one of
+  its cards seen or sending its exercise answers `403` `lesson-locked`, and
+  the webapp shows the lesson as locked rather than a page not found.
+- **Content changes follow the rows**: a card that is rewritten or moved
+  keeps its id, so it stays seen; a card or lesson deleted takes its rows
+  with it; a card sent back to review drops out of the counts until it is
+  validated again, seen as before.
+- **Writes do not hold up the page.** The webapp sends a card view without
+  waiting for it; a write the server cannot be reached for is kept in memory
+  and sent again with the next write or when the browser is back online. A
+  refusal is not retried.
 
 ## The starter content
 
@@ -731,6 +784,19 @@ CDN; for an app this size, a precached PWA, that load is negligible.
 rather than moving with the API's own prefix. The webapp therefore never routes
 them, and the service worker leaves them, like `/api`, to the network.
 
+**Progress lives on the server, per account, rather than in the browser.**
+A learner moves between a phone and a computer under one account, Safari
+clears the storage of a site not installed after seven days without a visit,
+and the lock must hold against a request typed by hand. Keyed on the cards
+and lessons, the rows also follow the content: a deletion removes them, an
+edit keeps them.
+
+**The server repeats two rules of the exercise rather than build it.** The
+exercise is drawn and graded in the webapp, but the lock needs to know which
+lessons have one and what passes. Moving the exercise to the server would
+make the webapp wait on it for every question; repeating a predicate and a
+threshold, checked by shared cases, costs two short functions.
+
 **Sessions live in PostgreSQL rather than in a signed token.** A server-side
 session can be deleted: logout, an expiry and a password change take effect on
 the next request, which a self-contained token such as a JWT cannot do without
@@ -944,6 +1010,11 @@ rather than a part of it.
   only an entry's place among its siblings changes without one.
 - An exercise draws its distractors from its own lesson: a lesson of three
   cards offers three choices, and one of fewer has no exercise.
-- Exercises keep no score: the score at the end is gone once the page is left.
+- The server takes an exercise's score as the webapp sends it: the questions
+  are asked in the browser, so a request written by hand can pass an exercise
+  and open the next lesson.
+- The app needs the network: a card seen or a score made while it is
+  unreachable is kept in memory only, and lost if the page is closed before
+  it comes back.
 - Rolling back to an image with older content files brings the content back
   to those files: the entries they lack are deleted, with their recordings.
