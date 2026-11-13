@@ -3,9 +3,10 @@ import type { StudyCard } from "@/lib/tracks";
 /**
  * `meaning`: the Arabic, pick its meaning. `arabic`: the meaning, pick the
  * Arabic. `form`: a letter's initial, medial or final form, pick the
- * isolated letter.
+ * isolated letter. `listen`: the card's recording, whose URL is the prompt,
+ * pick the Arabic.
  */
-export type QuestionKind = "meaning" | "arabic" | "form";
+export type QuestionKind = "meaning" | "arabic" | "form" | "listen";
 
 export interface Question {
 	id: string;
@@ -17,7 +18,16 @@ export interface Question {
 	answer: string;
 }
 
+export interface Grade {
+	/** The share of questions answered right the first time, rounded down. */
+	percent: number;
+	passed: boolean;
+}
+
 export type Random = () => number;
+
+export const QUIZ_LENGTH = 12;
+export const PASS_PERCENT = 90;
 
 const MAX_CHOICES = 4;
 const MIN_CHOICES = 3;
@@ -67,88 +77,169 @@ function letterForms(card: StudyCard): string[] {
 		: [card.forms.final];
 }
 
+/** Every question the card can make, one per kind. */
 function questionsFor(
 	card: StudyCard,
 	others: readonly StudyCard[],
 	random: Random,
 ): Question[] {
-	const candidates: Question[] = [];
+	const questions: Question[] = [];
 	const ofLetter = card.forms !== null;
+	function ask(
+		kind: QuestionKind,
+		prompt: string,
+		answer: string,
+		distractors: readonly (string | null)[],
+	) {
+		const choices = choicesFor(answer, distractors, random);
+		if (choices) {
+			questions.push({ id: card.id, kind, ofLetter, prompt, choices, answer });
+		}
+	}
+
 	if (card.meaningFr !== null) {
-		const meanings = choicesFor(
+		ask(
+			"meaning",
+			card.arabic,
 			card.meaningFr,
 			others
 				.filter((other) => other.arabic !== card.arabic)
 				.map((other) => other.meaningFr),
-			random,
 		);
-		if (meanings) {
-			candidates.push({
-				id: card.id,
-				kind: "meaning",
-				ofLetter,
-				prompt: card.arabic,
-				choices: meanings,
-				answer: card.meaningFr,
-			});
-		}
-		const arabic = choicesFor(
+		ask(
+			"arabic",
+			card.meaningFr,
 			card.arabic,
 			others
 				.filter((other) => other.meaningFr !== card.meaningFr)
 				.map((other) => other.arabic),
-			random,
 		);
-		if (arabic) {
-			candidates.push({
-				id: card.id,
-				kind: "arabic",
-				ofLetter,
-				prompt: card.meaningFr,
-				choices: arabic,
-				answer: card.arabic,
-			});
-		}
 	}
 	const form = pick(letterForms(card), random);
 	if (form !== undefined) {
-		const letters = choicesFor(
+		ask(
+			"form",
+			form,
 			card.arabic,
 			others.filter((other) => other.forms).map((other) => other.arabic),
-			random,
 		);
-		if (letters) {
-			candidates.push({
-				id: card.id,
-				kind: "form",
-				ofLetter,
-				prompt: form,
-				choices: letters,
-				answer: card.arabic,
-			});
-		}
 	}
-	return candidates;
+	if (card.audio !== null) {
+		ask(
+			"listen",
+			card.audio.url,
+			card.arabic,
+			others.map((other) => other.arabic),
+		);
+	}
+	return questions;
 }
 
 /**
- * One question per card that can make one, of a kind drawn among those it
- * allows, in a random order. Distractors come from the other cards of the
- * lesson, so a lesson of fewer than three cards makes none.
+ * Orders the questions so that two about one card never follow each other:
+ * each turn takes, among the cards other than the last one asked, one with
+ * the most questions left.
+ */
+function interleave(
+	questions: readonly Question[],
+	random: Random,
+): Question[] {
+	const left = new Map<string, Question[]>();
+	for (const question of shuffle(questions, random)) {
+		left.set(question.id, [...(left.get(question.id) ?? []), question]);
+	}
+	const ordered: Question[] = [];
+	let last: string | undefined;
+	while (left.size > 0) {
+		const others = [...left].filter(([id]) => id !== last);
+		const pool = others.length > 0 ? others : [...left];
+		const most = Math.max(...pool.map(([, queued]) => queued.length));
+		const next = pick(
+			pool.filter(([, queued]) => queued.length === most),
+			random,
+		);
+		if (!next) {
+			break;
+		}
+		const [id, [question, ...rest]] = next;
+		if (question) {
+			ordered.push(question);
+		}
+		last = id;
+		if (rest.length > 0) {
+			left.set(id, rest);
+		} else {
+			left.delete(id);
+		}
+	}
+	return ordered;
+}
+
+/**
+ * Every card that can make a question asks one; then, one card at a time,
+ * the cards ask the other kinds they allow until the quiz holds `length`
+ * questions or the cards have nothing left. Distractors come from the other
+ * cards of the lesson, so a lesson of fewer than three cards makes none.
  */
 export function buildQuiz(
 	cards: readonly StudyCard[],
 	random: Random = Math.random,
+	length: number = QUIZ_LENGTH,
 ): Question[] {
-	const questions = cards.flatMap((card) => {
-		const others = cards.filter((other) => other.id !== card.id);
-		const question = pick(questionsFor(card, others, random), random);
-		return question ? [question] : [];
-	});
-	return shuffle(questions, random);
+	const perCard = shuffle(cards, random).map((card) =>
+		shuffle(
+			questionsFor(
+				card,
+				cards.filter((other) => other.id !== card.id),
+				random,
+			),
+			random,
+		),
+	);
+	const rounds = Math.max(0, ...perCard.map((questions) => questions.length));
+	const chosen: Question[] = [];
+	for (let round = 0; round < rounds; round++) {
+		for (const questions of perCard) {
+			const question = questions[round];
+			if (question && (round === 0 || chosen.length < length)) {
+				chosen.push(question);
+			}
+		}
+	}
+	return interleave(chosen, random);
 }
 
 /** Whether the cards make at least one question, whatever the draw. */
 export function hasQuiz(cards: readonly StudyCard[]): boolean {
 	return buildQuiz(cards).length > 0;
+}
+
+/**
+ * The queue once a missed question goes back in, its choices reshuffled: at
+ * the end, or as close to it as it can sit without a question about the same
+ * card on either side.
+ */
+export function requeue(
+	rest: readonly Question[],
+	missed: Question,
+	random: Random = Math.random,
+): Question[] {
+	const again = { ...missed, choices: shuffle(missed.choices, random) };
+	for (let at = rest.length; at > 0; at--) {
+		if (rest[at - 1]?.id !== missed.id && rest[at]?.id !== missed.id) {
+			return [...rest.slice(0, at), again, ...rest.slice(at)];
+		}
+	}
+	return [...rest, again];
+}
+
+/** `firstTry` of `total` questions answered right the first time. */
+export function gradeQuiz(total: number, firstTry: number): Grade {
+	if (total <= 0) {
+		return { percent: 0, passed: false };
+	}
+	return {
+		percent: Math.floor((firstTry * 100) / total),
+		passed: firstTry * 100 >= PASS_PERCENT * total,
+	};
 }

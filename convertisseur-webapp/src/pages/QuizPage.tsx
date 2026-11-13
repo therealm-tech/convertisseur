@@ -2,11 +2,15 @@ import { Link, useLoaderData } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Arabic } from "@/components/Arabic";
 import { CloseIcon } from "@/components/icons";
+import { PlayButton } from "@/components/PlayButton";
 import {
 	buildQuiz,
+	type Grade,
+	gradeQuiz,
+	PASS_PERCENT,
 	type Question,
 	type QuestionKind,
-	shuffle,
+	requeue,
 } from "@/lib/quiz";
 import type { StudyLesson } from "@/lib/tracks";
 
@@ -14,12 +18,14 @@ const instructions: Record<QuestionKind, string> = {
 	meaning: "Quel est le sens ?",
 	arabic: "Comment dit-on ?",
 	form: "Quelle est cette lettre ?",
+	listen: "Qu'entends-tu ?",
 };
 
 const letterInstructions: Record<QuestionKind, string> = {
 	meaning: "Quel son ?",
 	arabic: "Quelle lettre ?",
 	form: "Quelle est cette lettre ?",
+	listen: "Quelle lettre entends-tu ?",
 };
 
 /** Whether the choices of a question are Arabic, or its prompt. */
@@ -76,7 +82,11 @@ function QuestionCard({
 					arabicChoices ? "quiz-prompt" : "quiz-prompt quiz-prompt-arabic"
 				}
 			>
-				<Text arabic={!arabicChoices}>{question.prompt}</Text>
+				{question.kind === "listen" ? (
+					<PlayButton url={question.prompt} label="Écouter" />
+				) : (
+					<Text arabic={!arabicChoices}>{question.prompt}</Text>
+				)}
 			</p>
 			<fieldset
 				aria-labelledby="quiz-question"
@@ -142,30 +152,42 @@ function Feedback({
 
 function Finished({
 	lesson,
-	score,
+	grade,
+	firstTry,
 	total,
 	onRestart,
 }: {
 	lesson: StudyLesson;
-	score: number;
+	grade: Grade;
+	firstTry: number;
 	total: number;
 	onRestart: () => void;
 }) {
 	return (
 		<section className="lesson-end" aria-labelledby="quiz-end-title">
 			<h2 id="quiz-end-title" className="lesson-end-title">
-				Exercice terminé
+				{grade.passed ? "Exercice réussi" : "Exercice à refaire"}
 			</h2>
+			<p className="quiz-grade">{grade.percent}&#8239;%</p>
 			<p className="lesson-end-text">
-				{score} sur {total} du premier coup
+				{firstTry} sur {total} du premier coup
 			</p>
-			<button type="button" className="button-secondary" onClick={onRestart}>
+			{grade.passed ? null : (
+				<p className="lesson-end-text">
+					Il faut {PASS_PERCENT}&#8239;% pour réussir.
+				</p>
+			)}
+			<button
+				type="button"
+				className={grade.passed ? "button-secondary" : "button-primary"}
+				onClick={onRestart}
+			>
 				Recommencer
 			</button>
 			<Link
 				to="/tracks/$track"
 				params={{ track: lesson.track }}
-				className="button-primary"
+				className={grade.passed ? "button-primary" : "button-secondary"}
 			>
 				Retour au parcours
 			</Link>
@@ -173,9 +195,13 @@ function Finished({
 	);
 }
 
+function questionKey(question: Question): string {
+	return `${question.id}:${question.kind}`;
+}
+
 /**
- * Asks the questions in turn; one answered wrong comes back at the end, with
- * its choices reshuffled, until it is answered right.
+ * Asks the questions in turn; one answered wrong comes back near the end,
+ * with its choices reshuffled, until it is answered right.
  */
 function Quiz({
 	lesson,
@@ -200,7 +226,7 @@ function Quiz({
 		}
 		setPicked(choice);
 		if (choice !== current.answer) {
-			setMissed((ids) => new Set(ids).add(current.id));
+			setMissed((keys) => new Set(keys).add(questionKey(current)));
 		}
 	}
 
@@ -209,13 +235,7 @@ function Quiz({
 			return;
 		}
 		const rest = queue.slice(1);
-		if (picked !== current.answer) {
-			rest.push({
-				...current,
-				choices: shuffle(current.choices, Math.random),
-			});
-		}
-		setQueue(rest);
+		setQueue(picked === current.answer ? rest : requeue(rest, current));
 		setPicked(null);
 		setTurn((count) => count + 1);
 	}
@@ -276,7 +296,8 @@ function Quiz({
 			) : (
 				<Finished
 					lesson={lesson}
-					score={total - missed.size}
+					grade={gradeQuiz(total, total - missed.size)}
+					firstTry={total - missed.size}
 					total={total}
 					onRestart={onRestart}
 				/>
