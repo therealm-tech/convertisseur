@@ -1817,6 +1817,27 @@ button.button-primary {
 	text-decoration: underline;
 }
 
+/* Lined up under the lesson's title: the star is 64px wide, after 4px of
+   padding and a 12px gap. */
+.path-exercise {
+	display: inline-flex;
+	align-items: center;
+	min-height: 36px;
+	margin-inline-start: 80px;
+	padding: 0 14px;
+	border: 1.5px solid var(--color-border);
+	border-radius: 999px;
+	background: var(--color-surface);
+	color: var(--color-primary-text);
+	font-size: 14px;
+	font-weight: 900;
+	text-decoration: none;
+}
+
+.path-exercise:hover {
+	border-color: var(--color-primary);
+}
+
 .empty-state {
 	display: flex;
 	flex-direction: column;
@@ -1888,6 +1909,18 @@ button.button-primary {
 	font-weight: 900;
 	line-height: 1.2;
 	overflow-wrap: anywhere;
+}
+
+.lesson-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.lesson-actions .lesson-exercise {
+	min-height: 44px;
+	margin-top: 0;
 }
 
 .play {

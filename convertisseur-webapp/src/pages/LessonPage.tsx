@@ -1,5 +1,5 @@
 import { Link, useLoaderData } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Arabic } from "@/components/Arabic";
 import { BackIcon, CloseIcon } from "@/components/icons";
 import { LetterFormsRow } from "@/components/LetterFormsRow";
@@ -69,14 +69,33 @@ function Card({
 	);
 }
 
+function ExerciseLink({
+	lesson,
+	className,
+}: {
+	lesson: StudyLesson;
+	className: string;
+}) {
+	return (
+		<Link
+			to="/tracks/$track/lessons/$lessonId/exercise"
+			params={{ track: lesson.track, lessonId: lesson.id }}
+			className={className}
+		>
+			S'entraîner
+		</Link>
+	);
+}
+
 function Finished({
 	lesson,
+	quiz,
 	onRestart,
 }: {
 	lesson: StudyLesson;
+	quiz: boolean;
 	onRestart: () => void;
 }) {
-	const quiz = hasQuiz(lesson.cards);
 	return (
 		<section className="lesson-end" aria-labelledby="lesson-end-title">
 			<h2 id="lesson-end-title" className="lesson-end-title">
@@ -87,13 +106,7 @@ function Finished({
 				« {lesson.title} ».
 			</p>
 			{quiz ? (
-				<Link
-					to="/tracks/$track/lessons/$lessonId/exercise"
-					params={{ track: lesson.track, lessonId: lesson.id }}
-					className="button-primary"
-				>
-					S'entraîner
-				</Link>
+				<ExerciseLink lesson={lesson} className="button-primary" />
 			) : null}
 			<button type="button" className="button-secondary" onClick={onRestart}>
 				Revoir les cartes
@@ -116,6 +129,7 @@ export function LessonPage() {
 	const [index, setIndex] = useState(0);
 	const [revealed, setRevealed] = useState(false);
 	const [finished, setFinished] = useState(false);
+	const quiz = useMemo(() => hasQuiz(lesson.cards), [lesson.cards]);
 	const total = lesson.cards.length;
 	const card = lesson.cards[index];
 
@@ -182,8 +196,18 @@ export function LessonPage() {
 			<div className="lesson-intro">
 				<p className="lesson-unit">{lesson.unit.title}</p>
 				<h1 className="lesson-title">{lesson.title}</h1>
-				{lesson.audio ? (
-					<PlayButton url={lesson.audio.url} label="Écouter la leçon" />
+				{lesson.audio || (quiz && !finished) ? (
+					<div className="lesson-actions">
+						{lesson.audio ? (
+							<PlayButton url={lesson.audio.url} label="Écouter la leçon" />
+						) : null}
+						{quiz && !finished ? (
+							<ExerciseLink
+								lesson={lesson}
+								className="button-secondary lesson-exercise"
+							/>
+						) : null}
+					</div>
 				) : null}
 			</div>
 
@@ -205,6 +229,7 @@ export function LessonPage() {
 			) : finished || !card ? (
 				<Finished
 					lesson={lesson}
+					quiz={quiz}
 					onRestart={() => {
 						setFinished(false);
 						setIndex(0);

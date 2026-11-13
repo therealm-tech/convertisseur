@@ -122,9 +122,56 @@ describe("exercise", () => {
 		);
 	});
 
+	it("is offered from the first card of a lesson", async () => {
+		loggedIn();
+		await renderAt("/tracks/arabe/lessons/l-greetings");
+
+		await userEvent.click(
+			await screen.findByRole("link", { name: "S'entraîner" }),
+		);
+
+		expect(await screen.findByText("Exercice")).toBeInTheDocument();
+		expect(screen.getByRole("progressbar")).toHaveAttribute(
+			"aria-valuetext",
+			"0 sur 6",
+		);
+	});
+
+	it("is offered on the track's map, under lessons of three cards or more", async () => {
+		loggedIn();
+		const router = await renderAt("/tracks/arabe");
+
+		await userEvent.click(
+			await screen.findByRole("link", { name: "S'entraîner : Saluer" }),
+		);
+
+		expect(await screen.findByText("Exercice")).toBeInTheDocument();
+		expect(router.state.location.pathname).toBe(
+			"/tracks/arabe/lessons/l-greetings/exercise",
+		);
+	});
+
+	it("is not offered on the map under three cards", async () => {
+		loggedIn();
+		await renderAt("/tracks/arabe");
+
+		expect(
+			await screen.findByRole("link", { name: /Remercier/ }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "S'entraîner : Remercier" }),
+		).not.toBeInTheDocument();
+	});
+
 	it("is not offered under three cards", async () => {
 		loggedIn();
 		await renderAt("/tracks/arabe/lessons/l-short");
+		expect(
+			await screen.findByRole("heading", { name: "Remercier" }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("link", { name: "S'entraîner" }),
+		).not.toBeInTheDocument();
 		await userEvent.click(
 			await screen.findByRole("button", { name: "Suivante" }),
 		);
