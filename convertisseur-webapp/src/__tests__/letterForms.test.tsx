@@ -122,7 +122,7 @@ describe("letter forms", () => {
 		});
 		api.logIn("nour");
 		const user = userEvent.setup();
-		await renderAt("/admin/content");
+		await renderAt("/admin/content?lesson=l-letters");
 		await screen.findByRole("table");
 
 		await user.click(screen.getByRole("link", { name: "د · dāl" }));

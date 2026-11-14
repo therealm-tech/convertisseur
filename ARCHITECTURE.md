@@ -67,19 +67,36 @@ whose password was reset by an admin can reach `/password` only, and the
 admin area under `/admin` is open to `admin` and `super_admin` alone. These
 guards spare the user a page that would only fail: the server enforces the
 same rules on every request. The admin area opens on `/admin/content`, where
-staff write and review the learning content, beside `/admin/review`, the
-review queue (see [The review queue](#the-review-queue)), and
-`/admin/users`.
+staff write and review the learning content (see
+[The review queue](#the-review-queue)), beside `/admin/users`.
 
-`/admin/content` lists the units, lessons and cards, and keeps its filters in
-its query string (`status`, `track`, `note`, `q`, `page`), each change
-replacing the history entry rather than adding one. Each item is edited on a
-page of its own, `/admin/content/{units|lessons|cards}/{id}`, and written at
-`/admin/content/{units|lessons|cards}/new`, which leads to the new
-item's page once it is created. A page opened from the list carries the list's
-filters in its history state, so that its way back, and deleting the item,
-return to the very entry it came from, filters and scroll included; opened
-from a link, it leads to the list unfiltered.
+`/admin/content` keeps its filters in its query string, each change
+replacing the history entry rather than adding one: `status`, `note` (a
+review note), `audio=missing` (cards without a recording) and `track`
+narrow what it shows. It shows one of three things:
+
+- **The tree**, by default: the tracks, their units and their lessons, each
+  lesson with its cards and what is left to review. `unit` narrows it to one
+  unit. The filters keep the lessons where the lesson, its unit or a card
+  matches, and the counts beside them are computed in the browser from the
+  lesson summaries (`GET /api/v1/lessons`), the units and the items with a
+  note (`GET /api/v1/content-items`), loaded once.
+- **One lesson's cards**, with `lesson`: in the lesson's order, filtered in
+  the browser, with the previous and next lessons the filters keep, and the
+  way to review the lesson, edit it or write a card in it.
+- **The search results**, with `q`: units, lessons and cards from
+  `GET /api/v1/content-items`, the latest edit first, `page` by page, each
+  with the path of its unit and lesson.
+
+Each item is edited on a page of its own,
+`/admin/content/{units|lessons|cards}/{id}`, and written at
+`/admin/content/{units|lessons|cards}/new`, which starts in the unit or
+lesson its `parent` names and leads to the new item's page once it is
+created. A page opened from the content page carries its filters in its
+history state, so that its way back, and deleting the item, return to the
+very entry it came from, filters and scroll included, unless that entry
+showed the lesson just deleted; opened from a link, it leads to the tree
+unfiltered.
 
 Learners start on `/`, which shows both tracks; `/tracks/{track}` draws a
 track's units and their lessons as a path, and
@@ -273,9 +290,10 @@ strips the Arabic short vowels, other diacritics and the tatweel, so `شكرا` 
 
 ## The review queue
 
-`/admin/review` lists the lessons a reviewer has something to do in, by
-track and unit, each with the one count its filter is about: the cards left
-to review, or the cards without a recording;
+`/admin/content?status=to-review`, where `/admin/review` leads, lists the
+lessons a reviewer has something to do in, by track and unit, each with the
+cards left to review and a way to review it; `audio=missing` lists them by
+the cards without a recording instead.
 `/admin/review/lessons/{lessonId}` reviews one of them: on a screen under
 1024px wide, card by card and full screen, without the admin bar, whose
 place the card needs; above, every card on one page, beside the admin
@@ -291,7 +309,7 @@ take `RequireRole<Admin>` like the rest of the content:
   with a card without a recording, whatever their status; `unitId` the
   lessons of one unit. Every page also gives `itemsToReview`, the units,
   lessons and cards to review, flagged or not, and `cardsWithoutAudio`, for
-  the queue's header and the navigation's badge.
+  the navigation's badge.
 - **A flagged card is a card to review with a review note**, not a status of
   its own. Flagging writes the note and sends a validated card back to
   review; validating a flagged card clears its note.

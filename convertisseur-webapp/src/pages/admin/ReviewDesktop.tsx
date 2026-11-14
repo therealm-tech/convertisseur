@@ -37,8 +37,10 @@ export function ReviewDesktop({ data, actions, error }: ViewProps) {
 			<header className="review-desktop-head">
 				<div className="review-desktop-titles">
 					<span className="review-crumb">
-						<Link to="/admin/review">Relecture</Link> ·{" "}
-						{trackLabels[unit.track]} · Unité {unit.position} · {unit.title}
+						<Link to="/admin/content" search={{ status: "to-review" }}>
+							Contenu
+						</Link>{" "}
+						· {trackLabels[unit.track]} · Unité {unit.position} · {unit.title}
 					</span>
 					<div className="review-desktop-title-row">
 						<h1 className="admin-title">{lesson.title}</h1>

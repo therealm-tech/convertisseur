@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { expectOk, send, sendForm } from "@/lib/api";
+import { allPages, expectOk, MAX_PER_PAGE, send, sendForm } from "@/lib/api";
 import { LetterFormsSchema } from "@/lib/letterForms";
 
 export const TrackSchema = z.enum(["arabe", "islam"]);
@@ -85,6 +85,10 @@ const ContentItemSchema = z.object({
 	updatedAt: timestamp,
 	importKey: z.string().nullable(),
 	reviewNote: z.string().nullable(),
+	/** The unit of a lesson or of a card; `null` for a unit. */
+	unitId: z.string().nullable(),
+	/** The lesson of a card; `null` for a unit or a lesson. */
+	lessonId: z.string().nullable(),
 });
 export type ContentItem = z.infer<typeof ContentItemSchema>;
 
@@ -190,6 +194,16 @@ export async function listContent(query: ContentQuery): Promise<ContentPage> {
 	const response = await send("GET", `/api/v1/content-items?${params}`);
 	await expectOk(response);
 	return ContentPageSchema.parse(await response.json());
+}
+
+/** Every item matching `query`, across all its pages. */
+export async function listAllContent(
+	query: Omit<ContentQuery, "page" | "perPage">,
+): Promise<ContentItem[]> {
+	const { items } = await allPages<ContentItem, ContentPage>((page) =>
+		listContent({ ...query, page, perPage: MAX_PER_PAGE }),
+	);
+	return items;
 }
 
 export async function getItem<K extends Kind>(

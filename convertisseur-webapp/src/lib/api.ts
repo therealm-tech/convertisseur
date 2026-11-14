@@ -154,6 +154,25 @@ export async function expectOk(response: Response): Promise<void> {
 }
 
 /** The live session, or `null` when the browser holds none. */
+/** The most items a list endpoint gives in one page. */
+export const MAX_PER_PAGE = 100;
+
+/** Every page of `fetchPage`, which the API caps at 100 items. */
+export async function allPages<T, P extends { items: T[]; total: number }>(
+	fetchPage: (page: number) => Promise<P>,
+): Promise<{ first: P; items: T[] }> {
+	const first = await fetchPage(1);
+	const items = [...first.items];
+	for (let page = 2; items.length < first.total; page += 1) {
+		const next = await fetchPage(page);
+		if (next.items.length === 0) {
+			break;
+		}
+		items.push(...next.items);
+	}
+	return { first, items };
+}
+
 export async function fetchCurrentSession(): Promise<Session | null> {
 	const response = await send("GET", "/api/v1/sessions/current");
 	if (response.status === 401) {

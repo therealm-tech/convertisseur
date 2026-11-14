@@ -11,25 +11,6 @@ import {
 	useReviewTotals,
 } from "@/pages/admin/reviewTotals";
 
-function ReviewIcon() {
-	return (
-		<svg
-			width="20"
-			height="20"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="2"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			aria-hidden="true"
-		>
-			<path d="M9 11.5 11.5 14 16 9.5" />
-			<rect x="4" y="4" width="16" height="16" rx="3" />
-		</svg>
-	);
-}
-
 function ContentIcon() {
 	return (
 		<svg
@@ -86,18 +67,18 @@ function BackIcon() {
 	);
 }
 
-/** The review entry, with how many items wait for a reviewer. */
-function ReviewLink() {
+/** The content entry, with how many items wait for a reviewer. */
+function ContentLink() {
 	const { totals } = useReviewTotals();
 	const count = totals?.itemsToReview;
 	return (
 		<Link
-			to="/admin/review"
+			to="/admin/content"
 			className="admin-nav-link"
-			aria-label={count ? `Relecture, ${count} à relire` : undefined}
+			aria-label={count ? `Contenu, ${count} à relire` : undefined}
 		>
-			<ReviewIcon />
-			Relecture
+			<ContentIcon />
+			Contenu
 			{count ? (
 				<span className="admin-nav-count" aria-hidden="true">
 					{count}
@@ -144,11 +125,7 @@ function AdminFrame() {
 					</div>
 				</div>
 				<nav aria-label="Administration" className="admin-nav">
-					<ReviewLink />
-					<Link to="/admin/content" className="admin-nav-link">
-						<ContentIcon />
-						Contenu
-					</Link>
+					<ContentLink />
 					<Link
 						to="/admin/users"
 						className="admin-nav-link"

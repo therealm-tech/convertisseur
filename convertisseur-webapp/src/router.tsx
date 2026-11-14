@@ -7,7 +7,11 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 import { fetchCurrentSession } from "@/lib/api";
-import { parseContentSearch, parseSection } from "@/lib/contentRoutes";
+import {
+	parseContentSearch,
+	parseNewItemSearch,
+	parseSection,
+} from "@/lib/contentRoutes";
 import { isStaff } from "@/lib/roles";
 import {
 	fetchLesson,
@@ -23,7 +27,6 @@ import {
 } from "@/pages/admin/ContentEditPage";
 import { ContentPage } from "@/pages/admin/ContentPage";
 import { ReviewLessonPage } from "@/pages/admin/ReviewLessonPage";
-import { ReviewQueuePage } from "@/pages/admin/ReviewQueuePage";
 import { UsersPage } from "@/pages/admin/UsersPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { ErrorPage } from "@/pages/ErrorPage";
@@ -129,6 +132,7 @@ const adminContentItemRoute = createRoute({
 const adminContentNewRoute = createRoute({
 	getParentRoute: () => adminRoute,
 	path: "/content/$section/new",
+	validateSearch: parseNewItemSearch,
 	beforeLoad: ({ params }) => ({ kind: parseSection(params.section) }),
 	component: ContentCreatePage,
 });
@@ -136,7 +140,13 @@ const adminContentNewRoute = createRoute({
 const adminReviewRoute = createRoute({
 	getParentRoute: () => adminRoute,
 	path: "/review",
-	component: ReviewQueuePage,
+	beforeLoad: () => {
+		throw redirect({
+			to: "/admin/content",
+			search: { status: "to-review" },
+			replace: true,
+		});
+	},
 });
 
 const adminReviewLessonRoute = createRoute({

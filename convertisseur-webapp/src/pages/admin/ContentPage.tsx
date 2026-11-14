@@ -3,37 +3,40 @@ import { useEffect, useState } from "react";
 import {
 	type ContentItem,
 	type Kind,
+	listAllContent,
 	listContent,
 	type ContentPage as Page,
-	type Status,
 	type Track,
 } from "@/lib/content";
-import { kindLabels, statusLabels, trackLabels } from "@/lib/contentLabels";
+import { kindLabels, trackLabels } from "@/lib/contentLabels";
+import { type ContentSearch, sectionOf, statusOf } from "@/lib/contentRoutes";
 import {
-	type ContentSearch,
-	sectionOf,
-	statusOf,
-	statusParam,
-} from "@/lib/contentRoutes";
+	type Counts,
+	type Filters,
+	type TreeData,
+	treeCounts,
+} from "@/lib/contentTree";
 import { formatShortDay } from "@/lib/dates";
+import { listAllLessons } from "@/lib/review";
+import { ContentFilters } from "@/pages/admin/ContentFilters";
+import { ContentTree } from "@/pages/admin/ContentTree";
 import {
 	ItemTitle,
 	NoteFlag,
-	NoteIcon,
 	StatusPill,
 	useContentFailure,
 } from "@/pages/admin/contentParts";
+import { LessonCards } from "@/pages/admin/LessonCards";
 
 const PER_PAGE = 50;
 const SEARCH_DELAY_MS = 250;
 
-type StatusFilter = Status | "";
-type TrackFilter = Track | "";
-
-type Listing =
+type Loading<T> =
 	| { state: "loading" }
 	| { state: "failed" }
-	| { state: "ready"; page: Page };
+	| { state: "ready"; data: T };
+
+type TrackFilter = Track | "";
 
 const trackOptions: { value: TrackFilter; label: string }[] = [
 	{ value: "", label: "Tous" },
@@ -50,18 +53,56 @@ function useDebounced<T>(value: T, delayMs: number): T {
 	return debounced;
 }
 
-export function ContentPage() {
-	const filters = useSearch({ from: "/_app/admin/content" });
-	const navigate = useNavigate({ from: "/admin/content" });
+function filtersOf(search: ContentSearch): Filters {
+	return {
+		status: statusOf(search.status),
+		note: search.note === true,
+		audio: search.audio === "missing",
+		track: search.track,
+		unit: search.unit,
+	};
+}
+
+/** The lessons, units and noted items the tree and its counts come from. */
+function useTreeData(): Loading<TreeData> {
 	const onFailure = useContentFailure();
-	const status = statusOf(filters.status);
-	const track = filters.track;
-	const noted = filters.note === true;
-	const q = filters.q ?? "";
-	const pageNumber = filters.page ?? 1;
-	const [search, setSearch] = useState(q);
-	const [listing, setListing] = useState<Listing>({ state: "loading" });
-	const typed = useDebounced(search, SEARCH_DELAY_MS);
+	const [tree, setTree] = useState<Loading<TreeData>>({ state: "loading" });
+	useEffect(() => {
+		let current = true;
+		Promise.all([
+			listAllLessons({}),
+			listAllContent({ kind: "unit" }),
+			listAllContent({ hasReviewNote: true }),
+		]).then(
+			([{ lessons }, units, noted]) => {
+				if (current) {
+					setTree({ state: "ready", data: { lessons, units, noted } });
+				}
+			},
+			(failure: unknown) => {
+				if (current) {
+					setTree({ state: "failed" });
+					onFailure("admin.content_tree_failed", failure);
+				}
+			},
+		);
+		return () => {
+			current = false;
+		};
+	}, [onFailure]);
+	return tree;
+}
+
+/**
+ * The content of both tracks: their units and lessons as a tree, one
+ * lesson's cards, or the items matching a search.
+ */
+export function ContentPage() {
+	const search = useSearch({ from: "/_app/admin/content" });
+	const navigate = useNavigate({ from: "/admin/content" });
+	const tree = useTreeData();
+	const filters = filtersOf(search);
+	const treeData = tree.state === "ready" ? tree.data : undefined;
 
 	// Filters live in the URL, so that going back from an edit page finds them;
 	// they replace the entry rather than pile up in the history.
@@ -71,6 +112,99 @@ export function ContentPage() {
 			replace: true,
 		});
 	}
+
+	if (search.lesson) {
+		return (
+			<div className="admin-content">
+				<LessonCards
+					key={search.lesson}
+					lessonId={search.lesson}
+					search={search}
+					filters={filters}
+					tree={treeData}
+					onFilter={filter}
+				/>
+			</div>
+		);
+	}
+
+	const createLinks: { kind: Kind; label: string; className: string }[] = [
+		{ kind: "unit", label: "Nouvelle unité", className: "button-outline" },
+		{ kind: "card", label: "Nouvelle carte", className: "button-outline" },
+		{ kind: "lesson", label: "Nouvelle leçon", className: "button-solid" },
+	];
+
+	return (
+		<div className="admin-content">
+			<div className="admin-header-row">
+				<header className="admin-header">
+					<h1 className="admin-title">Contenu</h1>
+				</header>
+				<div className="admin-header-actions">
+					{createLinks.map((link) => (
+						<Link
+							key={link.kind}
+							to="/admin/content/$section/new"
+							params={{ section: sectionOf[link.kind] }}
+							search={
+								link.kind === "lesson" && search.unit
+									? { parent: search.unit }
+									: {}
+							}
+							state={{ contentList: search }}
+							className={link.className}
+						>
+							{link.label}
+						</Link>
+					))}
+				</div>
+			</div>
+
+			{search.q ? (
+				<SearchResults
+					search={search}
+					filters={filters}
+					tree={treeData}
+					onFilter={filter}
+				/>
+			) : (
+				<>
+					<ListFilters
+						search={search}
+						filters={filters}
+						counts={treeData ? treeCounts(treeData, filters) : undefined}
+						onFilter={filter}
+					/>
+					{tree.state === "failed" ? (
+						<p role="alert" className="form-error">
+							Impossible de charger le contenu. Réessaie dans un moment.
+						</p>
+					) : null}
+					{tree.state === "loading" ? (
+						<p className="admin-table-message">Chargement…</p>
+					) : null}
+					{treeData ? (
+						<ContentTree data={treeData} filters={filters} search={search} />
+					) : null}
+				</>
+			)}
+		</div>
+	);
+}
+
+interface ListFiltersProps {
+	search: ContentSearch;
+	filters: Filters;
+	counts: Partial<Counts> | undefined;
+	onFilter: (change: Partial<ContentSearch>) => void;
+}
+
+/** The filters, with the track and the search the tree and results share. */
+function ListFilters({ search, filters, counts, onFilter }: ListFiltersProps) {
+	const navigate = useNavigate({ from: "/admin/content" });
+	const q = search.q ?? "";
+	const [text, setText] = useState(q);
+	const typed = useDebounced(text, SEARCH_DELAY_MS);
 
 	useEffect(() => {
 		if (typed !== q) {
@@ -85,6 +219,73 @@ export function ContentPage() {
 		}
 	}, [typed, q, navigate]);
 
+	return (
+		<ContentFilters
+			filters={filters}
+			counts={counts}
+			onFilter={onFilter}
+			extra={
+				<div className="admin-filter">
+					<label htmlFor="content-parcours" className="admin-filter-label">
+						Parcours
+					</label>
+					<select
+						id="content-parcours"
+						className="admin-select"
+						value={search.track ?? ""}
+						onChange={(event) => {
+							const chosen = trackOptions.find(
+								(option) => option.value === event.target.value,
+							);
+							onFilter({ track: chosen?.value || undefined });
+						}}
+					>
+						{trackOptions.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</select>
+				</div>
+			}
+		>
+			<label htmlFor="content-recherche" className="visually-hidden">
+				Rechercher du contenu
+			</label>
+			<input
+				id="content-recherche"
+				type="search"
+				className="admin-search"
+				placeholder="Rechercher un titre ou un mot"
+				autoComplete="off"
+				value={text}
+				onChange={(event) => setText(event.target.value)}
+			/>
+		</ContentFilters>
+	);
+}
+
+interface SearchResultsProps {
+	search: ContentSearch;
+	filters: Filters;
+	tree: TreeData | undefined;
+	onFilter: (change: Partial<ContentSearch>) => void;
+}
+
+/** The items matching the search, the latest edit first. */
+function SearchResults({
+	search,
+	filters,
+	tree,
+	onFilter,
+}: SearchResultsProps) {
+	const onFailure = useContentFailure();
+	const [listing, setListing] = useState<Loading<Page>>({ state: "loading" });
+	const pageNumber = search.page ?? 1;
+	const { status, track } = filters;
+	const noted = filters.note;
+	const q = search.q;
+
 	useEffect(() => {
 		let current = true;
 		listContent({
@@ -95,9 +296,9 @@ export function ContentPage() {
 			q,
 			hasReviewNote: noted || undefined,
 		}).then(
-			(page) => {
+			(data) => {
 				if (current) {
-					setListing({ state: "ready", page });
+					setListing({ state: "ready", data });
 				}
 			},
 			(failure: unknown) => {
@@ -112,134 +313,30 @@ export function ContentPage() {
 		};
 	}, [pageNumber, status, track, noted, q, onFailure]);
 
-	function open(item: ContentItem) {
-		void navigate({
-			to: "/admin/content/$section/$itemId",
-			params: { section: sectionOf[item.kind], itemId: item.id },
-			state: { contentList: filters },
-		});
-	}
-
-	const page = listing.state === "ready" ? listing.page : undefined;
-	const counts = page?.statusCounts;
+	const page = listing.state === "ready" ? listing.data : undefined;
 	const pageCount = page
 		? Math.max(1, Math.ceil(page.total / page.perPage))
 		: 1;
-	const statusOptions: {
-		value: StatusFilter;
-		label: string;
-		count?: number;
-	}[] = [
-		{
-			value: "",
-			label: "Tout",
-			...(counts ? { count: counts.toReview + counts.validated } : {}),
-		},
-		{
-			value: "to_review",
-			label: statusLabels.to_review,
-			...(counts ? { count: counts.toReview } : {}),
-		},
-		{
-			value: "validated",
-			label: statusLabels.validated,
-			...(counts ? { count: counts.validated } : {}),
-		},
-	];
-	const createLinks: { kind: Kind; label: string; className: string }[] = [
-		{ kind: "unit", label: "Nouvelle unité", className: "button-outline" },
-		{ kind: "card", label: "Nouvelle carte", className: "button-outline" },
-		{ kind: "lesson", label: "Nouvelle leçon", className: "button-solid" },
-	];
+	const counts = page
+		? {
+				all: page.statusCounts.toReview + page.statusCounts.validated,
+				toReview: page.statusCounts.toReview,
+				validated: page.statusCounts.validated,
+				noted: page.reviewNoteCount,
+			}
+		: undefined;
+	// The search spans every unit, and the API has no audio filter: both
+	// belong to the tree alone.
+	const searched: Filters = { ...filters, audio: false, unit: undefined };
 
 	return (
-		<div className="admin-content">
-			<div className="admin-header-row">
-				<header className="admin-header">
-					<h1 className="admin-title">Contenu</h1>
-					<p className="admin-lead">
-						Unités, leçons et cartes des deux parcours. Un contenu « à relire »
-						n'est pas montré aux apprenants tant qu'il n'est pas validé.
-					</p>
-				</header>
-				<div className="admin-header-actions">
-					{createLinks.map((link) => (
-						<Link
-							key={link.kind}
-							to="/admin/content/$section/new"
-							params={{ section: sectionOf[link.kind] }}
-							state={{ contentList: filters }}
-							className={link.className}
-						>
-							{link.label}
-						</Link>
-					))}
-				</div>
-			</div>
-
-			<div className="admin-filters">
-				<fieldset className="status-filter">
-					<legend className="visually-hidden">Filtrer par statut</legend>
-					{statusOptions.map((option) => (
-						<button
-							key={option.value}
-							type="button"
-							aria-pressed={(status ?? "") === option.value}
-							onClick={() =>
-								filter({ status: statusParam(option.value || undefined) })
-							}
-						>
-							{option.label}
-							{option.count === undefined ? null : ` · ${option.count}`}
-						</button>
-					))}
-				</fieldset>
-				<button
-					type="button"
-					className="note-filter"
-					aria-pressed={noted}
-					onClick={() => filter({ note: noted ? undefined : true })}
-				>
-					<NoteIcon />
-					Avec remarque
-					{page ? ` · ${page.reviewNoteCount}` : null}
-				</button>
-				<div className="admin-filter">
-					<label htmlFor="content-parcours" className="admin-filter-label">
-						Parcours
-					</label>
-					<select
-						id="content-parcours"
-						className="admin-select"
-						value={track ?? ""}
-						onChange={(event) => {
-							const chosen = trackOptions.find(
-								(option) => option.value === event.target.value,
-							);
-							filter({ track: chosen?.value || undefined });
-						}}
-					>
-						{trackOptions.map((option) => (
-							<option key={option.value} value={option.value}>
-								{option.label}
-							</option>
-						))}
-					</select>
-				</div>
-				<label htmlFor="content-recherche" className="visually-hidden">
-					Rechercher du contenu
-				</label>
-				<input
-					id="content-recherche"
-					type="search"
-					className="admin-search"
-					placeholder="Rechercher un titre ou un mot"
-					autoComplete="off"
-					value={search}
-					onChange={(event) => setSearch(event.target.value)}
-				/>
-			</div>
-
+		<>
+			<ListFilters
+				search={search}
+				filters={searched}
+				counts={counts}
+				onFilter={onFilter}
+			/>
 			<div className="admin-table-card">
 				{listing.state === "failed" ? (
 					<p role="alert" className="form-error admin-table-message">
@@ -250,10 +347,9 @@ export function ContentPage() {
 					<p className="admin-table-message">Chargement…</p>
 				) : null}
 				{page ? (
-					<ContentTable items={page.items} filters={filters} onOpen={open} />
+					<ResultTable items={page.items} search={search} tree={tree} />
 				) : null}
 			</div>
-
 			{page && pageCount > 1 ? (
 				<nav aria-label="Pages" className="admin-pagination">
 					<button
@@ -261,7 +357,7 @@ export function ContentPage() {
 						className="button-secondary"
 						disabled={pageNumber <= 1}
 						onClick={() =>
-							filter({ page: pageNumber > 2 ? pageNumber - 1 : undefined })
+							onFilter({ page: pageNumber > 2 ? pageNumber - 1 : undefined })
 						}
 					>
 						Précédent
@@ -273,24 +369,25 @@ export function ContentPage() {
 						type="button"
 						className="button-secondary"
 						disabled={pageNumber >= pageCount}
-						onClick={() => filter({ page: pageNumber + 1 })}
+						onClick={() => onFilter({ page: pageNumber + 1 })}
 					>
 						Suivant
 					</button>
 				</nav>
 			) : null}
-		</div>
+		</>
 	);
 }
 
-interface ContentTableProps {
+interface ResultTableProps {
 	items: ContentItem[];
-	/** The list's filters, which the edit pages lead back to. */
-	filters: ContentSearch;
-	onOpen: (item: ContentItem) => void;
+	/** The page's filters, which the edit pages lead back to. */
+	search: ContentSearch;
+	tree: TreeData | undefined;
 }
 
-function ContentTable({ items, filters, onOpen }: ContentTableProps) {
+function ResultTable({ items, search, tree }: ResultTableProps) {
+	const navigate = useNavigate();
 	if (items.length === 0) {
 		return <p className="admin-table-message">Aucun contenu ne correspond.</p>;
 	}
@@ -300,7 +397,6 @@ function ContentTable({ items, filters, onOpen }: ContentTableProps) {
 				<thead>
 					<tr>
 						<th scope="col">Titre</th>
-						<th scope="col">Parcours</th>
 						<th scope="col">Type</th>
 						<th scope="col">Relecture</th>
 						<th scope="col">Modifié</th>
@@ -315,9 +411,12 @@ function ContentTable({ items, filters, onOpen }: ContentTableProps) {
 								const target = event.target;
 								const onLink =
 									target instanceof Element && target.closest("a") !== null;
-								const selecting = Boolean(window.getSelection()?.toString());
-								if (!onLink && !selecting) {
-									onOpen(item);
+								if (!onLink && !window.getSelection()?.toString()) {
+									void navigate({
+										to: "/admin/content/$section/$itemId",
+										params: { section: sectionOf[item.kind], itemId: item.id },
+										state: { contentList: search },
+									});
 								}
 							}}
 						>
@@ -325,7 +424,7 @@ function ContentTable({ items, filters, onOpen }: ContentTableProps) {
 								<Link
 									to="/admin/content/$section/$itemId"
 									params={{ section: sectionOf[item.kind], itemId: item.id }}
-									state={{ contentList: filters }}
+									state={{ contentList: search }}
 									className="content-title-link"
 								>
 									<span>
@@ -336,12 +435,9 @@ function ContentTable({ items, filters, onOpen }: ContentTableProps) {
 										/>
 									</span>
 								</Link>
-								{item.parentTitle ? (
-									<span className="content-parent">{item.parentTitle}</span>
-								) : null}
+								<ItemPath item={item} tree={tree} />
 								{item.reviewNote ? <NoteFlag /> : null}
 							</th>
-							<td>{trackLabels[item.track]}</td>
 							<td>{kindLabels[item.kind]}</td>
 							<td>
 								<StatusPill status={item.status} />
@@ -354,5 +450,40 @@ function ContentTable({ items, filters, onOpen }: ContentTableProps) {
 				</tbody>
 			</table>
 		</div>
+	);
+}
+
+/** "Arabe › L'alphabet › Les lettres": where an item sits, each step a link. */
+function ItemPath({
+	item,
+	tree,
+}: {
+	item: ContentItem;
+	tree: TreeData | undefined;
+}) {
+	const unitTitle =
+		item.kind === "card"
+			? tree?.lessons.find((lesson) => lesson.id === item.lessonId)?.unit.title
+			: item.parentTitle;
+	return (
+		<span className="content-parent content-path">
+			{trackLabels[item.track]}
+			{item.unitId && unitTitle ? (
+				<>
+					{" › "}
+					<Link to="/admin/content" search={{ unit: item.unitId }}>
+						{unitTitle}
+					</Link>
+				</>
+			) : null}
+			{item.lessonId && item.parentTitle ? (
+				<>
+					{" › "}
+					<Link to="/admin/content" search={{ lesson: item.lessonId }}>
+						{item.parentTitle}
+					</Link>
+				</>
+			) : null}
+		</span>
 	);
 }

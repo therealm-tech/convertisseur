@@ -5,11 +5,20 @@ import { type Kind, type Status, TrackSchema } from "@/lib/content";
 const StatusParamSchema = z.enum(["to-review", "validated"]);
 type StatusParam = z.infer<typeof StatusParamSchema>;
 
-/** The filters of the content list, kept in its URL. */
+const IdSchema = z.string().min(1);
+
+/**
+ * The filters of the content page, kept in its URL. `lesson` shows one
+ * lesson's cards, `q` the items matching a text, and the tree of the tracks
+ * shows otherwise, narrowed to one `unit` when set.
+ */
 export const ContentSearchSchema = z.object({
 	status: StatusParamSchema.optional().catch(undefined),
 	track: TrackSchema.optional().catch(undefined),
 	note: z.literal(true).optional().catch(undefined),
+	audio: z.literal("missing").optional().catch(undefined),
+	unit: IdSchema.optional().catch(undefined),
+	lesson: IdSchema.optional().catch(undefined),
 	q: z.string().min(1).optional().catch(undefined),
 	page: z.number().int().min(2).optional().catch(undefined),
 });
@@ -19,6 +28,18 @@ export function parseContentSearch(
 	search: Record<string, unknown>,
 ): ContentSearch {
 	return ContentSearchSchema.parse(search);
+}
+
+/** The parent a new item's form starts in: a lesson's unit, a card's lesson. */
+const NewItemSearchSchema = z.object({
+	parent: IdSchema.optional().catch(undefined),
+});
+export type NewItemSearch = z.infer<typeof NewItemSearchSchema>;
+
+export function parseNewItemSearch(
+	search: Record<string, unknown>,
+): NewItemSearch {
+	return NewItemSearchSchema.parse(search);
 }
 
 const statusOfParam: Record<StatusParam, Status> = {
