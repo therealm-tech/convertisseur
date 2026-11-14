@@ -186,7 +186,9 @@ export class FakeContent {
 				(row) =>
 					(!params.get("track") || row.track === params.get("track")) &&
 					(!params.get("kind") || row.kind === params.get("kind")) &&
-					`${row.title} ${row.arabic} ${row.transliteration ?? ""}`
+					`${row.title} ${row.arabic} ${row.transliteration ?? ""} ${
+						row.parentId ? (this.row(row.parentId)?.title ?? "") : ""
+					}`
 						.toLowerCase()
 						.includes(q),
 			)
@@ -223,6 +225,7 @@ export class FakeContent {
 				updatedAt: row.updatedAt,
 				importKey: row.importKey,
 				reviewNote: row.reviewNote,
+				...this.parents(row),
 			}));
 		return json(200, {
 			items,
@@ -539,6 +542,21 @@ export class FakeContent {
 	}
 
 	/** A lesson as the review queue lists it. */
+	/** The unit and lesson ids the review list gives each item. */
+	private parents(row: Row): {
+		unitId: string | null;
+		lessonId: string | null;
+	} {
+		if (row.kind === "unit") {
+			return { unitId: null, lessonId: null };
+		}
+		if (row.kind === "lesson") {
+			return { unitId: row.parentId, lessonId: null };
+		}
+		const lesson = this.row(row.parentId ?? "");
+		return { unitId: lesson?.parentId ?? null, lessonId: row.parentId };
+	}
+
 	private summary(lesson: Row) {
 		const unit = this.row(lesson.parentId ?? "") as Row;
 		const cards = this.rows.filter(

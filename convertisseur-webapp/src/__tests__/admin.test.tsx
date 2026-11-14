@@ -91,7 +91,7 @@ describe("admin area guard", () => {
 			within(sections)
 				.getAllByRole("link")
 				.map((link) => link.textContent),
-		).toEqual(["Relecture", "Contenu", "Utilisateurs et rôles"]);
+		).toEqual(["Contenu", "Utilisateurs et rôles"]);
 
 		await userEvent.click(screen.getByRole("link", { name: "Retour à l'app" }));
 

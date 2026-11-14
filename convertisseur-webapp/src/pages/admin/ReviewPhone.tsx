@@ -74,7 +74,8 @@ export function ReviewPhone({ data, actions, error }: ViewProps) {
 		<div className="review-phone">
 			<div className="review-phone-top">
 				<Link
-					to="/admin/review"
+					to="/admin/content"
+					search={{ status: "to-review" }}
 					className="review-close"
 					aria-label="Revenir à la liste des leçons"
 				>
@@ -333,7 +334,11 @@ function DoneScreen({
 				) : null}
 			</div>
 			<div className="review-phone-bar">
-				<Link to="/admin/review" className="review-bar-secondary">
+				<Link
+					to="/admin/content"
+					search={{ status: "to-review" }}
+					className="review-bar-secondary"
+				>
 					Toutes les leçons
 				</Link>
 				{data.nextId ? (

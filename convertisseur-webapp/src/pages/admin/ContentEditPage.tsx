@@ -5,6 +5,7 @@ import {
 	useParams,
 	useRouteContext,
 	useRouter,
+	useSearch,
 } from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
 import { Dialog } from "@/components/Dialog";
@@ -71,17 +72,18 @@ const notEmptyMessages: Record<Kind, string> = {
 	card: UNEXPECTED,
 };
 
-function emptyDraft(kind: Kind): Draft {
+/** A new item's fields, in `parentId` when given: a unit, or a lesson. */
+function emptyDraft(kind: Kind, parentId = ""): Draft {
 	switch (kind) {
 		case "unit":
 			return { kind, fields: { track: "arabe", title: "" } };
 		case "lesson":
-			return { kind, fields: { unitId: "", title: "" } };
+			return { kind, fields: { unitId: parentId, title: "" } };
 		case "card":
 			return {
 				kind,
 				fields: {
-					lessonId: "",
+					lessonId: parentId,
 					arabic: "",
 					transliteration: "",
 					meaningFr: "",
@@ -184,10 +186,12 @@ export function ContentEditPage() {
 
 /** A new unit, lesson or card to write. */
 export function ContentCreatePage() {
-	const { kind } = useRouteContext({
-		from: "/_app/admin/content/$section/new",
-	});
-	return <ContentEditor key={kind} kind={kind} id={undefined} />;
+	const from = "/_app/admin/content/$section/new";
+	const { kind } = useRouteContext({ from });
+	const { parent } = useSearch({ from });
+	return (
+		<ContentEditor key={kind} kind={kind} id={undefined} parentId={parent} />
+	);
 }
 
 /**
@@ -201,8 +205,19 @@ function useBackToList() {
 	const filters = listOrigin(origin);
 	return {
 		filters,
-		back: () => {
-			if (filters) {
+		/** Back to the list; `deleted` names a lesson whose page it was. */
+		back: (deleted?: string) => {
+			if (
+				filters &&
+				filters.lesson !== undefined &&
+				filters.lesson === deleted
+			) {
+				void navigate({
+					to: "/admin/content",
+					search: { ...filters, lesson: undefined },
+					replace: true,
+				});
+			} else if (filters) {
 				router.history.back();
 			} else {
 				void navigate({ to: "/admin/content", replace: true });
@@ -235,16 +250,22 @@ interface ContentEditorProps {
 	kind: Kind;
 	/** The item to edit; a new one is written when undefined. */
 	id: string | undefined;
+	/** The unit or lesson a new item starts in. */
+	parentId?: string | undefined;
 }
 
-function ContentEditor({ kind: pageKind, id }: ContentEditorProps) {
+function ContentEditor({ kind: pageKind, id, parentId }: ContentEditorProps) {
 	const navigate = useNavigate();
 	const onFailure = useContentFailure();
 	const { back } = useBackToList();
 	const titleId = useId();
 	const [state, setState] = useState<Phase>(
 		id === undefined
-			? { phase: "ready", loaded: undefined, draft: emptyDraft(pageKind) }
+			? {
+					phase: "ready",
+					loaded: undefined,
+					draft: emptyDraft(pageKind, parentId),
+				}
 			: { phase: "loading" },
 	);
 	const [position, setPosition] = useState("");
@@ -414,7 +435,7 @@ function ContentEditor({ kind: pageKind, id }: ContentEditorProps) {
 		begin();
 		try {
 			await deleteItem(current.kind, current.item.id);
-			back();
+			back(current.item.id);
 		} catch (failure) {
 			onFailure("admin.content_delete_failed", failure);
 			setError(describeFailure(failure, current.kind));

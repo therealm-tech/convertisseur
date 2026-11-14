@@ -38,7 +38,7 @@ async function openContentPage() {
 	});
 	api.logIn("nour");
 	const user = userEvent.setup();
-	await renderAt("/admin/content");
+	await renderAt("/admin/content?lesson=l-bonjour");
 	await screen.findByRole("table");
 	return { api, user };
 }
@@ -50,7 +50,7 @@ function detail() {
 function titles() {
 	return screen
 		.getAllByRole("rowheader")
-		.map((cell) => within(cell).getByRole("link").textContent ?? "");
+		.map((cell) => within(cell).getAllByRole("link")[0]?.textContent ?? "");
 }
 
 describe("imported content", () => {
@@ -120,7 +120,7 @@ describe("imported content", () => {
 		const { api, user } = await openContentPage();
 		expect(screen.getAllByText("Remarque")).toHaveLength(1);
 
-		await user.click(screen.getByRole("link", { name: "Bonjour" }));
+		await user.click(screen.getByRole("link", { name: "Modifier la leçon" }));
 		const panel = detail();
 		const note = await within(panel).findByRole("textbox", {
 			name: "Remarque de relecture",
@@ -152,7 +152,7 @@ describe("imported content", () => {
 			expect(screen.getAllByText("Remarque")).toHaveLength(2),
 		);
 
-		await user.click(screen.getByRole("link", { name: "Bonjour" }));
+		await user.click(screen.getByRole("link", { name: "Modifier la leçon" }));
 		const reopened = await within(detail()).findByRole("textbox", {
 			name: "Remarque de relecture",
 		});
@@ -174,6 +174,11 @@ describe("imported content", () => {
 	it("caps a review note at 2000 characters, counted as typed", async () => {
 		const { user } = await openContentPage();
 		await user.click(screen.getByRole("link", { name: "Salutations" }));
+		await user.click(
+			within(
+				await screen.findByRole("region", { name: "Salutations" }),
+			).getByRole("link", { name: "Modifier" }),
+		);
 		const panel = detail();
 		const note = await within(panel).findByRole("textbox", {
 			name: "Remarque de relecture",
@@ -200,7 +205,7 @@ describe("imported content", () => {
 
 		await user.click(screen.getByRole("button", { name: "À relire · 0" }));
 		await waitFor(() =>
-			expect(screen.getByText("Aucun contenu ne correspond.")).toBeVisible(),
+			expect(screen.getByText("Aucune carte ne correspond.")).toBeVisible(),
 		);
 		expect(
 			screen.getByRole("button", { name: "Avec remarque · 0" }),

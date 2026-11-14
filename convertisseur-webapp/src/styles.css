@@ -3347,3 +3347,238 @@ a.button-secondary {
 		margin-inline-start: auto;
 	}
 }
+
+.content-path a {
+	color: inherit;
+	text-decoration-color: var(--color-input-border);
+}
+
+/* On a phone, the filters other than the status fold behind a button; from
+   768px they all stay in view and the button goes. */
+.content-filters-toggle {
+	flex: 0 0 auto;
+	min-height: 44px;
+	padding: 0 14px;
+	border: 1.5px solid var(--color-border);
+	border-radius: 16px;
+	background: var(--color-surface);
+	color: var(--color-text);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 900;
+	cursor: pointer;
+}
+
+.content-filters-toggle[aria-expanded="true"] {
+	border-color: var(--color-primary);
+}
+
+.content-filters-more {
+	display: none;
+	flex: 1 1 100%;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.content-filters-more[data-open="true"] {
+	display: flex;
+}
+
+@media (min-width: 768px) {
+	.content-filters-toggle {
+		display: none;
+	}
+
+	.content-filters-more,
+	.content-filters-more[data-open="true"] {
+		display: contents;
+	}
+}
+
+.content-crumbs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+}
+
+.content-crumbs a {
+	overflow-wrap: anywhere;
+}
+
+.content-tree-unit {
+	color: inherit;
+	text-decoration: none;
+}
+
+.content-tree-unit:hover {
+	text-decoration: underline;
+}
+
+.content-tree-edit {
+	flex: none;
+	margin-inline-start: auto;
+	color: var(--color-primary-text);
+	font-size: 13px;
+	font-weight: 900;
+	text-decoration: none;
+}
+
+.content-tree-lesson {
+	display: flex;
+	align-items: center;
+	border-top: 1px solid var(--color-surface-muted);
+}
+
+.review-lessons > .content-tree-lesson:first-child {
+	border-top: 0;
+}
+
+.review-lessons > .content-tree-lesson > .review-lesson {
+	flex: 1;
+	min-width: 0;
+	border-top: 0;
+}
+
+.content-tree-review {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	text-decoration: none;
+	min-height: 36px;
+	margin-inline-end: 12px;
+	padding: 0 12px;
+	font-size: 14px;
+}
+
+.content-lesson-head {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.content-lesson-stats {
+	margin: 0;
+}
+
+.content-lesson-stats .review-progress {
+	flex: 0 0 96px;
+}
+
+.content-lesson-pager {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 15px;
+	font-weight: 900;
+}
+
+.content-lesson-pager a {
+	color: var(--color-primary-text);
+	text-decoration: none;
+	overflow-wrap: anywhere;
+}
+
+/* A lesson's cards read as a list on a phone, each card on its own block,
+   and as a table from 768px. */
+.lesson-cards {
+	min-width: 0;
+}
+
+.lesson-cards thead {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
+.lesson-cards tr {
+	display: grid;
+	grid-template-areas:
+		"title state"
+		"meaning state"
+		"audio state";
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: 12px;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table.lesson-cards tbody tr:last-child {
+	border-bottom: 0;
+}
+
+.admin-table.lesson-cards th,
+.admin-table.lesson-cards td {
+	padding: 0;
+	border-bottom: 0;
+}
+
+.lesson-cards th[scope="row"] {
+	grid-area: title;
+}
+
+.lesson-cards .lesson-cards-position {
+	display: none;
+}
+
+.lesson-cards-meaning {
+	grid-area: meaning;
+	overflow-wrap: anywhere;
+}
+
+.lesson-cards-audio {
+	grid-area: audio;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.lesson-cards-audio::before {
+	content: "Audio : ";
+}
+
+.lesson-cards-state {
+	grid-area: state;
+}
+
+@media (min-width: 768px) {
+	.lesson-cards thead {
+		position: static;
+		width: auto;
+		height: auto;
+		overflow: visible;
+		clip-path: none;
+	}
+
+	.lesson-cards tr,
+	.lesson-cards thead tr {
+		display: table-row;
+		padding: 0;
+	}
+
+	.admin-table.lesson-cards th,
+	.admin-table.lesson-cards td {
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.admin-table.lesson-cards tbody tr:last-child > * {
+		border-bottom: 0;
+	}
+
+	.lesson-cards .lesson-cards-position {
+		display: table-cell;
+		width: 3rem;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+
+	.lesson-cards-audio::before {
+		content: none;
+	}
+}

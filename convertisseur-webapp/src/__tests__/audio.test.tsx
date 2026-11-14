@@ -107,7 +107,7 @@ async function openCard(withAudio: boolean) {
 	seed(api, withAudio);
 	api.logIn("nour");
 	const user = userEvent.setup();
-	await renderAt("/admin/content");
+	await renderAt("/admin/content?lesson=l-1");
 	await user.click(await screen.findByRole("link", { name: "واش راك؟" }));
 	const panel = screen.getByRole("main");
 	await within(panel).findByRole("textbox", {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { expectOk, send } from "@/lib/api";
+import { allPages, expectOk, MAX_PER_PAGE, send } from "@/lib/api";
 import {
 	type Card,
 	CardSchema,
@@ -64,24 +64,6 @@ export interface LessonFilter {
 export interface ReviewTotals {
 	itemsToReview: number;
 	cardsWithoutAudio: number;
-}
-
-const MAX_PER_PAGE = 100;
-
-/** Every page of `fetchPage`, which the API caps at 100 items. */
-async function allPages<T, P extends { items: T[]; total: number }>(
-	fetchPage: (page: number) => Promise<P>,
-): Promise<{ first: P; items: T[] }> {
-	const first = await fetchPage(1);
-	const items = [...first.items];
-	for (let page = 2; items.length < first.total; page += 1) {
-		const next = await fetchPage(page);
-		if (next.items.length === 0) {
-			break;
-		}
-		items.push(...next.items);
-	}
-	return { first, items };
 }
 
 export async function listLessons(

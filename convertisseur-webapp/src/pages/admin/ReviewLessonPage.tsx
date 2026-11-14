@@ -208,7 +208,11 @@ export function ReviewLessonPage() {
 						? "Cette leçon n'existe plus."
 						: "La leçon n'a pas pu être chargée. Réessaie dans un moment."}
 				</p>
-				<Link to="/admin/review" className="button-outline review-back-link">
+				<Link
+					to="/admin/content"
+					search={{ status: "to-review" }}
+					className="button-outline review-back-link"
+				>
 					Toutes les leçons
 				</Link>
 			</div>
