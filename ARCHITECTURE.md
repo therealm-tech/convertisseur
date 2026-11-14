@@ -63,8 +63,9 @@ Every navigation first asks the API who is logged in
 server is the only one that knows, and the webapp keeps no copy of the session
 of its own. A visitor without a session lands on `/login`, the login and
 registration screen; a logged-in user is sent from there to `/`. An account
-whose password was reset by an admin can reach `/password` only, and the
-admin area under `/admin` is open to `admin` and `super_admin` alone. These
+whose password was reset by an admin can reach `/password` only, one without
+an email `/email` only (see [Accounts and sessions](#accounts-and-sessions)),
+and the admin area under `/admin` is open to `admin` and `super_admin` alone. These
 guards spare the user a page that would only fail: the server enforces the
 same rules on every request. The admin area opens on `/admin/content`, where
 staff write and review the learning content (see
@@ -163,7 +164,10 @@ sqlx records each one and refuses to start when an applied migration has
 changed.
 
 `users` holds the accounts: a username, unique case-insensitively through an
-index on `lower(username)`; an argon2id password hash in PHC string format;
+index on `lower(username)`; an `email`, unique case-insensitively through an
+index on `lower(email)`, and `NULL` on an account that has not set one, the
+super admin the bootstrap creates or a row older than the column; an argon2id
+password hash in PHC string format;
 a `role` of the `user_role` enum, `user`, `admin` or `super_admin`;
 `must_change_password`, set by an admin's password reset; and
 `last_active_at`, the last time one of its sessions was opened or used.
@@ -608,20 +612,21 @@ sequenceDiagram
 
 ## Accounts and sessions
 
-An account is a username and a password, with no email address. Registration
+An account is a username, an email address and a password. Registration
 creates a `user`; usernames are 3 to 32 characters among ASCII letters, digits,
-`.`, `_` and `-`, and passwords at least 12 characters, the rule the super
-admin's password follows too. Registering does not log in: the webapp chains
-the two calls.
+`.`, `_` and `-`, emails pass the `validator` crate's format check, and
+passwords are at least 12 characters, the rule the super admin's password
+follows too. Registering does not log in: the webapp chains the two calls. The
+login screen takes one field, the username or the email.
 
 ```mermaid
 sequenceDiagram
     participant B as Browser
     participant S as convertisseur-api
     participant P as PostgreSQL
-    B->>S: POST /api/v1/sessions {username, password}
+    B->>S: POST /api/v1/sessions {login, password}
     S->>S: count the attempt against the client IP
-    S->>P: the account, by lower(username)
+    S->>P: the account, by lower(username) or lower(email), the username first
     S->>S: verify the password (argon2id), or a dummy hash
     S->>S: draw a random 256-bit token
     S->>P: INSERT the token's SHA-256, user, expiry
@@ -645,13 +650,31 @@ sequenceDiagram
   matches, it stores the new hash and deletes the account's sessions in the
   same transaction. The same password keeps the stored hash and the sessions,
   so a restart logs nobody out.
-- **A failed login says nothing about the username.** An unknown username and a
-  wrong password get the same `401`, and an unknown username is verified
+- **`login` names the account by its username or its email.** A username never
+  holds an `@`, so the two cannot meet, except for the configured super admin's
+  username, which the registration rules do not bind: when it is another
+  account's email, the super admin wins, and that account logs in with its
+  username. The body's `login` also reads as `username`, the name a page of an
+  earlier build still open in a browser sends.
+- **A failed login says nothing about the account.** An unknown username or
+  email and a wrong password get the same `401`, and an unknown one is verified
   against a fixed dummy hash, with the same argon2 parameters, so that both take
-  as long.
+  as long. The log line of a refusal names no username or email.
+- **The email is a second login name, never a channel.** It is not verified and
+  the server sends nothing to it. An account sets or changes its own with
+  `PUT /api/v1/users/{userId}/email`; nobody else's, admins included. It is
+  shown to the account itself and to admins in `/admin/users`, and to nobody
+  else: the content's authors carry their username alone.
+- **An account without an email is asked for one by the webapp.** Every page
+  but `/email`, `/password` and logout sends it to `/email` until it sets one,
+  as the forced password change does; the server answers it as any other
+  account, since nothing it serves depends on the address.
+- **Registration and the email change tell whether an email is taken**, with a
+  `409` `email-taken`, as registration does for a username. Both count against
+  the registration rate limit, which slows down testing a list of addresses.
 - **Login and registration are rate limited per client IP**: 10 login attempts
-  at once then one a minute, and 5 registrations at once then one every 10
-  minutes. A refusal is a `429` problem with `Retry-After`. The client IP is
+  at once then one a minute, and 5 registrations or email changes at once then
+  one every 10 minutes. A refusal is a `429` problem with `Retry-After`. The client IP is
   the TCP peer, or the last address in the header named by `CLIENT_IP_HEADER`
   when the server sits behind a reverse proxy that sets it.
 
@@ -691,7 +714,8 @@ new role applies to the account's open sessions at once.
 
 ## Password resets
 
-Accounts have no email address, so a forgotten password goes through an admin:
+The server sends nothing to an account's email, so a forgotten password goes
+through an admin:
 
 ```mermaid
 sequenceDiagram
@@ -1002,8 +1026,8 @@ rather than a part of it.
 - **The super admin password never reaches a log.** clap hides its environment
   value from `--help`, the configuration types do not implement `Debug`, and
   only its hash is stored.
-- **Usernames are unique regardless of case.** The bootstrap and the login
-  match a username case-insensitively, and keep the stored spelling.
+- **Usernames and emails are unique regardless of case.** The bootstrap and
+  the login match them case-insensitively, and keep the stored spelling.
 - **A session token never reaches the database or a log.** Only its SHA-256 is
   stored, and no log line carries a token or a password, temporary passwords
   included.
@@ -1028,8 +1052,10 @@ rather than a part of it.
 
 ## Limitations
 
-- Accounts have no email address, so there is no self-service password reset:
-  an admin resets a forgotten password and hands the temporary one over.
+- The app sends no email, so there is no self-service password reset: an admin
+  resets a forgotten password and hands the temporary one over.
+- Emails are not verified: an account can register an address that is not its
+  owner's, and the owner then cannot register with it.
 - The rate limits key on an IP address: people behind one NAT, a school or a
   mosque network, share their limits.
 - The server does not start when PostgreSQL or the object store is
