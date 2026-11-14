@@ -133,7 +133,7 @@ describe("quiz", () => {
 
 	it("asks to recognise a recording among the Arabic of the other cards", () => {
 		const cards = [
-			card("salam", "السلام عليكم", "Bonjour", recorded("salam")),
+			card("salam", "السلام عليكم", null, recorded("salam")),
 			...words.slice(1),
 		];
 
@@ -147,6 +147,71 @@ describe("quiz", () => {
 			expect(listen[0]?.answer).toBe("السلام عليكم");
 			for (const choice of listen[0]?.choices ?? []) {
 				expect(cards.map((each) => each.arabic)).toContain(choice);
+			}
+		}
+	});
+
+	it("plays a recorded word for its meaning, instead of showing its Arabic", () => {
+		const cards = [
+			card("salam", "السلام عليكم", "Bonjour", recorded("salam")),
+			...words.slice(1),
+		];
+
+		for (let seed = 1; seed <= 20; seed++) {
+			const salam = buildQuiz(cards, seeded(seed)).filter(
+				(question) => question.id === "salam",
+			);
+
+			expect(salam.map((question) => question.kind)).not.toContain("meaning");
+			const understand = salam.filter(
+				(question) => question.kind === "understand",
+			);
+			expect(understand).toHaveLength(1);
+			expect(understand[0]?.prompt).toBe("/api/v1/audio/salam");
+			expect(understand[0]?.answer).toBe("Bonjour");
+		}
+	});
+
+	it("shows a recorded letter written, its meaning being its sound", () => {
+		const cards = letters.map((letter) => ({
+			...letter,
+			...recorded(letter.id),
+		}));
+
+		for (let seed = 1; seed <= 20; seed++) {
+			const kinds = buildQuiz(cards, seeded(seed)).map(
+				(question) => question.kind,
+			);
+
+			expect(kinds).toContain("meaning");
+			expect(kinds).not.toContain("understand");
+		}
+	});
+
+	it("never asks one card twice for the same answer", () => {
+		const alphabet = [
+			...letters,
+			card("tha", "ث", "« th »", {
+				forms: { kind: "joining", initial: "ثـ", medial: "ـثـ", final: "ـث" },
+			}),
+			card("jim", "ج", "« dj »", {
+				forms: { kind: "joining", initial: "جـ", medial: "ـجـ", final: "ـج" },
+			}),
+			card("dhal", "ذ", "« dh »", {
+				forms: { kind: "non_joining", final: "ـذ" },
+			}),
+			card("ra", "ر", "« r »", { forms: { kind: "non_joining", final: "ـر" } }),
+		].map((letter) => ({ ...letter, ...recorded(letter.id) }));
+
+		for (let seed = 1; seed <= 50; seed++) {
+			const questions = buildQuiz(alphabet, seeded(seed));
+
+			expect(questions).toHaveLength(QUIZ_LENGTH);
+			for (const letter of alphabet) {
+				const answers = questions
+					.filter((question) => question.id === letter.id)
+					.map((question) => question.answer);
+				expect(new Set(answers).size).toBe(answers.length);
 			}
 		}
 	});

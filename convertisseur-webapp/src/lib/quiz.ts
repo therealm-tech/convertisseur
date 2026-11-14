@@ -1,12 +1,18 @@
 import type { StudyCard } from "@/lib/tracks";
 
 /**
- * `meaning`: the Arabic, pick its meaning. `arabic`: the meaning, pick the
- * Arabic. `form`: a letter's initial, medial or final form, pick the
- * isolated letter. `listen`: the card's recording, whose URL is the prompt,
- * pick the Arabic.
+ * `meaning`: the Arabic, pick its meaning. `understand`: the card's
+ * recording, pick its meaning. `arabic`: the meaning, pick the Arabic.
+ * `form`: a letter's initial, medial or final form, pick the isolated letter.
+ * `listen`: the card's recording, pick the Arabic. The prompt of `understand`
+ * and `listen` is the recording's URL.
  */
-export type QuestionKind = "meaning" | "arabic" | "form" | "listen";
+export type QuestionKind =
+	| "meaning"
+	| "understand"
+	| "arabic"
+	| "form"
+	| "listen";
 
 export interface Question {
 	id: string;
@@ -77,7 +83,11 @@ function letterForms(card: StudyCard): string[] {
 		: [card.forms.final];
 }
 
-/** Every question the card can make, one per kind. */
+/**
+ * Every question the card can make, one per kind. A word with a recording is
+ * asked its meaning from the recording rather than from the written Arabic; a
+ * letter keeps the written one, its meaning being the sound it makes.
+ */
 function questionsFor(
 	card: StudyCard,
 	others: readonly StudyCard[],
@@ -98,14 +108,14 @@ function questionsFor(
 	}
 
 	if (card.meaningFr !== null) {
-		ask(
-			"meaning",
-			card.arabic,
-			card.meaningFr,
-			others
-				.filter((other) => other.arabic !== card.arabic)
-				.map((other) => other.meaningFr),
-		);
+		const meanings = others
+			.filter((other) => other.arabic !== card.arabic)
+			.map((other) => other.meaningFr);
+		if (card.audio !== null && !ofLetter) {
+			ask("understand", card.audio.url, card.meaningFr, meanings);
+		} else {
+			ask("meaning", card.arabic, card.meaningFr, meanings);
+		}
 		ask(
 			"arabic",
 			card.meaningFr,
@@ -133,6 +143,22 @@ function questionsFor(
 		);
 	}
 	return questions;
+}
+
+/**
+ * Keeps the first of the questions that share an answer: `arabic`, `form` and `listen` all have
+ * the card's Arabic for answer and the same distractors, so a second one
+ * reads like the first asked again.
+ */
+function oneQuestionPerAnswer(questions: readonly Question[]): Question[] {
+	const answers = new Set<string>();
+	return questions.filter((question) => {
+		if (answers.has(question.answer)) {
+			return false;
+		}
+		answers.add(question.answer);
+		return true;
+	});
 }
 
 /**
@@ -178,8 +204,9 @@ function interleave(
 /**
  * Every card that can make a question asks one; then, one card at a time,
  * the cards ask the other kinds they allow until the quiz holds `length`
- * questions or the cards have nothing left. Distractors come from the other
- * cards of the lesson, so a lesson of fewer than three cards makes none.
+ * questions or the cards have nothing left. A card never asks two questions
+ * with the same answer. Distractors come from the other cards of the lesson,
+ * so a lesson of fewer than three cards makes none.
  */
 export function buildQuiz(
 	cards: readonly StudyCard[],
@@ -187,13 +214,15 @@ export function buildQuiz(
 	length: number = QUIZ_LENGTH,
 ): Question[] {
 	const perCard = shuffle(cards, random).map((card) =>
-		shuffle(
-			questionsFor(
-				card,
-				cards.filter((other) => other.id !== card.id),
+		oneQuestionPerAnswer(
+			shuffle(
+				questionsFor(
+					card,
+					cards.filter((other) => other.id !== card.id),
+					random,
+				),
 				random,
 			),
-			random,
 		),
 	);
 	const rounds = Math.max(0, ...perCard.map((questions) => questions.length));

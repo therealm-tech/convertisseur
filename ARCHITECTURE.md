@@ -340,14 +340,24 @@ asks them one at a time, with three or four choices each. It is built from
 the lesson the page already loads; only its score reaches the server, which
 takes it as sent (see [Progress and the lock](#progress-and-the-lock)).
 
-- **Four kinds of question**: the Arabic of a card, pick its meaning; the
+- **Five kinds of question**: the Arabic of a card, pick its meaning; the
   meaning, pick the Arabic; for a letter of the alphabet, one of its initial,
   medial or final forms, pick the isolated letter; and for a card with a
-  recording, the recording, pick the Arabic. On a letter, the meaning is its
-  sound, and the page words the question that way.
-- **Twelve questions, every card asked**: each card asks one question of a
-  kind drawn among those it allows, then the cards ask their other kinds, one
-  card at a time, until the exercise holds twelve. A lesson whose cards allow
+  recording, the recording, pick the Arabic, or the recording, pick its
+  meaning. On a letter, the meaning is its sound, and the page words the
+  question that way.
+- **A recording replaces the written prompt of the meaning**: a word with a
+  recording is asked its meaning from the recording, never from its written
+  Arabic, which it still offers as the choices of its other questions. A
+  letter keeps its written prompt, since hearing a letter to pick its sound
+  tests nothing.
+- **Twelve questions, every card asked, never twice for one answer**: each
+  card asks one question of a kind drawn among those it allows, then the
+  cards ask their other kinds, one card at a time, until the exercise holds
+  twelve. A card never asks two questions with the same answer: the kinds
+  whose answer is the Arabic share their distractors too, so a second one
+  would be the first asked again. A card thus asks at most two questions, its
+  meaning and one whose answer is its Arabic. A lesson whose cards allow
   fewer asks them all; one of more than twelve cards asks each once. A card
   without a meaning, forms or recording asks nothing.
 - **Two questions about one card never follow each other**, in the order

@@ -314,8 +314,7 @@ describe("exercise", () => {
 		).toMatch(/^(Quel son \?|Quelle lettre \?|Quelle est cette lettre \?)$/);
 	});
 
-	it("asks to recognise a card's recording", async () => {
-		const api = loggedIn();
+	function seedRecorded(api: FakeApi, meanings: boolean) {
 		api.content.seed("lesson", {
 			id: "l-heard",
 			parentId: "u-darija",
@@ -329,7 +328,7 @@ describe("exercise", () => {
 				id: `h-${index}`,
 				parentId: "l-heard",
 				arabic,
-				meaningFr,
+				meaningFr: meanings ? meaningFr : null,
 				audio: {
 					id: `a-${index}`,
 					contentType: "audio/mpeg",
@@ -340,11 +339,36 @@ describe("exercise", () => {
 				...validated,
 			});
 		}
+	}
+
+	it("asks to recognise a card's recording", async () => {
+		seedRecorded(loggedIn(), false);
+
+		await renderAt("/tracks/arabe/lessons/l-heard/exercise");
+
+		expect(
+			await screen.findByRole("heading", { name: "Qu'entends-tu ?" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Écouter" })).toBeInTheDocument();
+		expect(document.querySelector("audio")?.getAttribute("src")).toMatch(
+			/^\/api\/v1\/audio\/a-[0-2]$/,
+		);
+		const group = screen.getByRole("group", { name: "Qu'entends-tu ?" });
+		for (const choice of within(group).getAllByRole("button")) {
+			expect(Object.keys(greetings)).toContain(choice.textContent);
+		}
+	});
+
+	it("plays a recorded word for its meaning, without its Arabic", async () => {
+		seedRecorded(loggedIn(), true);
 
 		await renderAt("/tracks/arabe/lessons/l-heard/exercise");
 		await screen.findByRole("heading", { level: 2 });
-		while (!screen.queryByRole("heading", { name: "Qu'entends-tu ?" })) {
-			const [first] = question().choices;
+		while (!screen.queryByRole("heading", { name: "Quel est le sens ?" })) {
+			const heading = screen.getByRole("heading", { level: 2 });
+			const [first] = within(
+				screen.getByRole("group", { name: heading.textContent ?? "" }),
+			).getAllByRole("button");
 			if (first) {
 				await userEvent.click(first);
 			}
@@ -354,12 +378,12 @@ describe("exercise", () => {
 		}
 
 		expect(screen.getByRole("button", { name: "Écouter" })).toBeInTheDocument();
-		expect(document.querySelector("audio")?.getAttribute("src")).toMatch(
-			/^\/api\/v1\/audio\/a-[0-2]$/,
-		);
-		const group = screen.getByRole("group", { name: "Qu'entends-tu ?" });
+		for (const arabic of Object.keys(greetings)) {
+			expect(screen.queryByText(arabic)).not.toBeInTheDocument();
+		}
+		const group = screen.getByRole("group", { name: "Quel est le sens ?" });
 		for (const choice of within(group).getAllByRole("button")) {
-			expect(Object.keys(greetings)).toContain(choice.textContent);
+			expect(Object.values(greetings)).toContain(choice.textContent);
 		}
 	});
 
