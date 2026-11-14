@@ -607,6 +607,14 @@ async fn lists_content_with_filters_counts_and_pages(pool: PgPool) {
     assert_eq!(card["id"], thanks.as_str());
     assert_eq!(card["track"], "arabe");
     assert_eq!(card["parentTitle"], "Les lettres");
+    assert_eq!(card["unitId"], alphabet.as_str());
+    assert_eq!(card["lessonId"], letters.as_str());
+    let lesson = &all.body["items"][2];
+    assert_eq!(lesson["unitId"], alphabet.as_str());
+    assert_eq!(lesson["lessonId"], Value::Null);
+    let unit = &all.body["items"][3];
+    assert_eq!(unit["unitId"], Value::Null);
+    assert_eq!(unit["lessonId"], Value::Null);
 
     let to_review = server
         .get(&admin, "/api/v1/content-items?status=to_review&track=arabe")
@@ -623,7 +631,14 @@ async fn lists_content_with_filters_counts_and_pages(pool: PgPool) {
     );
     assert_eq!(server.titles(&admin, "?track=islam").await, ["Les piliers"]);
     assert_eq!(server.titles(&admin, "?kind=lesson").await, ["Les lettres"]);
-    assert_eq!(server.titles(&admin, "?q=LETTRES").await, ["Les lettres"]);
+    assert_eq!(
+        server.titles(&admin, "?q=LETTRES").await,
+        ["شُكْرًا", "Les lettres"]
+    );
+    assert_eq!(
+        server.titles(&admin, "?q=alphabet").await,
+        ["Les lettres", "L'alphabet"]
+    );
     assert_eq!(
         server.titles(&admin, "?q=%D8%B4%D9%83%D8%B1").await,
         ["شُكْرًا"]

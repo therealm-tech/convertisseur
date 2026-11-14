@@ -223,6 +223,8 @@ pub struct ContentItem {
     pub updated_at: DateTime<Utc>,
     pub import_key: Option<String>,
     pub review_note: Option<String>,
+    pub unit_id: Option<Uuid>,
+    pub lesson_id: Option<Uuid>,
 }
 
 /// The review state of a row after a status change.

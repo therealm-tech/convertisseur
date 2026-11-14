@@ -8,7 +8,9 @@ SELECT
     status,
     updated_at,
     import_key,
-    review_note
+    review_note,
+    unit_id,
+    lesson_id
 FROM content_items
 WHERE
     ($1::content_status IS NULL OR status = $1)
