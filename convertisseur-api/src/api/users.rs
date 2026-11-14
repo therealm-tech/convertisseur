@@ -423,6 +423,9 @@ pub struct EmailResponse {
 async fn set_email(
     State(state): State<AppState>,
     Authenticated(user): Authenticated,
+    // Its `email-taken` tells whether an address has an account, as
+    // registration does, so it shares registration's limit.
+    _: RateLimited<Registration>,
     ApiPath(path): ApiPath<UserPath>,
     ValidJson(request): ValidJson<SetEmailRequest>,
 ) -> Result<Json<EmailResponse>, ApiError> {
@@ -451,7 +454,7 @@ fn set_email_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .description(
             "For the account of the session only, the `super_admin` included. The email logs in \
              in place of the username from then on. It is not verified, and nothing is sent to \
-             it.",
+             it. Attempts count against the registration rate limit.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<EmailResponse>, _>(|r| r.description("The new email"))
@@ -471,5 +474,8 @@ fn set_email_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
         .response_with::<422, ApiError, _>(|r| {
             r.description("`email_invalid`: not an email address")
+        })
+        .response_with::<429, ApiError, _>(|r| {
+            r.description("Too many attempts from this IP; see `Retry-After`")
         })
 }

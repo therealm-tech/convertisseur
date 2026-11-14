@@ -170,6 +170,24 @@ async fn waits_for_a_pending_password_change(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn shares_the_registration_rate_limit(pool: PgPool) {
+    let server = Server::new(&pool);
+    let id = create_account(&pool, "francis", "user").await;
+    let session = server.session("francis").await;
+
+    for n in 0..5 {
+        let answer = server
+            .set_email(&session, id, &format!("francis{n}@example.com"))
+            .await;
+        assert_eq!(answer.status, StatusCode::OK, "{n}");
+    }
+    let refused = server.set_email(&session, id, "francis@example.com").await;
+
+    refused.assert_problem(StatusCode::TOO_MANY_REQUESTS, "rate-limited");
+    assert!(refused.headers.contains_key("retry-after"));
+}
+
+#[sqlx::test]
 async fn documents_the_endpoint(pool: PgPool) {
     let server = Server::new(&pool);
 
@@ -177,7 +195,7 @@ async fn documents_the_endpoint(pool: PgPool) {
 
     let operation = &document.body["paths"]["/api/v1/users/{userId}/email"]["put"];
     assert_eq!(operation["tags"], json!(["Users"]));
-    for status in ["200", "401", "403", "409", "422"] {
+    for status in ["200", "401", "403", "409", "422", "429"] {
         assert!(operation["responses"][status].is_object(), "{status}");
     }
 }
