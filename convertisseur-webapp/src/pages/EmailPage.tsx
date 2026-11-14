@@ -13,8 +13,8 @@ import { logger } from "@/lib/logger";
 import { LOGOUT_FAILED, useLogout } from "@/lib/useLogout";
 
 /**
- * Sets the logged-in account's email. An account without one, created
- * before it was required, reaches no other page until it sets one.
+ * Sets the logged-in account's email. An account without one, the super
+ * admin as the bootstrap creates it, reaches no other page until it sets one.
  */
 export function EmailPage() {
 	const { session } = useRouteContext({ from: "/email" });
@@ -71,11 +71,6 @@ export function EmailPage() {
 				<h1 className="landing-title">
 					{forced ? "Ajoute ton adresse e-mail" : "Changer mon adresse e-mail"}
 				</h1>
-				{forced ? (
-					<p className="landing-tagline">
-						Elle est désormais demandée à chaque compte.
-					</p>
-				) : null}
 			</header>
 			<section className="auth-card">
 				<form className="auth-form" noValidate onSubmit={onSubmit}>

@@ -24,8 +24,8 @@ pub enum Role {
 pub struct User {
     pub id: Uuid,
     pub username: String,
-    /// Unverified, and unique whatever its case. Accounts created before it
-    /// was required, and the super admin, may have none.
+    /// Unverified, and unique whatever its case. The super admin has none
+    /// until it sets one.
     pub email: Option<String>,
     pub role: Role,
     /// Set by a password reset: until the account picks a new password, it
