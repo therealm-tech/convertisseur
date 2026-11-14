@@ -193,6 +193,32 @@ describe("users page", () => {
 		);
 	});
 
+	it("shows each account's email, and a dash for none", async () => {
+		const api = installFakeApi();
+		api.clearEmail("chef");
+		api.logIn("nour");
+		await renderAt("/admin/users");
+		await screen.findByRole("table");
+
+		expect(within(row("aicha")).getByText("aicha@example.com")).toBeVisible();
+		expect(within(row("chef")).getByText("—")).toBeVisible();
+	});
+
+	it("searches emails", async () => {
+		const { api, user } = await openUsersPage("nour");
+		const karim = api.account("karim.dz");
+		if (karim) {
+			karim.user = { ...karim.user, email: "k.benali@example.org" };
+		}
+
+		await user.type(
+			screen.getByRole("searchbox", { name: "Rechercher un utilisateur" }),
+			"benali",
+		);
+
+		await waitFor(() => expect(usernames()).toEqual(["karim.dz"]));
+	});
+
 	it("searches usernames and filters roles", async () => {
 		const { user } = await openUsersPage("nour");
 

@@ -29,6 +29,7 @@ import { ContentPage } from "@/pages/admin/ContentPage";
 import { ReviewLessonPage } from "@/pages/admin/ReviewLessonPage";
 import { UsersPage } from "@/pages/admin/UsersPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
+import { EmailPage } from "@/pages/EmailPage";
 import { ErrorPage } from "@/pages/ErrorPage";
 import { HomePage } from "@/pages/HomePage";
 import { LessonError, LessonNotFound, LessonPage } from "@/pages/LessonPage";
@@ -45,8 +46,8 @@ const rootRoute = createRootRoute({
 	errorComponent: ErrorPage,
 });
 
-// Every page but the auth screen and the password change needs a session
-// whose password needs no change.
+// Every page but the auth screen, the password change and the email needs a
+// session whose password needs no change and whose account has an email.
 const appRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	id: "_app",
@@ -56,6 +57,9 @@ const appRoute = createRoute({
 		}
 		if (context.session.mustChangePassword) {
 			throw redirect({ to: "/password", replace: true });
+		}
+		if (context.session.user.email === null) {
+			throw redirect({ to: "/email", replace: true });
 		}
 		return { user: context.session.user };
 	},
@@ -173,6 +177,21 @@ const passwordRoute = createRoute({
 	component: ChangePasswordPage,
 });
 
+const emailRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/email",
+	beforeLoad: ({ context }) => {
+		if (!context.session) {
+			throw redirect({ to: "/login", replace: true });
+		}
+		if (context.session.mustChangePassword) {
+			throw redirect({ to: "/password", replace: true });
+		}
+		return { session: context.session };
+	},
+	component: EmailPage,
+});
+
 const authRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/login",
@@ -201,6 +220,7 @@ const routeTree = rootRoute.addChildren([
 		]),
 	]),
 	passwordRoute,
+	emailRoute,
 	authRoute,
 ]);
 

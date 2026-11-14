@@ -3,7 +3,7 @@ import type { InputHTMLAttributes } from "react";
 interface TextFieldProps {
 	id: string;
 	label: string;
-	type: "text" | "password";
+	type: "text" | "email" | "password";
 	autoComplete: InputHTMLAttributes<HTMLInputElement>["autoComplete"];
 	value: string;
 	onChange: (value: string) => void;

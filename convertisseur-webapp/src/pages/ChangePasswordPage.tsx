@@ -7,7 +7,7 @@ import {
 import { type FormEvent, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { TextField } from "@/components/TextField";
-import { changePassword, logout } from "@/lib/api";
+import { changePassword } from "@/lib/api";
 import { PASSWORD_MIN_CHARS } from "@/lib/credentials";
 import { logger } from "@/lib/logger";
 import {
@@ -16,6 +16,7 @@ import {
 	type PasswordChangeForm,
 	validatePasswordChange,
 } from "@/lib/passwordChange";
+import { LOGOUT_FAILED, useLogout } from "@/lib/useLogout";
 
 const emptyForm: PasswordChangeForm = {
 	currentPassword: "",
@@ -81,15 +82,7 @@ export function ChangePasswordPage() {
 		setSubmitting(false);
 	}
 
-	async function onLogout() {
-		try {
-			await logout();
-			await navigate({ to: "/login" });
-		} catch (error) {
-			logger.warn("auth.logout_failed", { error });
-			setFormError("La déconnexion a échoué. Réessaie dans un moment.");
-		}
-	}
+	const onLogout = useLogout(() => setFormError(LOGOUT_FAILED));
 
 	return (
 		<main className="auth">

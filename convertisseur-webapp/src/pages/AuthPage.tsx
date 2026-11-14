@@ -2,8 +2,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, useRef, useState } from "react";
 import { CredentialsForm } from "@/components/CredentialsForm";
 import { Logo } from "@/components/Logo";
-import { type Credentials, login, register } from "@/lib/api";
-import { validateLogin, validateRegistration } from "@/lib/credentials";
+import { login, register } from "@/lib/api";
+import {
+	type CredentialsInput,
+	validateLogin,
+	validateRegistration,
+} from "@/lib/credentials";
 
 type Tab = "login" | "registration";
 
@@ -17,14 +21,15 @@ export function AuthPage() {
 	const [tab, setTab] = useState<Tab>("login");
 	const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
-	async function logIn(credentials: Credentials) {
-		await login(credentials);
+	async function logIn({ login: identifier, password }: CredentialsInput) {
+		await login({ login: identifier.trim(), password });
 		await navigate({ to: "/" });
 	}
 
-	async function signUp(credentials: Credentials) {
-		await register(credentials);
-		await logIn(credentials);
+	async function signUp({ username, email, password }: CredentialsInput) {
+		await register({ username, email: email.trim(), password });
+		await login({ login: username, password });
+		await navigate({ to: "/" });
 	}
 
 	function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {

@@ -27,7 +27,12 @@ async function openContentPage() {
 		importKey: "arabe/salutations/bonjour/salam",
 		status: "validated",
 		validatedAt: "2026-11-02T09:00:00Z",
-		validatedBy: { id: "u-bilal", username: "bilal", role: "admin" },
+		validatedBy: {
+			id: "u-bilal",
+			username: "bilal",
+			email: null,
+			role: "admin",
+		},
 		reviewNote: "Il manque le tanwin",
 	});
 	content.seed("card", {

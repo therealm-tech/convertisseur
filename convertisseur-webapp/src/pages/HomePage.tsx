@@ -1,15 +1,8 @@
-import {
-	Link,
-	useLoaderData,
-	useNavigate,
-	useRouteContext,
-} from "@tanstack/react-router";
+import { Link, useLoaderData, useRouteContext } from "@tanstack/react-router";
 import { useState } from "react";
 import { Logo } from "@/components/Logo";
 import { TrackGlyph } from "@/components/TrackGlyph";
-import { logout } from "@/lib/api";
 import { countOf, trackLabels } from "@/lib/contentLabels";
-import { logger } from "@/lib/logger";
 import {
 	completedCount,
 	isStarted,
@@ -20,6 +13,7 @@ import {
 import { PASS_PERCENT } from "@/lib/quiz";
 import { isStaff } from "@/lib/roles";
 import { lessonCount, type Track } from "@/lib/tracks";
+import { LOGOUT_FAILED, useLogout } from "@/lib/useLogout";
 
 const stepLabels: Record<StepKind, string> = {
 	start: "Commencer",
@@ -139,20 +133,15 @@ function TrackCard({ track }: { track: Track }) {
 export function HomePage() {
 	const { user } = useRouteContext({ from: "/_app/" });
 	const tracks = useLoaderData({ from: "/_app/" });
-	const navigate = useNavigate();
 	const [failed, setFailed] = useState(false);
 	const empty = tracks.every((track) => track.units.length === 0);
 	const step = nextStep(tracks);
 
+	const logOut = useLogout(() => setFailed(true));
+
 	async function onLogout() {
 		setFailed(false);
-		try {
-			await logout();
-			await navigate({ to: "/login" });
-		} catch (error) {
-			logger.warn("auth.logout_failed", { error });
-			setFailed(true);
-		}
+		await logOut();
 	}
 
 	return (
@@ -191,7 +180,7 @@ export function HomePage() {
 			<div className="home-account">
 				{failed ? (
 					<p role="alert" className="form-error">
-						La déconnexion a échoué. Réessaie dans un moment.
+						{LOGOUT_FAILED}
 					</p>
 				) : null}
 				<nav aria-label="Mon compte" className="home-links">
@@ -200,6 +189,9 @@ export function HomePage() {
 							Administration
 						</Link>
 					) : null}
+					<Link to="/email" className="home-link">
+						Changer mon adresse e-mail
+					</Link>
 					<Link to="/password" className="home-link">
 						Changer mon mot de passe
 					</Link>
