@@ -17,6 +17,7 @@ import { type Attempt, isPassed, type StudyLesson } from "@/lib/tracks";
 
 const instructions: Record<QuestionKind, string> = {
 	meaning: "Quel est le sens ?",
+	understand: "Quel est le sens ?",
 	arabic: "Comment dit-on ?",
 	form: "Quelle est cette lettre ?",
 	listen: "Qu'entends-tu ?",
@@ -24,14 +25,19 @@ const instructions: Record<QuestionKind, string> = {
 
 const letterInstructions: Record<QuestionKind, string> = {
 	meaning: "Quel son ?",
+	understand: "Quel son ?",
 	arabic: "Quelle lettre ?",
 	form: "Quelle est cette lettre ?",
 	listen: "Quelle lettre entends-tu ?",
 };
 
-/** Whether the choices of a question are Arabic, or its prompt. */
+/** Whether a question's choices are Arabic rather than meanings. */
 function choicesAreArabic(kind: QuestionKind): boolean {
-	return kind !== "meaning";
+	return kind !== "meaning" && kind !== "understand";
+}
+
+function promptIsRecording(kind: QuestionKind): boolean {
+	return kind === "listen" || kind === "understand";
 }
 
 function Text({ arabic, children }: { arabic: boolean; children: string }) {
@@ -63,6 +69,7 @@ function QuestionCard({
 }) {
 	const heading = useRef<HTMLHeadingElement>(null);
 	const arabicChoices = choicesAreArabic(question.kind);
+	const recording = promptIsRecording(question.kind);
 
 	useEffect(() => {
 		heading.current?.focus();
@@ -80,10 +87,12 @@ function QuestionCard({
 			</h2>
 			<p
 				className={
-					arabicChoices ? "quiz-prompt" : "quiz-prompt quiz-prompt-arabic"
+					arabicChoices || recording
+						? "quiz-prompt"
+						: "quiz-prompt quiz-prompt-arabic"
 				}
 			>
-				{question.kind === "listen" ? (
+				{recording ? (
 					<PlayButton url={question.prompt} label="Écouter" />
 				) : (
 					<Text arabic={!arabicChoices}>{question.prompt}</Text>
