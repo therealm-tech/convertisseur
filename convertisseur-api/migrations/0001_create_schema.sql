@@ -48,8 +48,8 @@ CREATE TYPE content_kind AS ENUM ('unit', 'lesson', 'card');
 -- siblings within one transaction, hence the deferred uniqueness.
 --
 -- import_key is the stable key of a row imported from the content files, by
--- which `import-content` knows it already exists; NULL for what staff write
--- in the admin area. review_note is what a reviewer reports about an item,
+-- which the content sync finds it again; NULL for what staff write in the
+-- admin area. review_note is what a reviewer reports about an item,
 -- e.g. a wrong vowel; NULL when there is nothing to report.
 CREATE TABLE units (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
