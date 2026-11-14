@@ -15,8 +15,9 @@ answers the JSON API under `/api` and serves the React webapp for every other
 path, backed by PostgreSQL and an S3-compatible object store for uploaded
 media.
 
-Registration is open on the Internet: an account is a username and a password,
-with no email address. Accounts have one of three roles: `user`, `admin` or
+Registration is open on the Internet: an account is a username, an email
+address and a password, and logs in with its username or its email. The
+address is not verified and the app sends nothing to it. Accounts have one of three roles: `user`, `admin` or
 `super_admin`. There is always exactly one super admin, the account named in
 the server's configuration. Every account studies the two tracks, `arabe` and
 `islam`: their units, their lessons, and each lesson's cards one at a time,
@@ -37,7 +38,7 @@ filtered to what is left to review, without audio or noted, down to one
 lesson's cards; a reviewer goes through each lesson left to review, card by
 card on a phone, and records the cards without audio. At
 `/admin/users`, they search
-accounts, reset forgotten passwords and delete accounts, and the super admin
+accounts by username or email, reset forgotten passwords and delete accounts, and the super admin
 also promotes users to admin and back.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and the reasoning behind

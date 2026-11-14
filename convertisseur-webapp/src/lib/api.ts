@@ -7,6 +7,7 @@ export type Role = z.infer<typeof RoleSchema>;
 const UserSchema = z.object({
 	id: z.string(),
 	username: z.string(),
+	email: z.string().nullable(),
 	role: RoleSchema,
 });
 export type User = z.infer<typeof UserSchema>;
@@ -31,6 +32,8 @@ const UserPageSchema = z.object({
 });
 export type UserPage = z.infer<typeof UserPageSchema>;
 
+const EmailSchema = z.object({ email: z.string() });
+
 const PasswordResetSchema = z.object({ temporaryPassword: z.string() });
 
 const FieldProblemSchema = z.object({ field: z.string(), code: z.string() });
@@ -45,6 +48,7 @@ export const problemTypes = {
 	forbidden: "urn:convertisseur:problem:forbidden",
 	importedContent: "urn:convertisseur:problem:imported-content",
 	notEmpty: "urn:convertisseur:problem:not-empty",
+	emailTaken: "urn:convertisseur:problem:email-taken",
 	invalidCredentials: "urn:convertisseur:problem:invalid-credentials",
 	lessonLocked: "urn:convertisseur:problem:lesson-locked",
 	passwordChangeRequired: "urn:convertisseur:problem:password-change-required",
@@ -55,8 +59,15 @@ export const problemTypes = {
 	validation: "urn:convertisseur:problem:validation",
 } as const;
 
-export interface Credentials {
+export interface LoginCredentials {
+	/** The account's username or email. */
+	login: string;
+	password: string;
+}
+
+export interface Registration {
 	username: string;
+	email: string;
 	password: string;
 }
 
@@ -182,13 +193,13 @@ export async function fetchCurrentSession(): Promise<Session | null> {
 	return SessionSchema.parse(await response.json());
 }
 
-export async function register(credentials: Credentials): Promise<User> {
-	const response = await send("POST", "/api/v1/users", credentials);
+export async function register(registration: Registration): Promise<User> {
+	const response = await send("POST", "/api/v1/users", registration);
 	await expectOk(response);
 	return UserSchema.parse(await response.json());
 }
 
-export async function login(credentials: Credentials): Promise<Session> {
+export async function login(credentials: LoginCredentials): Promise<Session> {
 	const response = await send("POST", "/api/v1/sessions", credentials);
 	await expectOk(response);
 	return SessionSchema.parse(await response.json());
@@ -243,4 +254,10 @@ export async function changePassword(
 	change: PasswordChange,
 ): Promise<void> {
 	await expectOk(await send("PUT", `${userPath(userId)}/password`, change));
+}
+
+export async function setEmail(userId: string, email: string): Promise<string> {
+	const response = await send("PUT", `${userPath(userId)}/email`, { email });
+	await expectOk(response);
+	return EmailSchema.parse(await response.json()).email;
 }

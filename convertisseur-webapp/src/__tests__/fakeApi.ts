@@ -32,6 +32,8 @@ export interface FakeApi {
 	goOffline(): void;
 	/** The account named `username`, as the server holds it. */
 	account(username: string): Account | undefined;
+	/** Leaves `username` without an email, as an account created before it. */
+	clearEmail(username: string): void;
 	/** The units, lessons and cards, as the server holds them. */
 	content: FakeContent;
 }
@@ -47,7 +49,7 @@ function seed(
 	lastActiveAt: string | null = null,
 ): Account {
 	return {
-		user: { id, username, role },
+		user: { id, username, email: `${username}@example.com`, role },
 		password: "le bon mot de passe",
 		mustChangePassword: false,
 		createdAt: "2026-09-12T10:00:00Z",
@@ -56,7 +58,7 @@ function seed(
 }
 
 const memberPath =
-	/^\/api\/v1\/users\/([^/]+)(\/role|\/password|\/password-resets)?$/;
+	/^\/api\/v1\/users\/([^/]+)(\/role|\/password|\/password-resets|\/email)?$/;
 
 const contentPath = /^\/api\/v1\/(content-items|units|lessons|cards)(\/|$)/;
 
@@ -78,6 +80,10 @@ export function installFakeApi(): FakeApi {
 		accounts.find(
 			(account) =>
 				account.user.username.toLowerCase() === username.toLowerCase(),
+		);
+	const findByEmail = (email: string) =>
+		accounts.find(
+			(account) => account.user.email?.toLowerCase() === email.toLowerCase(),
 		);
 	const byId = (id: string) =>
 		accounts.find((account) => account.user.id === id);
@@ -109,7 +115,8 @@ export function installFakeApi(): FakeApi {
 		const matching = accounts
 			.filter(
 				({ user }) =>
-					user.username.toLowerCase().includes(q) &&
+					(user.username.toLowerCase().includes(q) ||
+						(user.email ?? "").toLowerCase().includes(q)) &&
 					(!role || user.role === role),
 			)
 			.sort(
@@ -145,6 +152,23 @@ export function installFakeApi(): FakeApi {
 		return new Response(null, { status: 204 });
 	}
 
+	function setEmail(target: Account | undefined, body: unknown) {
+		const actor = guard("user");
+		if (actor instanceof Response) {
+			return actor;
+		}
+		if (actor !== target) {
+			return problem(403, "forbidden");
+		}
+		const { email } = body as { email: string };
+		const holder = findByEmail(email);
+		if (holder && holder !== actor) {
+			return problem(409, "email-taken");
+		}
+		actor.user = { ...actor.user, email };
+		return json(200, { email });
+	}
+
 	function member(
 		method: string,
 		target: Account | undefined,
@@ -153,6 +177,9 @@ export function installFakeApi(): FakeApi {
 	): Response {
 		if (`${method} ${sub}` === "PUT /password") {
 			return changePassword(target, body);
+		}
+		if (`${method} ${sub}` === "PUT /email") {
+			return setEmail(target, body);
 		}
 		const actor = guard(sub === "/role" ? "super_admin" : "admin");
 		if (actor instanceof Response) {
@@ -220,7 +247,12 @@ export function installFakeApi(): FakeApi {
 			}
 			return content.handle(method, url, body, actor.user);
 		}
-		const credentials = body as { username: string; password: string };
+		const credentials = body as {
+			login: string;
+			username: string;
+			email: string;
+			password: string;
+		};
 
 		switch (`${method} ${url.pathname}`) {
 			case "GET /api/v1/sessions/current":
@@ -231,7 +263,8 @@ export function installFakeApi(): FakeApi {
 				session = null;
 				return new Response(null, { status: 204 });
 			case "POST /api/v1/sessions": {
-				const account = find(credentials.username);
+				const account =
+					find(credentials.login) ?? findByEmail(credentials.login);
 				if (!account || account.password !== credentials.password) {
 					return problem(401, "invalid-credentials");
 				}
@@ -242,11 +275,15 @@ export function installFakeApi(): FakeApi {
 				if (find(credentials.username)) {
 					return problem(409, "username-taken");
 				}
+				if (findByEmail(credentials.email)) {
+					return problem(409, "email-taken");
+				}
 				const account = seed(
 					`u-${credentials.username}`,
 					credentials.username,
 					"user",
 				);
+				account.user.email = credentials.email;
 				account.password = credentials.password;
 				accounts.push(account);
 				return json(201, account.user);
@@ -276,6 +313,12 @@ export function installFakeApi(): FakeApi {
 		},
 		account(username) {
 			return find(username);
+		},
+		clearEmail(username) {
+			const account = find(username);
+			if (account) {
+				account.user = { ...account.user, email: null };
+			}
 		},
 		content,
 	};

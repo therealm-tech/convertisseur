@@ -1,4 +1,7 @@
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use axum::{
     Router,
@@ -88,18 +91,28 @@ impl Server {
         self.send(json_request(Method::POST, uri, body)).await
     }
 
+    /// Registers `username` with an email of its own.
     async fn register(&self, username: &str, password: &str) -> Answer {
+        static NEXT: AtomicU32 = AtomicU32::new(1);
+        let email = format!(
+            "learner{}@example.com",
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        );
+        self.register_with(username, &email, password).await
+    }
+
+    async fn register_with(&self, username: &str, email: &str, password: &str) -> Answer {
         self.post(
             "/api/v1/users",
-            &json!({ "username": username, "password": password }),
+            &json!({ "username": username, "email": email, "password": password }),
         )
         .await
     }
 
-    async fn login(&self, username: &str, password: &str) -> Answer {
+    async fn login(&self, login: &str, password: &str) -> Answer {
         self.post(
             "/api/v1/sessions",
-            &json!({ "username": username, "password": password }),
+            &json!({ "login": login, "password": password }),
         )
         .await
     }
@@ -158,17 +171,21 @@ async fn session_count(pool: &PgPool) -> i64 {
 async fn registers_a_user(pool: PgPool) {
     let server = Server::new(pool.clone());
 
-    let answer = server.register("aicha.b", PASSWORD).await;
+    let answer = server
+        .register_with("aicha.b", "Aicha.B@example.com", PASSWORD)
+        .await;
 
     assert_eq!(answer.status, StatusCode::CREATED);
     assert_eq!(answer.body["username"], "aicha.b");
+    assert_eq!(answer.body["email"], "Aicha.B@example.com");
     assert_eq!(answer.body["role"], "user");
-    let (id, hash): (uuid::Uuid, String) =
-        sqlx::query_as("SELECT id, password_hash FROM users WHERE username = 'aicha.b'")
+    let (id, email, hash): (uuid::Uuid, String, String) =
+        sqlx::query_as("SELECT id, email, password_hash FROM users WHERE username = 'aicha.b'")
             .fetch_one(&pool)
             .await
             .unwrap();
     assert_eq!(answer.body["id"], id.to_string());
+    assert_eq!(email, "Aicha.B@example.com", "stored as typed");
     assert!(hash.starts_with("$argon2id$"));
     assert_eq!(session_count(&pool).await, 0, "registering does not log in");
 }
@@ -187,6 +204,65 @@ async fn refuses_a_username_taken_in_another_case(pool: PgPool) {
     assert_eq!(
         answer.problem_type(),
         "urn:convertisseur:problem:username-taken"
+    );
+}
+
+#[sqlx::test]
+async fn refuses_an_email_taken_in_another_case(pool: PgPool) {
+    let server = Server::new(pool);
+    assert_eq!(
+        server
+            .register_with("aicha", "Aicha@Example.com", PASSWORD)
+            .await
+            .status,
+        StatusCode::CREATED
+    );
+
+    let answer = server
+        .register_with("aicha2", "aicha@example.COM", PASSWORD)
+        .await;
+
+    assert_eq!(answer.status, StatusCode::CONFLICT);
+    assert_eq!(
+        answer.problem_type(),
+        "urn:convertisseur:problem:email-taken"
+    );
+}
+
+#[sqlx::test]
+async fn refuses_a_registration_without_an_email(pool: PgPool) {
+    let server = Server::new(pool);
+
+    let answer = server
+        .post(
+            "/api/v1/users",
+            &json!({ "username": "aicha", "password": PASSWORD }),
+        )
+        .await;
+
+    assert_eq!(answer.status, StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test]
+async fn refuses_an_invalid_email(pool: PgPool) {
+    let server = Server::new(pool.clone());
+
+    // Five cases at most: the registration rate limit lets five through.
+    for email in ["aicha", "aicha@", "@example.com", "aicha b@example.com"] {
+        let answer = server.register_with("aicha", email, PASSWORD).await;
+        assert_eq!(answer.status, StatusCode::UNPROCESSABLE_ENTITY, "{email}");
+        assert_eq!(
+            answer.body["errors"],
+            json!([{ "field": "email", "code": "email_invalid" }]),
+            "{email}"
+        );
+    }
+    assert_eq!(
+        server
+            .register_with("bilal", "bilal+convertisseur@mail.example.org", PASSWORD)
+            .await
+            .status,
+        StatusCode::CREATED
     );
 }
 
@@ -318,6 +394,59 @@ async fn logs_in_with_a_secure_session_cookie(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn logs_in_with_the_email_in_any_case(pool: PgPool) {
+    let server = Server::new(pool);
+    server
+        .register_with("aicha", "Aicha@Example.com", PASSWORD)
+        .await;
+
+    let answer = server.login("aicha@EXAMPLE.com", PASSWORD).await;
+
+    assert_eq!(answer.status, StatusCode::CREATED);
+    assert_eq!(answer.body["user"]["username"], "aicha");
+    assert_eq!(answer.body["user"]["email"], "Aicha@Example.com");
+}
+
+#[sqlx::test]
+async fn still_logs_in_with_the_username_field(pool: PgPool) {
+    let server = Server::new(pool);
+    server.register("aicha", PASSWORD).await;
+
+    let answer = server
+        .post(
+            "/api/v1/sessions",
+            &json!({ "username": "aicha", "password": PASSWORD }),
+        )
+        .await;
+
+    assert_eq!(answer.status, StatusCode::CREATED);
+}
+
+#[sqlx::test]
+async fn the_super_admin_username_wins_over_an_equal_email(pool: PgPool) {
+    ensure_super_admin(&pool, "chef@example.com", PASSWORD.to_owned())
+        .await
+        .unwrap();
+    let server = Server::new(pool);
+    server
+        .register_with("aicha", "Chef@example.com", "aicha's own password")
+        .await;
+
+    let answer = server.login("chef@example.com", PASSWORD).await;
+    let learner = server
+        .login("chef@example.com", "aicha's own password")
+        .await;
+
+    assert_eq!(answer.status, StatusCode::CREATED);
+    assert_eq!(answer.body["user"]["role"], "super_admin");
+    assert_eq!(learner.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        server.login("aicha", "aicha's own password").await.status,
+        StatusCode::CREATED
+    );
+}
+
+#[sqlx::test]
 async fn drops_secure_from_the_cookie_when_configured(pool: PgPool) {
     let server = Server::with(
         pool,
@@ -337,18 +466,26 @@ async fn drops_secure_from_the_cookie_when_configured(pool: PgPool) {
 #[sqlx::test]
 async fn a_wrong_password_and_an_unknown_user_look_the_same(pool: PgPool) {
     let server = Server::new(pool.clone());
-    server.register("aicha", PASSWORD).await;
+    server
+        .register_with("aicha", "aicha@example.com", PASSWORD)
+        .await;
 
     let wrong_password = server.login("aicha", "not the right password").await;
+    let wrong_password_by_email = server
+        .login("aicha@example.com", "not the right password")
+        .await;
     let unknown_user = server.login("nobody", PASSWORD).await;
+    let unknown_email = server.login("nobody@example.com", PASSWORD).await;
 
     assert_eq!(wrong_password.status, StatusCode::UNAUTHORIZED);
     assert_eq!(
         wrong_password.problem_type(),
         "urn:convertisseur:problem:invalid-credentials"
     );
-    assert_eq!(unknown_user.status, wrong_password.status);
-    assert_eq!(unknown_user.body, wrong_password.body);
+    for other in [&wrong_password_by_email, &unknown_user, &unknown_email] {
+        assert_eq!(other.status, wrong_password.status);
+        assert_eq!(other.body, wrong_password.body);
+    }
     assert!(wrong_password.headers.get(header::SET_COOKIE).is_none());
     assert_eq!(session_count(&pool).await, 0);
 }

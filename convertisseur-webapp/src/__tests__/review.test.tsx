@@ -16,7 +16,12 @@ const recording: Audio = {
 const validated = {
 	status: "validated" as const,
 	validatedAt: "2026-11-02T09:00:00Z",
-	validatedBy: { id: "u-bilal", username: "bilal", role: "admin" as const },
+	validatedBy: {
+		id: "u-bilal",
+		username: "bilal",
+		email: null,
+		role: "admin" as const,
+	},
 };
 
 /**

@@ -11,19 +11,32 @@ async function openAuthScreen(tab: "Connexion" | "Inscription" = "Connexion") {
 	return { api, user, form: screen.getByRole("tabpanel", { name: tab }) };
 }
 
+const LOGIN_LABEL = "Pseudo ou adresse e-mail";
+
+/** Types each value into the field its label names; skips empty ones. */
 async function fill(
 	user: ReturnType<typeof userEvent.setup>,
 	form: HTMLElement,
-	username: string,
-	password: string,
+	values: Record<string, string>,
 ) {
 	const scope = within(form);
-	if (username) {
-		await user.type(scope.getByLabelText("Pseudo"), username);
+	for (const [label, value] of Object.entries(values)) {
+		if (value) {
+			await user.type(scope.getByLabelText(label), value);
+		}
 	}
-	if (password) {
-		await user.type(scope.getByLabelText("Mot de passe"), password);
-	}
+}
+
+function logIn(login: string, password: string) {
+	return { [LOGIN_LABEL]: login, "Mot de passe": password };
+}
+
+function register(username: string, password: string, email = "b@example.com") {
+	return {
+		Pseudo: username,
+		"Adresse e-mail": email,
+		"Mot de passe": password,
+	};
 }
 
 function posted(api: FakeApi, path: string) {
@@ -49,7 +62,8 @@ describe("auth screen", () => {
 		expect(
 			screen.getByRole("button", { name: "Se connecter" }),
 		).toBeInTheDocument();
-		expect(screen.queryByLabelText(/mail/i)).not.toBeInTheDocument();
+		expect(screen.getByLabelText(LOGIN_LABEL)).toBeInTheDocument();
+		expect(screen.queryByLabelText("Adresse e-mail")).not.toBeInTheDocument();
 	});
 
 	it("switches tabs with the arrow keys", async () => {
@@ -72,9 +86,9 @@ describe("auth screen", () => {
 
 			await user.click(within(form).getByRole("button"));
 
-			expect(within(form).getByLabelText("Pseudo")).toHaveAccessibleDescription(
-				"Saisis ton pseudo.",
-			);
+			expect(
+				within(form).getByLabelText(LOGIN_LABEL),
+			).toHaveAccessibleDescription("Saisis ton pseudo ou ton adresse e-mail.");
 			expect(
 				within(form).getByLabelText("Mot de passe"),
 			).toHaveAccessibleDescription("Saisis ton mot de passe.");
@@ -84,7 +98,7 @@ describe("auth screen", () => {
 		it("lands on the home page once logged in", async () => {
 			const { user, form } = await openAuthScreen();
 
-			await fill(user, form, "Aicha", "le bon mot de passe");
+			await fill(user, form, logIn("Aicha", "le bon mot de passe"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(
@@ -92,14 +106,33 @@ describe("auth screen", () => {
 			).toBeInTheDocument();
 		});
 
+		it("logs in with the email, sent trimmed", async () => {
+			const { api, user, form } = await openAuthScreen();
+
+			await fill(
+				user,
+				form,
+				logIn(" Aicha@Example.com ", "le bon mot de passe"),
+			);
+			await user.click(within(form).getByRole("button"));
+
+			expect(
+				await screen.findByRole("heading", { name: "Salam, aicha" }),
+			).toBeInTheDocument();
+			expect(posted(api, "/api/v1/sessions")[0]?.body).toEqual({
+				login: "Aicha@Example.com",
+				password: "le bon mot de passe",
+			});
+		});
+
 		it("refuses wrong credentials without saying which is wrong", async () => {
 			const { user, form } = await openAuthScreen();
 
-			await fill(user, form, "aicha", "pas le bon mot de passe");
+			await fill(user, form, logIn("aicha", "pas le bon mot de passe"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(await screen.findByRole("alert")).toHaveTextContent(
-				"Pseudo ou mot de passe incorrect.",
+				"Pseudo, adresse e-mail ou mot de passe incorrect.",
 			);
 		});
 
@@ -111,7 +144,7 @@ describe("auth screen", () => {
 				problem(429, "rate-limited", { "Retry-After": "90" }),
 			);
 
-			await fill(user, form, "aicha", "le bon mot de passe");
+			await fill(user, form, logIn("aicha", "le bon mot de passe"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -123,7 +156,7 @@ describe("auth screen", () => {
 			const { api, user, form } = await openAuthScreen();
 			api.goOffline();
 
-			await fill(user, form, "aicha", "le bon mot de passe");
+			await fill(user, form, logIn("aicha", "le bon mot de passe"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -144,7 +177,7 @@ describe("auth screen", () => {
 		])("refuses the username %j", async (username, message) => {
 			const { api, user, form } = await openAuthScreen("Inscription");
 
-			await fill(user, form, username, "un mot de passe assez long");
+			await fill(user, form, register(username, "un mot de passe assez long"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(within(form).getByLabelText("Pseudo")).toHaveAccessibleDescription(
@@ -156,7 +189,7 @@ describe("auth screen", () => {
 		it("refuses a password under 12 characters", async () => {
 			const { api, user, form } = await openAuthScreen("Inscription");
 
-			await fill(user, form, "bilal", "onze caract");
+			await fill(user, form, register("bilal", "onze caract"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(
@@ -169,11 +202,41 @@ describe("auth screen", () => {
 			expect(posted(api, "/api/v1/users")).toHaveLength(0);
 		});
 
+		it.each([
+			["", "Saisis ton adresse e-mail."],
+			["bilal", "Cette adresse e-mail n'est pas valide."],
+			["bilal@", "Cette adresse e-mail n'est pas valide."],
+		])("refuses the email %j", async (email, message) => {
+			const { api, user, form } = await openAuthScreen("Inscription");
+
+			await fill(
+				user,
+				form,
+				register("bilal", "un mot de passe assez long", email),
+			);
+			await user.click(within(form).getByRole("button"));
+
+			expect(
+				within(form).getByLabelText("Adresse e-mail"),
+			).toHaveAccessibleDescription(expect.stringContaining(message));
+			expect(posted(api, "/api/v1/users")).toHaveLength(0);
+		});
+
+		it("says what the email is for", async () => {
+			const { form } = await openAuthScreen("Inscription");
+
+			expect(
+				within(form).getByLabelText("Adresse e-mail"),
+			).toHaveAccessibleDescription(
+				"Pour te connecter. Aucun message n'y est envoyé.",
+			);
+		});
+
 		it("clears a message once the field is fixed", async () => {
 			const { user, form } = await openAuthScreen("Inscription");
 			const username = within(form).getByLabelText("Pseudo");
 
-			await fill(user, form, "ab", "un mot de passe assez long");
+			await fill(user, form, register("ab", "un mot de passe assez long"));
 			await user.click(within(form).getByRole("button"));
 			await user.type(username, "c");
 
@@ -183,7 +246,15 @@ describe("auth screen", () => {
 		it("creates the account, logs in and lands on the home page", async () => {
 			const { api, user, form } = await openAuthScreen("Inscription");
 
-			await fill(user, form, "bilal_92", "un mot de passe assez long");
+			await fill(
+				user,
+				form,
+				register(
+					"bilal_92",
+					"un mot de passe assez long",
+					" Bilal92@example.com ",
+				),
+			);
 			await user.click(within(form).getByRole("button"));
 
 			expect(
@@ -191,15 +262,19 @@ describe("auth screen", () => {
 			).toBeInTheDocument();
 			expect(posted(api, "/api/v1/users")[0]?.body).toEqual({
 				username: "bilal_92",
+				email: "Bilal92@example.com",
 				password: "un mot de passe assez long",
 			});
-			expect(posted(api, "/api/v1/sessions")).toHaveLength(1);
+			expect(posted(api, "/api/v1/sessions")[0]?.body).toEqual({
+				login: "bilal_92",
+				password: "un mot de passe assez long",
+			});
 		});
 
 		it("says when the username is taken", async () => {
 			const { user, form } = await openAuthScreen("Inscription");
 
-			await fill(user, form, "AICHA", "un mot de passe assez long");
+			await fill(user, form, register("AICHA", "un mot de passe assez long"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(
@@ -211,23 +286,48 @@ describe("auth screen", () => {
 			);
 		});
 
+		it("says when the email is taken", async () => {
+			const { user, form } = await openAuthScreen("Inscription");
+
+			await fill(
+				user,
+				form,
+				register("bilal_92", "un mot de passe assez long", "AICHA@example.com"),
+			);
+			await user.click(within(form).getByRole("button"));
+
+			expect(
+				await within(form).findByText(
+					"Cette adresse e-mail est déjà utilisée.",
+				),
+			).toBeInTheDocument();
+			expect(within(form).getByLabelText("Adresse e-mail")).toHaveAttribute(
+				"aria-invalid",
+				"true",
+			);
+		});
+
 		it("shows the server's field rules in French", async () => {
 			const { api, user, form } = await openAuthScreen("Inscription");
 			api.failNext(
 				"POST",
 				"/api/v1/users",
 				problem(422, "validation", {}, [
+					{ field: "email", code: "email_invalid" },
 					{ field: "password", code: "password_length" },
 				]),
 			);
 
-			await fill(user, form, "bilal", "un mot de passe assez long");
+			await fill(user, form, register("bilal", "un mot de passe assez long"));
 			await user.click(within(form).getByRole("button"));
 
 			expect(
 				await within(form).findByText(
 					"Ton mot de passe doit faire au moins 12 caractères.",
 				),
+			).toBeInTheDocument();
+			expect(
+				within(form).getByText("Cette adresse e-mail n'est pas valide."),
 			).toBeInTheDocument();
 		});
 	});

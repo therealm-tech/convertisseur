@@ -38,7 +38,7 @@ describe("forced password change", () => {
 		const router = await renderAt("/login");
 		const form = await screen.findByRole("tabpanel", { name: "Connexion" });
 
-		await user.type(screen.getByLabelText("Pseudo"), "aicha");
+		await user.type(screen.getByLabelText("Pseudo ou adresse e-mail"), "aicha");
 		await user.type(screen.getByLabelText("Mot de passe"), TEMPORARY_PASSWORD);
 		await user.click(form.querySelector("button") as HTMLButtonElement);
 

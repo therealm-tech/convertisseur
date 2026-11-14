@@ -89,7 +89,12 @@ function seed(api: FakeApi, withAudio: boolean) {
 		arabic: "واش راك؟",
 		status: "validated",
 		validatedAt: "2026-11-06T09:00:00Z",
-		validatedBy: { id: "u-bilal", username: "bilal", role: "admin" },
+		validatedBy: {
+			id: "u-bilal",
+			username: "bilal",
+			email: null,
+			role: "admin",
+		},
 		audio: withAudio
 			? {
 					id: "a-1",

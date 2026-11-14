@@ -67,7 +67,12 @@ const playback = (audio: Audio | null) =>
 const author = (user: User | null) =>
 	user ? { id: user.id, username: user.username } : null;
 
-const nobody: User = { id: "u-seed", username: "seed", role: "admin" };
+const nobody: User = {
+	id: "u-seed",
+	username: "seed",
+	email: null,
+	role: "admin",
+};
 
 /** An in-memory stand-in for the content endpoints. */
 export class FakeContent {

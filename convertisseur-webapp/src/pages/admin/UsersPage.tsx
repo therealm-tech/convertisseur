@@ -160,7 +160,7 @@ export function UsersPage() {
 					id="users-recherche"
 					type="search"
 					className="admin-search"
-					placeholder="Pseudo"
+					placeholder="Pseudo ou adresse e-mail"
 					autoComplete="off"
 					autoCapitalize="none"
 					spellCheck={false}
@@ -303,6 +303,7 @@ function UsersTable({
 				<thead>
 					<tr>
 						<th scope="col">Pseudo</th>
+						<th scope="col">Adresse e-mail</th>
 						<th scope="col">Rôle</th>
 						<th scope="col">Inscription</th>
 						<th scope="col">Dernière activité</th>
@@ -323,6 +324,7 @@ function UsersTable({
 									<span className="admin-me">toi</span>
 								) : null}
 							</th>
+							<td className="admin-cell-muted">{target.email ?? "—"}</td>
 							<td>
 								<RoleCell
 									viewer={viewer}

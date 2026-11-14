@@ -1,9 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { TextField } from "@/components/TextField";
-import type { Credentials } from "@/lib/api";
 import {
 	type CredentialErrors,
+	type CredentialsInput,
 	describeFailure,
+	EMAIL_HINT,
 	PASSWORD_MIN_CHARS,
 	USERNAME_MAX_CHARS,
 	USERNAME_MIN_CHARS,
@@ -14,11 +15,11 @@ interface CredentialsFormProps {
 	kind: "login" | "registration";
 	labelledBy: string;
 	submitLabel: string;
-	validate: (credentials: Credentials) => CredentialErrors;
-	submit: (credentials: Credentials) => Promise<void>;
+	validate: (credentials: CredentialsInput) => CredentialErrors;
+	submit: (credentials: CredentialsInput) => Promise<void>;
 }
 
-/** The username and password form behind both tabs of the auth screen. */
+/** The form behind both tabs of the auth screen. */
 export function CredentialsForm({
 	kind,
 	labelledBy,
@@ -26,8 +27,10 @@ export function CredentialsForm({
 	validate,
 	submit,
 }: CredentialsFormProps) {
-	const [credentials, setCredentials] = useState<Credentials>({
+	const [credentials, setCredentials] = useState<CredentialsInput>({
+		login: "",
 		username: "",
+		email: "",
 		password: "",
 	});
 	const [attempted, setAttempted] = useState(false);
@@ -39,7 +42,7 @@ export function CredentialsForm({
 	const errors = { ...serverErrors, ...localErrors };
 	const registering = kind === "registration";
 
-	function update(field: keyof Credentials, value: string) {
+	function update(field: keyof CredentialsInput, value: string) {
 		setCredentials((current) => ({ ...current, [field]: value }));
 		setServerErrors((current) => ({ ...current, [field]: undefined }));
 		setFormError(undefined);
@@ -72,20 +75,40 @@ export function CredentialsForm({
 			noValidate
 			onSubmit={onSubmit}
 		>
-			<TextField
-				id={`${kind}-pseudo`}
-				label="Pseudo"
-				type="text"
-				autoComplete="username"
-				value={credentials.username}
-				onChange={(value) => update("username", value)}
-				error={errors.username}
-				hint={
-					registering
-						? `${USERNAME_MIN_CHARS} à ${USERNAME_MAX_CHARS} caractères : lettres, chiffres, . _ -`
-						: undefined
-				}
-			/>
+			{registering ? (
+				<>
+					<TextField
+						id={`${kind}-pseudo`}
+						label="Pseudo"
+						type="text"
+						autoComplete="username"
+						value={credentials.username}
+						onChange={(value) => update("username", value)}
+						error={errors.username}
+						hint={`${USERNAME_MIN_CHARS} à ${USERNAME_MAX_CHARS} caractères : lettres, chiffres, . _ -`}
+					/>
+					<TextField
+						id={`${kind}-email`}
+						label="Adresse e-mail"
+						type="email"
+						autoComplete="email"
+						value={credentials.email}
+						onChange={(value) => update("email", value)}
+						error={errors.email}
+						hint={EMAIL_HINT}
+					/>
+				</>
+			) : (
+				<TextField
+					id={`${kind}-identifiant`}
+					label="Pseudo ou adresse e-mail"
+					type="text"
+					autoComplete="username"
+					value={credentials.login}
+					onChange={(value) => update("login", value)}
+					error={errors.login}
+				/>
+			)}
 			<TextField
 				id={`${kind}-mdp`}
 				label="Mot de passe"

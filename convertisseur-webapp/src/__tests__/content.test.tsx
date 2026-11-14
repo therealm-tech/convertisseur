@@ -11,7 +11,12 @@ function seedContent(api: FakeApi) {
 		track: "arabe",
 		status: "validated",
 		validatedAt: "2026-10-02T09:00:00Z",
-		validatedBy: { id: "u-bilal", username: "bilal", role: "admin" },
+		validatedBy: {
+			id: "u-bilal",
+			username: "bilal",
+			email: null,
+			role: "admin",
+		},
 	});
 	const letters = content.seed("lesson", {
 		id: "l-lettres",
@@ -320,7 +325,12 @@ describe("content edit pages", () => {
 			variety: "darija",
 			status: "validated",
 			validatedAt: "2026-11-06T09:00:00Z",
-			validatedBy: { id: "u-bilal", username: "bilal", role: "admin" },
+			validatedBy: {
+				id: "u-bilal",
+				username: "bilal",
+				email: null,
+				role: "admin",
+			},
 		});
 		await user.click(
 			await screen.findByRole("link", { name: /Les 4 formes des lettres/ }),
@@ -410,7 +420,12 @@ describe("content edit pages", () => {
 		if (!row) throw new Error("seed missing");
 		row.status = "validated";
 		row.validatedAt = "2026-11-06T09:00:00Z";
-		row.validatedBy = { id: "u-bilal", username: "bilal", role: "admin" };
+		row.validatedBy = {
+			id: "u-bilal",
+			username: "bilal",
+			email: null,
+			role: "admin",
+		};
 
 		await user.click(screen.getByRole("link", { name: "Modifier la leçon" }));
 		const panel = detail();

@@ -128,8 +128,8 @@ impl Server {
         self.request(request.unwrap()).await
     }
 
-    pub async fn login(&self, username: &str, password: &str) -> Answer {
-        let body = json!({ "username": username, "password": password });
+    pub async fn login(&self, login: &str, password: &str) -> Answer {
+        let body = json!({ "login": login, "password": password });
         self.send(Method::POST, "/api/v1/sessions", None, Some(&body))
             .await
     }

@@ -601,10 +601,11 @@ button.button-primary {
 }
 
 /* The narrowest the users table lays out in on a wide screen without
-   clipping a cell, measured with the longest role badge and both action
-   buttons on one line. */
+   clipping a cell, measured with the longest role badge, both action
+   buttons on one line and an email of 24 characters; a longer one scrolls
+   the table in its card. */
 .users-columns {
-	--table-fit: 910px;
+	--table-fit: 1110px;
 }
 
 .admin-table-card,
