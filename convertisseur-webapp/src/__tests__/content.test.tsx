@@ -604,6 +604,67 @@ describe("content edit pages", () => {
 		).toHaveAttribute("href", "/admin/content");
 	});
 
+	it("places an item in its track, unit and lesson", async () => {
+		const api = installFakeApi();
+		seedContent(api);
+		api.logIn("nour");
+		await renderAt("/admin/content/cards/c-shukran");
+
+		const crumbs = await screen.findByRole("navigation", {
+			name: "Fil d'Ariane",
+		});
+		expect(
+			within(crumbs)
+				.getAllByRole("link")
+				.map((link) => [link.textContent, link.getAttribute("href")]),
+		).toEqual([
+			["Contenu", "/admin/content"],
+			["Arabe", "/admin/content?track=arabe"],
+			["Les 4 formes des lettres", "/admin/content?lesson=l-lettres"],
+		]);
+	});
+
+	it("leads from a unit to its lessons and from a lesson to its cards", async () => {
+		const { user } = await openContentPage("/admin/content?status=to-review");
+		await tree();
+
+		await user.click(
+			within(screen.getByRole("region", { name: "L'alphabet" })).getByRole(
+				"link",
+				{ name: "Modifier" },
+			),
+		);
+		const lessons = await screen.findByRole("link", {
+			name: "Voir ses leçons",
+		});
+		expect(lessons).toHaveAttribute(
+			"href",
+			"/admin/content?status=to-review&unit=u-alphabet",
+		);
+
+		await user.click(lessons);
+		await user.click(
+			await screen.findByRole("link", { name: /^Les 4 formes des lettres/ }),
+		);
+		await user.click(
+			await screen.findByRole("link", { name: "Modifier la leçon" }),
+		);
+
+		expect(
+			await screen.findByRole("link", { name: "Voir les cartes" }),
+		).toHaveAttribute(
+			"href",
+			"/admin/content?status=to-review&lesson=l-lettres",
+		);
+		const crumbs = screen.getByRole("navigation", { name: "Fil d'Ariane" });
+		expect(
+			within(crumbs).getByRole("link", { name: "L'alphabet" }),
+		).toHaveAttribute(
+			"href",
+			"/admin/content?status=to-review&unit=u-alphabet",
+		);
+	});
+
 	it("says an item does not exist", async () => {
 		const api = installFakeApi();
 		seedContent(api);
