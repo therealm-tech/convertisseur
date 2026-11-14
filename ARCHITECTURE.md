@@ -165,9 +165,8 @@ changed.
 
 `users` holds the accounts: a username, unique case-insensitively through an
 index on `lower(username)`; an `email`, unique case-insensitively through an
-index on `lower(email)`, and `NULL` on an account that has not set one, the
-super admin the bootstrap creates or a row older than the column; an argon2id
-password hash in PHC string format;
+index on `lower(email)`, and `NULL` on the super admin the bootstrap creates
+until it sets one; an argon2id password hash in PHC string format;
 a `role` of the `user_role` enum, `user`, `admin` or `super_admin`;
 `must_change_password`, set by an admin's password reset; and
 `last_active_at`, the last time one of its sessions was opened or used.
@@ -665,7 +664,8 @@ sequenceDiagram
   `PUT /api/v1/users/{userId}/email`; nobody else's, admins included. It is
   shown to the account itself and to admins in `/admin/users`, and to nobody
   else: the content's authors carry their username alone.
-- **An account without an email is asked for one by the webapp.** Every page
+- **An account without an email, the super admin as the bootstrap creates
+  it, is asked for one by the webapp.** Every page
   but `/email`, `/password` and logout sends it to `/email` until it sets one,
   as the forced password change does; the server answers it as any other
   account, since nothing it serves depends on the address.
