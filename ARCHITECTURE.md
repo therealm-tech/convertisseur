@@ -337,8 +337,8 @@ gets the same `403` as everywhere else.
 An exercise asks questions about the cards of one lesson, in
 [`quiz.ts`](convertisseur-webapp/src/lib/quiz.ts), and the exercise page
 asks them one at a time, with three or four choices each. It is built from
-the lesson the page already loads; only its score reaches the server (see
-[Progress and the lock](#progress-and-the-lock)).
+the lesson the page already loads; only its score reaches the server, which
+takes it as sent (see [Progress and the lock](#progress-and-the-lock)).
 
 - **Four kinds of question**: the Arabic of a card, pick its meaning; the
   meaning, pick the Arabic; for a letter of the alphabet, one of its initial,
@@ -936,11 +936,17 @@ would need their own tables, content files, sync, admin forms and review queue,
 for questions the cards already answer. The price is that a question is only
 as good as its draw: the distractors are whatever the lesson holds.
 
-**Exercises are built in the webapp, not by the server.** The lesson's cards
-are all the questions need, and the learner's own client is the only one that
-reads the answers, so a server-side exercise would hide nothing worth hiding;
-built in the browser, an exercise takes no request of its own, works offline
-once the lesson is loaded, and leaves the API unchanged.
+**Exercises are built and graded in the webapp, not by the server.** The
+questions reach the browser with their answers, and the server records the
+`firstTry` and `total` the webapp sends to `POST /api/v1/exercise-attempts`,
+checking only that `firstTry <= total`, that `total` is in range and that the
+lesson is unlocked. A learner can therefore forge a pass and open the next
+lesson: the lock guides a learner, it does not certify anything (see
+[Limitations](#limitations)). The trade is deliberate: an exercise built in
+the browser takes no request of its own, works offline once the lesson is
+loaded, and answers each question at once, with no round trip per answer.
+Generating and grading on the server would close the gap, at the cost of
+offline use, a round trip per answer and per-exercise state on the server.
 
 **Icons are generated, not committed.** The build rasterises `logo.svg` into
 the favicon, the PWA icons and the Apple touch icon, so there is one logo file
@@ -1010,9 +1016,9 @@ rather than a part of it.
   only an entry's place among its siblings changes without one.
 - An exercise draws its distractors from its own lesson: a lesson of three
   cards offers three choices, and one of fewer has no exercise.
-- The server takes an exercise's score as the webapp sends it: the questions
-  are asked in the browser, so a request written by hand can pass an exercise
-  and open the next lesson.
+- The server takes an exercise's score as the webapp sends it, so a request
+  written by hand can pass an exercise and open the next lesson; see
+  [Exercises are built and graded in the webapp](#design-decisions).
 - The app needs the network: a card seen or a score made while it is
   unreachable is kept in memory only, and lost if the page is closed before
   it comes back.
