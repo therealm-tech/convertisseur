@@ -3582,3 +3582,9 @@ a.button-secondary {
 		content: none;
 	}
 }
+
+.content-child-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}

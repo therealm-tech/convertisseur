@@ -30,8 +30,13 @@ import {
 	type Variety,
 } from "@/lib/content";
 import { kindLabels, trackLabels, varietyLabels } from "@/lib/contentLabels";
-import { listOrigin, sectionOf } from "@/lib/contentRoutes";
+import { type ContentSearch, listOrigin, sectionOf } from "@/lib/contentRoutes";
 import { AudioBlock } from "@/pages/admin/AudioBlock";
+import {
+	ContentCrumbs,
+	type Crumb,
+	keptFilters,
+} from "@/pages/admin/contentNav";
 import {
 	ItemTitle,
 	RepoBadge,
@@ -246,6 +251,78 @@ function BackToList() {
 	);
 }
 
+/** Where the item sits: its track, then its unit or lesson. */
+function EditCrumbs({
+	loaded,
+	search,
+}: {
+	loaded: Loaded;
+	search: ContentSearch;
+}) {
+	const track: Crumb = {
+		label: trackLabels[loaded.item.track],
+		search: { track: loaded.item.track },
+	};
+	const trail: Crumb[] = [track];
+	if (loaded.kind === "lesson") {
+		trail.push({
+			label: loaded.item.unit.title,
+			search: { unit: loaded.item.unit.id },
+		});
+	} else if (loaded.kind === "card") {
+		trail.push({
+			label: loaded.item.lesson.title,
+			search: { lesson: loaded.item.lesson.id },
+		});
+	}
+	return <ContentCrumbs search={search} trail={trail} />;
+}
+
+/** The way to what a unit or lesson holds, and to a lesson's review. */
+function ChildLinks({
+	loaded,
+	search,
+}: {
+	loaded: Loaded;
+	search: ContentSearch;
+}) {
+	const kept = keptFilters(search);
+	if (loaded.kind === "unit") {
+		return (
+			<div className="content-child-links">
+				<Link
+					to="/admin/content"
+					search={{ ...kept, unit: loaded.item.id }}
+					className="button-outline content-review-link"
+				>
+					Voir ses leçons
+				</Link>
+			</div>
+		);
+	}
+	if (loaded.kind === "lesson") {
+		return (
+			<div className="content-child-links">
+				<Link
+					to="/admin/content"
+					search={{ ...kept, lesson: loaded.item.id }}
+					className="button-outline content-review-link"
+				>
+					Voir les cartes
+				</Link>
+				<Link
+					to="/admin/review/lessons/$lessonId"
+					params={{ lessonId: loaded.item.id }}
+					className="button-outline content-review-link"
+				>
+					Relire cette leçon
+				</Link>
+			</div>
+		);
+	}
+	return null;
+}
+
 interface ContentEditorProps {
 	kind: Kind;
 	/** The item to edit; a new one is written when undefined. */
@@ -257,7 +334,7 @@ interface ContentEditorProps {
 function ContentEditor({ kind: pageKind, id, parentId }: ContentEditorProps) {
 	const navigate = useNavigate();
 	const onFailure = useContentFailure();
-	const { back } = useBackToList();
+	const { filters, back } = useBackToList();
 	const titleId = useId();
 	const [state, setState] = useState<Phase>(
 		id === undefined
@@ -446,6 +523,7 @@ function ContentEditor({ kind: pageKind, id, parentId }: ContentEditorProps) {
 	return (
 		<div className="admin-content content-edit">
 			<BackToList />
+			{loaded ? <EditCrumbs loaded={loaded} search={filters ?? {}} /> : null}
 			<section aria-labelledby={titleId} className="content-detail">
 				{loaded ? (
 					<div className="content-detail-meta">
@@ -465,15 +543,7 @@ function ContentEditor({ kind: pageKind, id, parentId }: ContentEditorProps) {
 						`Nouvelle ${kindLabels[kind].toLowerCase()}`
 					)}
 				</h1>
-				{loaded?.kind === "lesson" ? (
-					<Link
-						to="/admin/review/lessons/$lessonId"
-						params={{ lessonId: loaded.item.id }}
-						className="button-outline content-review-link"
-					>
-						Relire cette leçon
-					</Link>
-				) : null}
+				{loaded ? <ChildLinks loaded={loaded} search={filters ?? {}} /> : null}
 				{imported ? (
 					<p className="content-locked">
 						Texte et place se corrigent dans le dépôt. Signale une erreur par

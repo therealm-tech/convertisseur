@@ -92,7 +92,8 @@ Each item is edited on a page of its own,
 `/admin/content/{units|lessons|cards}/{id}`, and written at
 `/admin/content/{units|lessons|cards}/new`, which starts in the unit or
 lesson its `parent` names and leads to the new item's page once it is
-created. A page opened from the content page carries its filters in its
+created. An item's page links up to its track and its unit or lesson, and a
+unit's or lesson's page down to its lessons or cards. A page opened from the content page carries its filters in its
 history state, so that its way back, and deleting the item, return to the
 very entry it came from, filters and scroll included, unless that entry
 showed the lesson just deleted; opened from a link, it leads to the tree
