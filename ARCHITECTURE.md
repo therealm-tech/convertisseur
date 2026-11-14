@@ -219,7 +219,8 @@ erDiagram
   characters, on any unit, lesson or card.
 - **`content_items` is a view** over the three tables, in the shape of the
   review list: kind, track, title, parent title, status, last edit, import
-  key and review note.
+  key, review note and the ids of the unit and of the lesson an item
+  belongs to.
 
 ## Content and its review
 
@@ -264,9 +265,11 @@ recently edited first, filtered by status, track, kind, text and presence of
 a review note. Its `statusCounts` count each status under the other filters,
 and its `reviewNoteCount` the rows with a note, for the filters' badges. Each
 item carries its `importKey` and its `reviewNote`, so that the list of notes
-is also the list of entries of `content/` to correct. The text search compares through `content_search_key`, a SQL function
-that lowercases and strips the Arabic short vowels, other diacritics and the
-tatweel, so `شكرا` finds `شُكْرًا`.
+is also the list of entries of `content/` to correct, and its `unitId` and
+`lessonId` locate it in the tree. The text search also matches the title of
+an item's parent, a lesson by its unit and a card by its lesson. The search
+compares through `content_search_key`, a SQL function that lowercases and
+strips the Arabic short vowels, other diacritics and the tatweel, so `شكرا` finds `شُكْرًا`.
 
 ## The review queue
 

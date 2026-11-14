@@ -539,8 +539,9 @@ pub struct ListItemsQuery {
     status: Option<StatusJson>,
     track: Option<TrackJson>,
     kind: Option<KindJson>,
-    /// Part of a title or of a card's text, compared case-insensitively;
-    /// Arabic short vowels and other diacritics are ignored on both sides.
+    /// Part of a title or of a card's text, or of the title of its parent (a
+    /// lesson's unit, a card's lesson), compared case-insensitively; Arabic
+    /// short vowels and other diacritics are ignored on both sides.
     q: Option<String>,
     /// `true` lists only the items with a review note, `false` only those
     /// without.
@@ -566,6 +567,10 @@ pub struct ContentItemResponse {
     /// item written in the admin area.
     import_key: Option<String>,
     review_note: Option<String>,
+    /// The unit of a lesson or of a card; `null` for a unit.
+    unit_id: Option<Uuid>,
+    /// The lesson of a card; `null` for a unit or a lesson.
+    lesson_id: Option<Uuid>,
 }
 
 impl From<ContentItem> for ContentItemResponse {
@@ -581,6 +586,8 @@ impl From<ContentItem> for ContentItemResponse {
             updated_at: item.updated_at,
             import_key: item.import_key,
             review_note: item.review_note,
+            unit_id: item.unit_id,
+            lesson_id: item.lesson_id,
         }
     }
 }
