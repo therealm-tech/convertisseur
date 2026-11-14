@@ -36,6 +36,7 @@ pub enum ApiError {
     LessonLocked,
     InvalidCredentials,
     UsernameTaken,
+    EmailTaken,
     NotEmpty,
     Imported,
     RateLimited { retry_after: Duration },
@@ -190,13 +191,19 @@ impl ApiError {
                 StatusCode::UNAUTHORIZED,
                 "urn:convertisseur:problem:invalid-credentials",
                 "Invalid credentials",
-                "the username or the password is wrong",
+                "no account has this username or email, or the password is wrong",
             ),
             Self::UsernameTaken => (
                 StatusCode::CONFLICT,
                 "urn:convertisseur:problem:username-taken",
                 "Username taken",
                 "an account already has this username, whatever its case",
+            ),
+            Self::EmailTaken => (
+                StatusCode::CONFLICT,
+                "urn:convertisseur:problem:email-taken",
+                "Email taken",
+                "an account already has this email, whatever its case",
             ),
             Self::NotEmpty => (
                 StatusCode::CONFLICT,

@@ -9,4 +9,9 @@ UPDATE users
 SET last_active_at = now()
 FROM touched
 WHERE users.id = touched.user_id
-RETURNING users.id, users.username, users.role, users.must_change_password;
+RETURNING
+    users.id,
+    users.username,
+    users.email,
+    users.role,
+    users.must_change_password;

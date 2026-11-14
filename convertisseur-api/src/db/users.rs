@@ -48,27 +48,35 @@ pub async fn find_super_admin(exec: impl PgExecutor<'_>) -> sqlx::Result<Option<
         .await
 }
 
-/// Creates a `user` account; fails with a unique violation when the
-/// username is taken, whatever its case.
+/// Index behind the uniqueness of usernames, whatever their case.
+pub const USERNAME_KEY: &str = "users_username_key";
+/// Index behind the uniqueness of emails, whatever their case.
+pub const EMAIL_KEY: &str = "users_email_key";
+
+/// Creates a `user` account; fails with a unique violation on
+/// [`USERNAME_KEY`] or [`EMAIL_KEY`] when either is taken.
 pub async fn insert(
     exec: impl PgExecutor<'_>,
     username: &str,
+    email: &str,
     password_hash: &str,
 ) -> sqlx::Result<User> {
     sqlx::query_as(include_str!("../../queries/users/insert.sql"))
         .bind(username)
+        .bind(email)
         .bind(password_hash)
         .fetch_one(exec)
         .await
 }
 
-/// The account named `username`, compared case-insensitively.
+/// The account whose username or email is `login`, compared
+/// case-insensitively; the username wins when both match.
 pub async fn find_credentials(
     exec: impl PgExecutor<'_>,
-    username: &str,
+    login: &str,
 ) -> sqlx::Result<Option<Credentials>> {
     sqlx::query_as(include_str!("../../queries/users/find_credentials.sql"))
-        .bind(username)
+        .bind(login)
         .fetch_optional(exec)
         .await
 }
@@ -96,14 +104,14 @@ pub async fn lock(exec: impl PgExecutor<'_>, id: Uuid) -> sqlx::Result<Option<Us
 
 /// Which accounts a listing returns: `None` matches everything.
 pub struct UserFilter<'a> {
-    /// Part of the username, compared case-insensitively.
-    pub username_contains: Option<&'a str>,
+    /// Part of the username or of the email, compared case-insensitively.
+    pub text_contains: Option<&'a str>,
     pub role: Option<Role>,
 }
 
 pub async fn count(exec: impl PgExecutor<'_>, filter: &UserFilter<'_>) -> sqlx::Result<i64> {
     sqlx::query_scalar(include_str!("../../queries/users/count.sql"))
-        .bind(filter.username_contains)
+        .bind(filter.text_contains)
         .bind(filter.role)
         .fetch_one(exec)
         .await
@@ -118,7 +126,7 @@ pub async fn list(
     offset: i64,
 ) -> sqlx::Result<Vec<ListedUser>> {
     sqlx::query_as(include_str!("../../queries/users/list.sql"))
-        .bind(filter.username_contains)
+        .bind(filter.text_contains)
         .bind(filter.role)
         .bind(limit)
         .bind(offset)
@@ -149,6 +157,17 @@ pub async fn set_temporary_password(
     .bind(password_hash)
     .execute(exec)
     .await?;
+    Ok(())
+}
+
+/// Fails with a unique violation on [`EMAIL_KEY`] when another account has
+/// `email`, whatever its case.
+pub async fn set_email(exec: impl PgExecutor<'_>, id: Uuid, email: &str) -> sqlx::Result<()> {
+    sqlx::query(include_str!("../../queries/users/set_email.sql"))
+        .bind(id)
+        .bind(email)
+        .execute(exec)
+        .await?;
     Ok(())
 }
 

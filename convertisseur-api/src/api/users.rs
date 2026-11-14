@@ -15,7 +15,8 @@ use validator::{Validate, ValidationError};
 use super::{
     SESSION_SECURITY,
     extract::{
-        Admin, ApiPath, RateLimited, Registration, RequireRole, SuperAdmin, ValidJson, ValidQuery,
+        Admin, ApiPath, Authenticated, RateLimited, Registration, RequireRole, SuperAdmin,
+        ValidJson, ValidQuery,
     },
 };
 use crate::{
@@ -43,6 +44,10 @@ pub fn routes() -> ApiRouter<AppState> {
             "/api/v1/users/{userId}/role",
             put_with(set_role, set_role_docs),
         )
+        .api_route(
+            "/api/v1/users/{userId}/email",
+            put_with(set_email, set_email_docs),
+        )
 }
 
 /// Names one account in the path.
@@ -57,6 +62,7 @@ pub struct UserPath {
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("example" = serde_json::json!({
     "username": "aicha.b",
+    "email": "aicha@example.com",
     "password": "un mot de passe assez long",
 })))]
 pub struct CreateUserRequest {
@@ -64,6 +70,9 @@ pub struct CreateUserRequest {
     /// unique whatever its case.
     #[validate(custom(function = validate_username))]
     username: String,
+    /// An email address, unique whatever its case. Nothing is sent to it.
+    #[validate(email(code = "email_invalid"))]
+    email: String,
     /// At least 12 characters.
     #[validate(custom(function = validate_password))]
     password: String,
@@ -77,6 +86,15 @@ fn validate_username(username: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::new("username_characters"));
     }
     Ok(())
+}
+
+/// Maps a unique violation on the username or the email to its problem.
+fn taken(error: sqlx::Error) -> ApiError {
+    match error.as_database_error().and_then(|e| e.constraint()) {
+        Some(db::users::USERNAME_KEY) => ApiError::UsernameTaken,
+        Some(db::users::EMAIL_KEY) => ApiError::EmailTaken,
+        _ => error.into(),
+    }
 }
 
 pub(super) fn validate_password(password: &str) -> Result<(), ValidationError> {
@@ -93,6 +111,9 @@ pub(super) fn validate_password(password: &str) -> Result<(), ValidationError> {
 pub struct UserResponse {
     id: Uuid,
     username: String,
+    /// `null` for an account created before emails were required, until it
+    /// sets one.
+    email: Option<String>,
     role: RoleResponse,
 }
 
@@ -137,6 +158,7 @@ impl From<User> for UserResponse {
         Self {
             id: user.id,
             username: user.username,
+            email: user.email,
             role: user.role.into(),
         }
     }
@@ -148,17 +170,14 @@ async fn create_user(
     ValidJson(request): ValidJson<CreateUserRequest>,
 ) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
     let hash = password::hash(request.password).await?;
-    let user = db::users::insert(&state.pool, &request.username, &hash)
+    let user = db::users::insert(&state.pool, &request.username, &request.email, &hash)
         .await
-        .map_err(|error| match error.as_database_error() {
-            Some(db_error) if db_error.is_unique_violation() => {
-                tracing::debug!(
-                    username = request.username,
-                    "registration refused: username taken"
-                );
-                ApiError::UsernameTaken
+        .map_err(|error| {
+            let error = taken(error);
+            if matches!(error, ApiError::UsernameTaken | ApiError::EmailTaken) {
+                tracing::debug!(username = request.username, ?error, "registration refused");
             }
-            _ => error.into(),
+            error
         })?;
     tracing::info!(user_id = %user.id, username = user.username, "account created");
     Ok((StatusCode::CREATED, Json(user.into())))
@@ -176,13 +195,15 @@ fn create_user_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
             r.description("The body is not JSON of the expected shape")
         })
         .response_with::<409, ApiError, _>(|r| {
-            r.description("The username is taken, whatever its case")
+            r.description(
+                "`username-taken` or `email-taken`: another account has it, whatever its case",
+            )
         })
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
         .response_with::<422, ApiError, _>(|r| {
             r.description(
-                "A field breaks a rule: `username_length`, `username_characters` or \
-                 `password_length`",
+                "A field breaks a rule: `username_length`, `username_characters`, \
+                 `email_invalid` or `password_length`",
             )
         })
         .response_with::<429, ApiError, _>(|r| {
@@ -200,7 +221,7 @@ pub struct ListUsersQuery {
     /// 1 to 100; 50 by default.
     #[validate(range(min = 1, max = MAX_PER_PAGE))]
     per_page: Option<u32>,
-    /// Part of the username, compared case-insensitively.
+    /// Part of the username or of the email, compared case-insensitively.
     q: Option<String>,
     /// Only the accounts with this role.
     role: Option<RoleRequest>,
@@ -224,6 +245,8 @@ pub struct UserPageResponse {
 pub struct UserListItemResponse {
     id: Uuid,
     username: String,
+    /// `null` until an account created before emails were required sets one.
+    email: Option<String>,
     role: RoleResponse,
     created_at: DateTime<Utc>,
     /// The last time one of its sessions was used; `null` if it never logged
@@ -236,6 +259,7 @@ impl From<ListedUser> for UserListItemResponse {
         Self {
             id: user.id,
             username: user.username,
+            email: user.email,
             role: user.role.into(),
             created_at: user.created_at,
             last_active_at: user.last_active_at,
@@ -251,7 +275,7 @@ async fn list_users(
     let page = query.page.unwrap_or(1);
     let per_page = query.per_page.unwrap_or(DEFAULT_PER_PAGE);
     let filter = db::users::UserFilter {
-        username_contains: query.q.as_deref().map(str::trim).filter(|q| !q.is_empty()),
+        text_contains: query.q.as_deref().map(str::trim).filter(|q| !q.is_empty()),
         role: query.role.map(Role::from),
     };
     let offset = i64::from(page - 1) * i64::from(per_page);
@@ -269,7 +293,9 @@ async fn list_users(
 fn list_users_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
     op.tag("Users")
         .summary("List accounts")
-        .description("For an `admin` or the `super_admin`.")
+        .description(
+            "For an `admin` or the `super_admin`, the only accounts that see others' emails.",
+        )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<UserPageResponse>, _>(|r| r.description("One page of accounts"))
         .response_with::<400, ApiError, _>(|r| {
@@ -374,5 +400,76 @@ fn set_role_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
         .response_with::<422, ApiError, _>(|r| {
             r.description("`role_not_assignable`: the role is `super_admin`")
+        })
+}
+
+/// The email to log in with.
+#[derive(Deserialize, JsonSchema, Validate)]
+#[serde(rename_all = "camelCase")]
+#[schemars(extend("example" = serde_json::json!({ "email": "aicha@example.com" })))]
+pub struct SetEmailRequest {
+    /// An email address, unique whatever its case. Nothing is sent to it.
+    #[validate(email(code = "email_invalid"))]
+    email: String,
+}
+
+/// An account's email.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailResponse {
+    email: String,
+}
+
+async fn set_email(
+    State(state): State<AppState>,
+    Authenticated(user): Authenticated,
+    ApiPath(path): ApiPath<UserPath>,
+    ValidJson(request): ValidJson<SetEmailRequest>,
+) -> Result<Json<EmailResponse>, ApiError> {
+    if path.user_id != user.id {
+        tracing::info!(user_id = %user.id, target_id = %path.user_id, "email change refused: another account");
+        return Err(ApiError::Forbidden);
+    }
+    db::users::set_email(&state.pool, user.id, &request.email)
+        .await
+        .map_err(|error| {
+            let error = taken(error);
+            if matches!(error, ApiError::EmailTaken) {
+                tracing::debug!(user_id = %user.id, "email change refused: taken");
+            }
+            error
+        })?;
+    tracing::info!(user_id = %user.id, "email changed");
+    Ok(Json(EmailResponse {
+        email: request.email,
+    }))
+}
+
+fn set_email_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    op.tag("Users")
+        .summary("Set your email")
+        .description(
+            "For the account of the session only, the `super_admin` included. The email logs in \
+             in place of the username from then on. It is not verified, and nothing is sent to \
+             it.",
+        )
+        .security_requirement(SESSION_SECURITY)
+        .response_with::<200, Json<EmailResponse>, _>(|r| r.description("The new email"))
+        .response_with::<400, ApiError, _>(|r| {
+            r.description("The body is not JSON of the expected shape")
+        })
+        .response_with::<401, ApiError, _>(|r| r.description("No live session"))
+        .response_with::<403, ApiError, _>(|r| {
+            r.description(
+                "`forbidden`: the path names another account; `password-change-required`: it \
+                 must change its password first",
+            )
+        })
+        .response_with::<409, ApiError, _>(|r| {
+            r.description("`email-taken`: another account has it, whatever its case")
+        })
+        .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
+        .response_with::<422, ApiError, _>(|r| {
+            r.description("`email_invalid`: not an email address")
         })
 }

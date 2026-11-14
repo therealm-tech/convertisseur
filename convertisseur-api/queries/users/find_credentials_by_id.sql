@@ -1,6 +1,7 @@
 SELECT
     id,
     username,
+    email,
     role,
     must_change_password,
     password_hash

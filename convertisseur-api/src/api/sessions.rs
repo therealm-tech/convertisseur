@@ -43,16 +43,19 @@ pub fn routes() -> ApiRouter<AppState> {
         )
 }
 
-/// A username and its password.
+/// A username or an email, and the account's password.
 #[derive(Deserialize, JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("example" = serde_json::json!({
-    "username": "aicha.b",
+    "login": "aicha@example.com",
     "password": "un mot de passe assez long",
 })))]
 pub struct CreateSessionRequest {
-    /// Compared case-insensitively.
-    username: String,
+    /// The account's username or email, compared case-insensitively.
+    // A webapp loaded before the email existed sends `username` until the
+    // page reloads onto the new build.
+    #[serde(alias = "username")]
+    login: String,
     password: String,
 }
 
@@ -82,12 +85,9 @@ async fn create_session(
     _: RateLimited<Login>,
     ValidJson(request): ValidJson<CreateSessionRequest>,
 ) -> Result<Response, ApiError> {
-    let Some(account) = db::users::find_credentials(&state.pool, &request.username).await? else {
+    let Some(account) = db::users::find_credentials(&state.pool, &request.login).await? else {
         password::verify_dummy(request.password).await?;
-        tracing::info!(
-            username = request.username,
-            "login refused: unknown username"
-        );
+        tracing::info!("login refused: no account has this username or email");
         return Err(ApiError::InvalidCredentials);
     };
     if !password::verify(request.password, account.password_hash).await? {
@@ -121,8 +121,10 @@ fn create_session_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .description(
             "Opens a session and sets it in the `convertisseur_session` cookie: `HttpOnly`, \
              `SameSite=Lax`, `Secure` unless the server is configured otherwise. A session \
-             expires 30 days after its last use. A wrong password and an unknown username \
-             get the same answer. After a password reset, the temporary password logs in with \
+             expires 30 days after its last use. `login` is the account's username or its \
+             email; when the configured `super_admin`'s username is another account's email, \
+             it names the `super_admin`. A wrong password and an unknown username or email get \
+             the same answer. After a password reset, the temporary password logs in with \
              `mustChangePassword` set.",
         )
         .response_with::<201, Json<SessionResponse>, _>(|r| {
@@ -132,7 +134,7 @@ fn create_session_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
             r.description("The body is not JSON of the expected shape")
         })
         .response_with::<401, ApiError, _>(|r| {
-            r.description("The username or the password is wrong")
+            r.description("No account has this username or email, or the password is wrong")
         })
         .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
         .response_with::<429, ApiError, _>(|r| {

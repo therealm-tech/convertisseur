@@ -589,6 +589,39 @@ async fn searches_usernames_and_filters_roles(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn lists_and_searches_emails(pool: PgPool) {
+    let server = Server::new(&pool);
+    super_admin(&pool).await;
+    create_account(&pool, "nour", "admin").await;
+    let aicha = create_account(&pool, "aicha", "user").await;
+    sqlx::query("UPDATE users SET email = 'Aicha.B@Example.com' WHERE id = $1")
+        .bind(aicha)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let nour = server.session("nour").await;
+
+    let all = server.list(&nour, "").await;
+    let found = server.list(&nour, "?q=b@example").await;
+
+    let emails: Vec<_> = all.body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| (item["username"].clone(), item["email"].clone()))
+        .collect();
+    assert_eq!(
+        emails,
+        [
+            (json!("chef"), json!(null)),
+            (json!("nour"), json!(null)),
+            (json!("aicha"), json!("Aicha.B@Example.com")),
+        ]
+    );
+    assert_eq!(usernames(&found), ["aicha"]);
+}
+
+#[sqlx::test]
 async fn refuses_a_page_out_of_bounds_or_an_unknown_role(pool: PgPool) {
     let server = Server::new(&pool);
     create_account(&pool, "nour", "admin").await;

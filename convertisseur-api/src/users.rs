@@ -24,6 +24,9 @@ pub enum Role {
 pub struct User {
     pub id: Uuid,
     pub username: String,
+    /// Unverified, and unique whatever its case. Accounts created before it
+    /// was required, and the super admin, may have none.
+    pub email: Option<String>,
     pub role: Role,
     /// Set by a password reset: until the account picks a new password, it
     /// can do nothing else.
@@ -43,6 +46,7 @@ pub struct Credentials {
 pub struct ListedUser {
     pub id: Uuid,
     pub username: String,
+    pub email: Option<String>,
     pub role: Role,
     pub created_at: DateTime<Utc>,
     pub last_active_at: Option<DateTime<Utc>>,
@@ -85,6 +89,7 @@ mod tests {
         User {
             id: Uuid::from_u128(NEXT_ID.fetch_add(1, Ordering::Relaxed).into()),
             username: format!("{role:?}"),
+            email: None,
             role,
             must_change_password: false,
         }
