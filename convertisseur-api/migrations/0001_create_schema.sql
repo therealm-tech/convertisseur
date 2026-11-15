@@ -75,7 +75,7 @@ CREATE TABLE units (
 );
 
 -- An uploaded recording; its bytes live in the object store under
--- object_key.
+-- object_key. Its review is its own, apart from the text of what holds it.
 CREATE TABLE audio (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     object_key text NOT NULL UNIQUE,
@@ -83,7 +83,12 @@ CREATE TABLE audio (
     size_bytes bigint NOT NULL CHECK (size_bytes > 0),
     duration_ms integer CHECK (duration_ms >= 0),
     created_by uuid REFERENCES users (id) ON DELETE SET NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    status content_status NOT NULL DEFAULT 'to_review',
+    validated_by uuid REFERENCES users (id) ON DELETE SET NULL,
+    validated_at timestamptz,
+    review_note text CHECK (review_note <> '' AND char_length(review_note) <= 2000),
+    CONSTRAINT audio_validated_check CHECK ((status = 'validated') = (validated_at IS NOT NULL))
 );
 
 -- A lesson can carry a recording too, like a card.

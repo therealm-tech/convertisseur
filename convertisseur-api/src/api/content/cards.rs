@@ -14,8 +14,8 @@ use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
 use super::{
-    AudioResponse, LetterFormsResponse, MAX_TEXT_CHARS, Resource, ReviewResponse, TAG, TrackJson,
-    VarietyJson,
+    AudioResponse, Deletable, LetterFormsResponse, MAX_TEXT_CHARS, Resource, ReviewResponse, TAG,
+    TrackJson, VarietyJson,
     audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
     created, delete, delete_docs, optional_text, refused, set_review_note, set_review_note_docs,
     set_status, set_status_docs, validate_text,
@@ -67,10 +67,13 @@ pub struct CardResource;
 impl Resource for CardResource {
     type Rows = Cards;
     type Path = CardPath;
+    const NOT_FOUND_DOCS: &'static str = "No card has this id";
+}
+
+impl Deletable for CardResource {
     const DELETE_SUMMARY: &'static str = "Delete a card";
     const DELETE_DOCS: &'static str = "Deletes the card; the next ones in its lesson move up. \
          Answers 204 when it is already gone.";
-    const NOT_FOUND_DOCS: &'static str = "No card has this id";
 }
 
 /// Names one card in the path.

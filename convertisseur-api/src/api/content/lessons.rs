@@ -12,7 +12,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 use super::{
-    AudioResponse, Resource, ReviewResponse, TAG, TrackJson,
+    AudioResponse, Deletable, Resource, ReviewResponse, TAG, TrackJson,
     audio::{delete_audio, delete_audio_docs, put_audio, put_audio_docs, upload_limit},
     created, delete, delete_docs, refused,
     review::{list_lessons, list_lessons_docs},
@@ -74,10 +74,13 @@ pub struct LessonResource;
 impl Resource for LessonResource {
     type Rows = Lessons;
     type Path = LessonPath;
+    const NOT_FOUND_DOCS: &'static str = "No lesson has this id";
+}
+
+impl Deletable for LessonResource {
     const DELETE_SUMMARY: &'static str = "Delete a lesson";
     const DELETE_DOCS: &'static str = "Deletes a lesson with no cards; the next ones in its unit \
          move up. Answers 204 when it is already gone.";
-    const NOT_FOUND_DOCS: &'static str = "No lesson has this id";
 }
 
 /// Names one lesson in the path.

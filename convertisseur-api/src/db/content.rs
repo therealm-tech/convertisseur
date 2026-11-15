@@ -21,8 +21,16 @@ pub async fn lock(exec: impl PgExecutor<'_>) -> sqlx::Result<()> {
     Ok(())
 }
 
+/// A table whose rows carry a review: a status and a review note.
+pub trait Reviewed: Send {
+    /// What a row is, as the logs name it.
+    const ITEM: &'static str;
+    const SET_STATUS: &'static str;
+    const SET_REVIEW_NOTE: &'static str;
+}
+
 /// A content table whose rows are ordered among siblings sharing a parent.
-pub trait Ordered: Send {
+pub trait Ordered: Reviewed {
     /// What groups siblings: the track of a unit, the unit of a lesson, the
     /// lesson of a card.
     type Parent: for<'q> sqlx::Encode<'q, Postgres>
@@ -41,13 +49,17 @@ pub trait Ordered: Send {
     const DELETE: &'static str;
     /// Whether a parent row exists; `None` when the parent is not a row.
     const PARENT_EXISTS: Option<&'static str>;
-    const SET_STATUS: &'static str;
-    const SET_REVIEW_NOTE: &'static str;
     /// Whether rows of the next level hang off this one; `None` for cards.
     const HAS_CHILDREN: Option<&'static str>;
 }
 
 pub struct Units;
+
+impl Reviewed for Units {
+    const ITEM: &'static str = "unit";
+    const SET_STATUS: &'static str = include_str!("../../queries/units/set_status.sql");
+    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/units/set_review_note.sql");
+}
 
 impl Ordered for Units {
     type Parent = Track;
@@ -57,13 +69,17 @@ impl Ordered for Units {
     const LOCK: &'static str = include_str!("../../queries/units/lock.sql");
     const DELETE: &'static str = include_str!("../../queries/units/delete.sql");
     const PARENT_EXISTS: Option<&'static str> = None;
-    const SET_STATUS: &'static str = include_str!("../../queries/units/set_status.sql");
-    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/units/set_review_note.sql");
     const HAS_CHILDREN: Option<&'static str> =
         Some(include_str!("../../queries/units/has_children.sql"));
 }
 
 pub struct Lessons;
+
+impl Reviewed for Lessons {
+    const ITEM: &'static str = "lesson";
+    const SET_STATUS: &'static str = include_str!("../../queries/lessons/set_status.sql");
+    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/lessons/set_review_note.sql");
+}
 
 impl Ordered for Lessons {
     type Parent = Uuid;
@@ -74,13 +90,20 @@ impl Ordered for Lessons {
     const DELETE: &'static str = include_str!("../../queries/lessons/delete.sql");
     const PARENT_EXISTS: Option<&'static str> =
         Some(include_str!("../../queries/units/exists.sql"));
-    const SET_STATUS: &'static str = include_str!("../../queries/lessons/set_status.sql");
-    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/lessons/set_review_note.sql");
     const HAS_CHILDREN: Option<&'static str> =
         Some(include_str!("../../queries/lessons/has_children.sql"));
 }
 
 pub struct Cards;
+
+/// The recordings, reviewed apart from what holds them.
+pub struct Recordings;
+
+impl Reviewed for Recordings {
+    const ITEM: &'static str = "recording";
+    const SET_STATUS: &'static str = include_str!("../../queries/audio/set_status.sql");
+    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/audio/set_review_note.sql");
+}
 
 /// A content table whose rows can hold a recording.
 pub trait WithAudio: Ordered {
@@ -98,6 +121,12 @@ impl WithAudio for Cards {
     const SET_AUDIO: &'static str = include_str!("../../queries/cards/set_audio.sql");
 }
 
+impl Reviewed for Cards {
+    const ITEM: &'static str = "card";
+    const SET_STATUS: &'static str = include_str!("../../queries/cards/set_status.sql");
+    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/cards/set_review_note.sql");
+}
+
 impl Ordered for Cards {
     type Parent = Uuid;
     const KIND: ContentKind = ContentKind::Card;
@@ -107,8 +136,6 @@ impl Ordered for Cards {
     const DELETE: &'static str = include_str!("../../queries/cards/delete.sql");
     const PARENT_EXISTS: Option<&'static str> =
         Some(include_str!("../../queries/lessons/exists.sql"));
-    const SET_STATUS: &'static str = include_str!("../../queries/cards/set_status.sql");
-    const SET_REVIEW_NOTE: &'static str = include_str!("../../queries/cards/set_review_note.sql");
     const HAS_CHILDREN: Option<&'static str> = None;
 }
 
@@ -199,7 +226,7 @@ pub async fn has_children<O: Ordered>(exec: impl PgExecutor<'_>, id: Uuid) -> sq
 
 /// Sets the review status; a validation records `validator`. Returns `None`
 /// when the row does not exist.
-pub async fn set_status<O: Ordered>(
+pub async fn set_status<O: Reviewed>(
     exec: impl PgExecutor<'_>,
     id: Uuid,
     status: Status,
@@ -215,7 +242,7 @@ pub async fn set_status<O: Ordered>(
 
 /// Sets or clears the review note; returns the stored note, or `None` in
 /// the outer option when the row does not exist.
-pub async fn set_review_note<O: Ordered>(
+pub async fn set_review_note<O: Reviewed>(
     exec: impl PgExecutor<'_>,
     id: Uuid,
     note: Option<&str>,

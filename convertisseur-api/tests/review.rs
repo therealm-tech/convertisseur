@@ -104,8 +104,8 @@ impl Fixture {
         .await
     }
 
-    /// Gives the card a recording, as an upload would.
-    async fn record(&self, card: Uuid) {
+    /// Gives the card a recording, as an upload would; returns its id.
+    async fn record(&self, card: Uuid) -> Uuid {
         let audio = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO audio (id, object_key, content_type, size_bytes) \
@@ -121,6 +121,7 @@ impl Fixture {
             .execute(&self.pool)
             .await
             .unwrap();
+        audio
     }
 
     async fn status_of(&self, card: Uuid) -> String {
@@ -164,7 +165,7 @@ async fn lists_what_is_left_to_review_with_its_counts(pool: PgPool) {
     assert_eq!(queue["cardsWithoutAudio"], 4);
     assert_eq!(
         counts(&queue, "Bonjour"),
-        &json!({ "validated": 0, "flagged": 0, "toReview": 3, "withoutAudio": 3 })
+        &json!({ "validated": 0, "flagged": 0, "toReview": 3, "withoutAudio": 3 , "recordings": { "validated": 0, "flagged": 0, "toReview": 0 } })
     );
     let bonjour = &queue["items"][0];
     assert_eq!(bonjour["id"], fixture.bonjour.to_string());
@@ -194,7 +195,7 @@ async fn lists_what_is_left_to_review_with_its_counts(pool: PgPool) {
     assert_eq!(titles(&queue), ["Bonjour"], "Politesse has nothing left");
     assert_eq!(
         counts(&queue, "Bonjour"),
-        &json!({ "validated": 1, "flagged": 1, "toReview": 1, "withoutAudio": 3 })
+        &json!({ "validated": 1, "flagged": 1, "toReview": 1, "withoutAudio": 3 , "recordings": { "validated": 0, "flagged": 0, "toReview": 0 } })
     );
     assert_eq!(
         queue["itemsToReview"], 3,
@@ -207,7 +208,7 @@ async fn lists_what_is_left_to_review_with_its_counts(pool: PgPool) {
     assert_eq!(titles(&unit), ["Bonjour", "Politesse"], "whatever is left");
     assert_eq!(
         counts(&unit, "Politesse"),
-        &json!({ "validated": 1, "flagged": 0, "toReview": 0, "withoutAudio": 1 })
+        &json!({ "validated": 1, "flagged": 0, "toReview": 0, "withoutAudio": 1 , "recordings": { "validated": 0, "flagged": 0, "toReview": 0 } })
     );
 }
 
@@ -367,7 +368,7 @@ async fn validates_the_cards_that_are_not_flagged(pool: PgPool) {
         .await;
     assert_eq!(
         counts(&queue, "Bonjour"),
-        &json!({ "validated": 2, "flagged": 1, "toReview": 0, "withoutAudio": 3 })
+        &json!({ "validated": 2, "flagged": 1, "toReview": 0, "withoutAudio": 3 , "recordings": { "validated": 0, "flagged": 0, "toReview": 0 } })
     );
 }
 
@@ -459,4 +460,80 @@ async fn documents_the_review_endpoints(pool: PgPool) {
             "{method} {path} needs a session"
         );
     }
+}
+
+#[sqlx::test]
+async fn counts_and_filters_the_recordings_to_review(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let salam = fixture.record(fixture.salam).await;
+    let sbah = fixture.record(fixture.sbah).await;
+    fixture.record(fixture.msa).await;
+    fixture.validate("audio", salam).await;
+    let flagged = fixture
+        .send(
+            Method::PUT,
+            &format!("/api/v1/audio/{sbah}/review-note"),
+            Some(&json!({ "text": "Trop rapide" })),
+        )
+        .await;
+    assert_eq!(flagged.status, StatusCode::OK, "{}", flagged.body);
+
+    let queue = fixture.get("/api/v1/lessons?pendingAudio=true").await;
+    assert_eq!(titles(&queue), ["Bonjour"], "Politesse has no recording");
+    assert_eq!(queue["recordingsToReview"], 2, "sbah flagged and msa");
+    assert_eq!(
+        counts(&queue, "Bonjour")["recordings"],
+        json!({ "validated": 1, "flagged": 1, "toReview": 1 })
+    );
+    assert_eq!(queue["items"][0]["audioStatus"], Value::Null);
+    assert_eq!(
+        queue["itemsToReview"], 7,
+        "the recordings leave the text alone"
+    );
+}
+
+#[sqlx::test]
+async fn validates_the_recordings_that_are_not_flagged(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let salam = fixture.record(fixture.salam).await;
+    let sbah = fixture.record(fixture.sbah).await;
+    fixture
+        .send(
+            Method::PUT,
+            &format!("/api/v1/audio/{sbah}/review-note"),
+            Some(&json!({ "text": "Trop rapide" })),
+        )
+        .await;
+
+    let answer = fixture
+        .send(
+            Method::POST,
+            &format!("/api/v1/lessons/{}/audio-validations", fixture.bonjour),
+            Some(&json!({ "cardIds": [fixture.msa, fixture.sbah, fixture.salam] })),
+        )
+        .await;
+
+    assert_eq!(answer.status, StatusCode::OK, "{}", answer.body);
+    let recordings = answer.body["recordings"].as_array().unwrap();
+    assert_eq!(recordings.len(), 2, "msa has no recording: {recordings:?}");
+    assert_eq!(recordings[0]["cardId"], fixture.salam.to_string());
+    assert_eq!(recordings[0]["id"], salam.to_string());
+    assert_eq!(recordings[0]["status"], "validated");
+    assert_eq!(recordings[0]["validatedBy"]["username"], "relectrice");
+    assert_eq!(recordings[1]["status"], "to_review", "flagged, left alone");
+    assert_eq!(recordings[1]["reviewNote"], "Trop rapide");
+    assert_eq!(
+        fixture.status_of(fixture.salam).await,
+        "to_review",
+        "the card's text is apart"
+    );
+
+    fixture
+        .send(
+            Method::POST,
+            &format!("/api/v1/lessons/{}/audio-validations", fixture.bonjour),
+            Some(&json!({ "cardIds": [fixture.choukran] })),
+        )
+        .await
+        .assert_invalid("cardIds", "card_not_in_lesson");
 }

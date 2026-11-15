@@ -35,7 +35,10 @@ use crate::{
         self, Audio, ContentItem, ContentKind, ContentQuery, ContentRefusal, Review, Status,
         StatusChange, Track, Variety,
     },
-    db::{self, content::Ordered},
+    db::{
+        self,
+        content::{Ordered, Reviewed},
+    },
     error::ApiError,
     letters::{FormColumns, Joining, LetterForms},
     router::AppState,
@@ -225,6 +228,14 @@ pub struct AudioResponse {
     /// `null` when the file does not give it cheaply: only WAV and Ogg do.
     duration_ms: Option<u32>,
     created_at: DateTime<Utc>,
+    /// A new recording is `to_review`; learners hear it once `validated`,
+    /// whatever the status of what holds it.
+    status: StatusJson,
+    /// Set while the recording is `validated`.
+    validated_at: Option<DateTime<Utc>>,
+    /// What a reviewer reports about the recording; a recording to review
+    /// with a note is flagged.
+    review_note: Option<String>,
 }
 
 impl From<Audio> for AudioResponse {
@@ -235,6 +246,9 @@ impl From<Audio> for AudioResponse {
             size_bytes: u64::try_from(audio.size_bytes).unwrap_or_default(),
             duration_ms: audio.duration_ms.and_then(|ms| u32::try_from(ms).ok()),
             created_at: audio.created_at,
+            status: audio.status.into(),
+            validated_at: audio.validated_at,
+            review_note: audio.review_note,
         }
     }
 }
@@ -373,14 +387,18 @@ fn created(location: String, body: impl Serialize) -> Response {
         .into_response()
 }
 
-/// An endpoint family over one kind of content: its rows, the path that
-/// names one, and how its docs call it.
+/// An endpoint family over one kind of reviewed item: its rows, the path
+/// that names one, and how its docs call it.
 pub trait Resource: Send + Sync + 'static {
-    type Rows: Ordered;
+    type Rows: Reviewed;
     type Path: DeserializeOwned + JsonSchema + Send + Into<Uuid>;
+    const NOT_FOUND_DOCS: &'static str;
+}
+
+/// A unit, lesson or card family, whose items are deleted by id.
+pub trait Deletable: Resource<Rows: Ordered> {
     const DELETE_SUMMARY: &'static str;
     const DELETE_DOCS: &'static str;
-    const NOT_FOUND_DOCS: &'static str;
 }
 
 /// The review status to set.
@@ -499,7 +517,7 @@ fn set_review_note_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOpe
         .response_with::<422, ApiError, _>(|r| r.description("`review_note_length`: too long"))
 }
 
-async fn delete<R: Resource>(
+async fn delete<R: Deletable>(
     State(state): State<AppState>,
     RequireRole { user: actor, .. }: RequireRole<Admin>,
     ApiPath(path): ApiPath<R::Path>,
@@ -508,7 +526,7 @@ async fn delete<R: Resource>(
     Ok(NoContent)
 }
 
-fn delete_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOperation<'_> {
+fn delete_docs<R: Deletable>(op: TransformOperation<'_>) -> TransformOperation<'_> {
     op.tag(TAG)
         .summary(R::DELETE_SUMMARY)
         .description(R::DELETE_DOCS)

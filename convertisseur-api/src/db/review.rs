@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::{
     content::Card,
     db,
-    review::{CardReview, LessonFilter, LessonSummary, Totals},
+    review::{CardReview, LessonFilter, LessonSummary, RecordingReview, Totals},
 };
 
 /// One page of the lessons matching `filter`, in the order of the tracks.
@@ -18,6 +18,7 @@ pub async fn lessons(
         .bind(filter.unit_id)
         .bind(filter.pending_review)
         .bind(filter.missing_audio)
+        .bind(filter.pending_audio)
         .bind(limit)
         .bind(offset)
         .fetch_all(exec)
@@ -29,6 +30,7 @@ pub async fn count_lessons(exec: impl PgExecutor<'_>, filter: &LessonFilter) -> 
         .bind(filter.unit_id)
         .bind(filter.pending_review)
         .bind(filter.missing_audio)
+        .bind(filter.pending_audio)
         .fetch_one(exec)
         .await
 }
@@ -101,6 +103,35 @@ pub async fn validate_unflagged(
         .execute(exec)
         .await?;
     Ok(result.rows_affected())
+}
+
+/// Validates the recordings of the cards among `ids` that are to review
+/// without a review note; returns how many it validated.
+pub async fn validate_unflagged_recordings(
+    exec: impl PgExecutor<'_>,
+    lesson_id: Uuid,
+    ids: &[Uuid],
+    validator: Uuid,
+) -> sqlx::Result<u64> {
+    let result = sqlx::query(include_str!(
+        "../../queries/cards/validate_unflagged_audio.sql"
+    ))
+    .bind(lesson_id)
+    .bind(ids)
+    .bind(validator)
+    .execute(exec)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn recording_reviews(
+    exec: impl PgExecutor<'_>,
+    ids: &[Uuid],
+) -> sqlx::Result<Vec<RecordingReview>> {
+    sqlx::query_as(include_str!("../../queries/cards/audio_statuses.sql"))
+        .bind(ids)
+        .fetch_all(exec)
+        .await
 }
 
 pub async fn card_reviews(
