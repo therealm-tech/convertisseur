@@ -12,7 +12,7 @@ use convertisseur_api::{
     storage::{MemoryStore, Storage},
 };
 use serde_json::{Value, json};
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 use uuid::Uuid;
 
 /// [`SALUTATIONS`] synced, every row to review, and a reviewer logged in.
@@ -36,6 +36,14 @@ impl Fixture {
             .await
             .unwrap();
         sync_salutations(pool, &store, SALUTATIONS).await.unwrap();
+        for table in ["units", "lessons", "cards"] {
+            sqlx::query(AssertSqlSafe(format!(
+                "UPDATE {table} SET status = 'to_review', validated_by = NULL, validated_at = NULL"
+            )))
+            .execute(pool)
+            .await
+            .unwrap();
+        }
         create_account(pool, "relectrice", "admin").await;
         let server = Server::with_storage(pool, Storage::Memory(store));
         let admin = server.session("relectrice").await;

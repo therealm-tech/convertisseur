@@ -249,8 +249,8 @@ Staff write units, lessons and cards in the admin area; a reviewer, any
 `admin` or the `super_admin`, validates them. The rules, in
 [`content.rs`](convertisseur-api/src/content.rs):
 
-- **New content starts `to_review`, and any edit of its content sends it back
-  there**, by whoever makes it: the `UPDATE` resets the status and the
+- **New content written in the admin area starts `to_review`, and any edit
+  of its content sends it back there**, by whoever makes it: the `UPDATE` resets the status and the
   validation in the same statement, when a content field (title, Arabic,
   transliteration, meaning, variety, track) differs from the stored row
   (`IS DISTINCT FROM`). Saving a row unchanged keeps its validation.
@@ -460,8 +460,7 @@ sequenceDiagram
     R->>S: PUT …/review-note "wrong vowel on the 2nd word"
     Note over G: a pull request corrects the entry the importKey names
     G->>S: the next image, at start-up
-    S->>S: rewrite the row, back to to_review, note cleared
-    R->>S: PUT …/status validated
+    S->>S: rewrite the row, validated, note cleared
 ```
 
 - **A file is one unit, its lessons and their cards, in order.** Units sort
@@ -474,11 +473,13 @@ sequenceDiagram
   does not fit the track, forms that are not those of the card's letter. One problem stops the start-up, and the error lists
   them all. A unit test runs the same checks on the files of the build.
 - **The sync makes every imported row match its entry.** An entry no row
-  carries the key of is created, `to_review`, authored by the super admin. A
-  row whose text differs from its entry's (title, Arabic, transliteration,
-  meaning, variety, forms, track) is rewritten, sent back to `to_review` with its
-  validation cleared, and its review note is cleared too, since the change
-  answers it. A row whose text matches keeps its status and note. A row whose
+  carries the key of is created `validated`, authored and validated by the
+  super admin. A row whose text differs from its entry's (title, Arabic,
+  transliteration, meaning, variety, forms, track) is rewritten and
+  validated again by the super admin, whatever its status, and its review
+  note is cleared, since the change answers it. A row whose text matches
+  keeps its status and note, so a row a reviewer sent back to review stays
+  hidden until the files change it. A row whose
   parent or place differs is moved, keeping its status, as a move in the admin
   area does. A row whose key no entry has any more is deleted, with its
   recording.
@@ -967,6 +968,13 @@ the admin area does not edit imported text at all, rather than let the sync
 undo it in silence, and a reviewer reports an error in a review note. The
 status, the recording and the note stay in the database: the files say what
 the content is, the database what the review made of it.
+
+**Imported content arrives validated.** The files change through pull
+requests, reviewed before they merge, so a second review in the admin area
+would only repeat it and keep the content from learners until somebody
+clicks. The review in the admin area still applies to what the files hold:
+a reviewer who sends a row back to review hides it until a change in the
+files, a new reviewed text, validates it again.
 
 **The sync runs inside `serve`, not as a command of its own.** Every database
 then holds the content of the image that serves it, with no step to forget

@@ -303,7 +303,7 @@ async fn lists_the_items_with_a_review_note_and_their_import_keys(pool: PgPool) 
         .send(
             Method::PUT,
             &format!("{}/status", f.unit),
-            Some(&json!({ "status": "validated" })),
+            Some(&json!({ "status": "to_review" })),
         )
         .await;
     assert_eq!(answer.status, StatusCode::OK);
@@ -313,7 +313,7 @@ async fn lists_the_items_with_a_review_note_and_their_import_keys(pool: PgPool) 
     assert_eq!(all["reviewNoteCount"], 2);
     assert_eq!(
         all["statusCounts"],
-        json!({ "toReview": 6, "validated": 1 })
+        json!({ "toReview": 1, "validated": 6 })
     );
 
     let noted = f.get("/api/v1/content-items?hasReviewNote=true").await;
@@ -352,10 +352,7 @@ async fn lists_the_items_with_a_review_note_and_their_import_keys(pool: PgPool) 
         .await;
     assert_eq!(to_review["total"], 1);
     assert_eq!(to_review["reviewNoteCount"], 1);
-    assert_eq!(
-        to_review["items"][0]["importKey"],
-        "arabe/salutations/bonjour/sbah"
-    );
+    assert_eq!(to_review["items"][0]["importKey"], "arabe/salutations");
 
     let without = f.get("/api/v1/content-items?hasReviewNote=false").await;
     assert_eq!(without["total"], 5);

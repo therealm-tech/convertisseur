@@ -105,7 +105,7 @@ pub async fn cards(exec: impl PgExecutor<'_>) -> sqlx::Result<Vec<Row<Uuid, Card
         .collect())
 }
 
-/// Rewrites the unit's text, back to review, its note cleared.
+/// Rewrites the unit's text, validated by `editor`, its note cleared.
 pub async fn overwrite_unit(
     exec: impl PgExecutor<'_>,
     id: Uuid,
@@ -122,7 +122,7 @@ pub async fn overwrite_unit(
     Ok(())
 }
 
-/// Rewrites the lesson's text, back to review, its note cleared.
+/// Rewrites the lesson's text, validated by `editor`, its note cleared.
 pub async fn overwrite_lesson(
     exec: impl PgExecutor<'_>,
     id: Uuid,
@@ -138,7 +138,7 @@ pub async fn overwrite_lesson(
     Ok(())
 }
 
-/// Rewrites the card's text, back to review, its note cleared.
+/// Rewrites the card's text, validated by `editor`, its note cleared.
 pub async fn overwrite_card(
     exec: impl PgExecutor<'_>,
     id: Uuid,

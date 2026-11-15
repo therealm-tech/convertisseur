@@ -31,8 +31,8 @@ admin area, admins write and review the
 learning content at `/admin/content`: units, lessons and cards, with audio
 uploaded or recorded from the device's microphone, each "to review" until an
 admin validates it, and leave a review note on what needs a correction. The
-starter content is written in the repository and kept in step by the server;
-the admin area shows it read-only, apart from its review, its recording and
+starter content is written in the repository, reviewed in pull requests and
+kept in step by the server, which validates it; the admin area shows it read-only, apart from its review, its recording and
 its note. The content shows as a tree of the tracks, units and lessons,
 filtered to what is left to review, without audio or noted, down to one
 lesson's cards; a reviewer goes through each lesson left to review, card by
@@ -122,8 +122,8 @@ record.
 The image carries the starter units, lessons and cards written in
 [`content/`](content/), and every start-up of the server brings the database
 in line with them before it listens: it creates the entries the database
-lacks, rewrites those whose text changed and sends them back to review,
-moves those whose place changed, and deletes those gone from the files, with
+lacks and rewrites those whose text changed, both validated since the files
+are reviewed in pull requests, moves those whose place changed, and deletes those gone from the files, with
 their recordings. The log ends with a `content synced` line that counts each.
 With the local stack, a change to `content/` reaches the database with a
 rebuild:
