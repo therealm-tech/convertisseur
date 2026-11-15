@@ -1,13 +1,18 @@
 import { type ReactNode, useState } from "react";
 import type { Status } from "@/lib/content";
 import { statusLabels } from "@/lib/contentLabels";
-import { type ContentSearch, statusParam } from "@/lib/contentRoutes";
+import {
+	type AudioFilter,
+	audioParam,
+	type ContentSearch,
+	statusParam,
+} from "@/lib/contentRoutes";
 import type { Counts, Filters } from "@/lib/contentTree";
 import { NoteIcon } from "@/pages/admin/contentParts";
 
 interface ContentFiltersProps {
 	filters: Filters;
-	/** Unknown while loading; "Sans audio" shows only when counted. */
+	/** Unknown while loading; the audio filters show only when counted. */
 	counts: Partial<Counts> | undefined;
 	onFilter: (change: Partial<ContentSearch>) => void;
 	/** Kept in the folded panel on a phone, beside note and audio. */
@@ -34,7 +39,7 @@ export function ContentFilters({
 	const [open, setOpen] = useState(false);
 	const active =
 		Number(filters.note) +
-		Number(filters.audio) +
+		Number(filters.audio !== undefined) +
 		Number(filters.track !== undefined);
 	const statuses: {
 		value: Status | undefined;
@@ -51,6 +56,25 @@ export function ContentFilters({
 			value: "validated",
 			text: statusLabels.validated,
 			...withCount(counts?.validated),
+		},
+	];
+	const audios: {
+		value: AudioFilter;
+		text: string;
+		count: number | undefined;
+		icon: ReactNode;
+	}[] = [
+		{
+			value: "missing",
+			text: "Sans audio",
+			count: counts?.withoutAudio,
+			icon: <NoAudioIcon />,
+		},
+		{
+			value: "to_review",
+			text: "Audio à écouter",
+			count: counts?.audioToReview,
+			icon: <ListenIcon />,
 		},
 	];
 	return (
@@ -86,19 +110,23 @@ export function ContentFilters({
 					<NoteIcon />
 					{label("Avec remarque", counts?.noted)}
 				</button>
-				{counts?.withoutAudio === undefined && !filters.audio ? null : (
-					<button
-						type="button"
-						className="note-filter"
-						aria-pressed={filters.audio}
-						onClick={() =>
-							onFilter({ audio: filters.audio ? undefined : "missing" })
-						}
-					>
-						<NoAudioIcon />
-						{label("Sans audio", counts?.withoutAudio)}
-					</button>
-				)}
+				{audios.map((option) => {
+					const on = filters.audio === option.value;
+					return option.count === undefined && !on ? null : (
+						<button
+							key={option.value}
+							type="button"
+							className="note-filter"
+							aria-pressed={on}
+							onClick={() =>
+								onFilter({ audio: audioParam(on ? undefined : option.value) })
+							}
+						>
+							{option.icon}
+							{label(option.text, option.count)}
+						</button>
+					);
+				})}
 				{extra}
 			</div>
 			{children}
@@ -125,6 +153,25 @@ function NoAudioIcon() {
 		>
 			<path d="M11 5 6 9H3v6h3l5 4z" />
 			<path d="m16 9 5 6M21 9l-5 6" />
+		</svg>
+	);
+}
+
+function ListenIcon() {
+	return (
+		<svg
+			width="16"
+			height="16"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2.2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M11 5 6 9H3v6h3l5 4z" />
+			<path d="M15.5 9a4 4 0 0 1 0 6M18.5 6a8 8 0 0 1 0 12" />
 		</svg>
 	);
 }

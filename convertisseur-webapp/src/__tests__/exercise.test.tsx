@@ -335,6 +335,9 @@ describe("exercise", () => {
 					sizeBytes: 1000,
 					durationMs: 1200,
 					createdAt: "2026-10-01T09:00:00Z",
+					status: "validated",
+					validatedAt: "2026-10-02T09:00:00Z",
+					reviewNote: null,
 				},
 				...validated,
 			});

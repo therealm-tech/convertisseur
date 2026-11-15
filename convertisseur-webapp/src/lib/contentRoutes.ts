@@ -5,6 +5,11 @@ import { type Kind, type Status, TrackSchema } from "@/lib/content";
 const StatusParamSchema = z.enum(["to-review", "validated"]);
 type StatusParam = z.infer<typeof StatusParamSchema>;
 
+/** Cards without a recording, or recordings to review, flagged or not. */
+const AudioParamSchema = z.enum(["missing", "to-review"]);
+type AudioParam = z.infer<typeof AudioParamSchema>;
+export type AudioFilter = "missing" | "to_review";
+
 const IdSchema = z.string().min(1);
 
 /**
@@ -16,7 +21,7 @@ export const ContentSearchSchema = z.object({
 	status: StatusParamSchema.optional().catch(undefined),
 	track: TrackSchema.optional().catch(undefined),
 	note: z.literal(true).optional().catch(undefined),
-	audio: z.literal("missing").optional().catch(undefined),
+	audio: AudioParamSchema.optional().catch(undefined),
 	unit: IdSchema.optional().catch(undefined),
 	lesson: IdSchema.optional().catch(undefined),
 	q: z.string().min(1).optional().catch(undefined),
@@ -58,6 +63,26 @@ export function statusOf(param: StatusParam | undefined): Status | undefined {
 
 export function statusParam(status: Status | undefined) {
 	return status && paramOfStatus[status];
+}
+
+const audioOfParam: Record<AudioParam, AudioFilter> = {
+	missing: "missing",
+	"to-review": "to_review",
+};
+
+const paramOfAudio: Record<AudioFilter, AudioParam> = {
+	missing: "missing",
+	to_review: "to-review",
+};
+
+export function audioOf(
+	param: AudioParam | undefined,
+): AudioFilter | undefined {
+	return param && audioOfParam[param];
+}
+
+export function audioParam(filter: AudioFilter | undefined) {
+	return filter && paramOfAudio[filter];
 }
 
 const SectionSchema = z.enum(["units", "lessons", "cards"]);

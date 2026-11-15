@@ -2,11 +2,14 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import {
+	type Audio,
 	type Card,
 	deleteAudio,
 	getItem,
 	type Lesson,
 	type Status,
+	setAudioReviewNote,
+	setAudioStatus,
 	setReviewNote,
 	setStatus,
 	type Unit,
@@ -20,11 +23,12 @@ import {
 	lessonOrder,
 	listAllLessons,
 	validateCards,
+	validateRecordings,
 } from "@/lib/review";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { ReviewDesktop } from "@/pages/admin/ReviewDesktop";
 import { ReviewPhone } from "@/pages/admin/ReviewPhone";
-import { countCards } from "@/pages/admin/reviewParts";
+import { countCards, type RecordingActions } from "@/pages/admin/reviewParts";
 import { useReviewTotals } from "@/pages/admin/reviewTotals";
 
 /** Everything a lesson's review shows. */
@@ -46,12 +50,12 @@ type Upload = (
 ) => Promise<void>;
 
 /** What a reviewer does to the lesson; each one resolves once it is saved. */
-export interface ReviewActions {
-	busy: boolean;
+export interface ReviewActions extends RecordingActions {
 	validate: (card: Card) => Promise<boolean>;
 	flag: (card: Card, note: string) => Promise<boolean>;
 	sendBack: (card: Card) => Promise<boolean>;
 	validateRest: () => Promise<boolean>;
+	validateRestAudio: () => Promise<boolean>;
 	setStatusOf: (kind: "lesson" | "unit", status: Status) => void;
 	uploadCardAudio: (card: Card) => Upload;
 	removeCardAudio: (card: Card) => () => Promise<void>;
@@ -80,6 +84,7 @@ function derive(
 					...sibling,
 					status: lesson.status,
 					hasAudio: lesson.audio !== null,
+					audioStatus: lesson.audio?.status ?? null,
 					unit: { ...sibling.unit, status: unit.status },
 					cardCounts: counts,
 				}
@@ -105,20 +110,26 @@ function derive(
 
 async function load(lessonId: string) {
 	const lesson = await getItem("lesson", lessonId);
-	const [unit, cards, siblings, queue] = await Promise.all([
+	const [unit, cards, siblings, toRead, toHear] = await Promise.all([
 		getItem("unit", lesson.unit.id),
 		fetchLessonCards(lessonId),
 		listAllLessons({ unitId: lesson.unit.id }),
 		listAllLessons({ pendingReview: true }),
+		listAllLessons({ pendingAudio: true }),
 	]);
+	const queue = new Map(
+		[...toRead.lessons, ...toHear.lessons].map((one) => [one.id, one]),
+	);
 	return {
 		lesson,
 		unit,
 		cards,
 		siblings: siblings.lessons,
-		queue: queue.lessons,
+		queue: [...queue.values()].sort(lessonOrder),
 	};
 }
+
+type AudioReview = Pick<Audio, "status" | "validatedAt" | "reviewNote">;
 
 /** One lesson to review: card by card on a phone, as a list on a desktop. */
 export function ReviewLessonPage() {
@@ -181,6 +192,22 @@ export function ReviewLessonPage() {
 			});
 		},
 		[],
+	);
+
+	const patchAudio = useCallback(
+		(audioId: string, patch: Partial<AudioReview>) =>
+			update(({ lesson, cards }) => ({
+				lesson:
+					lesson.audio?.id === audioId
+						? { ...lesson, audio: { ...lesson.audio, ...patch } }
+						: lesson,
+				cards: cards.map((card) =>
+					card.audio?.id === audioId
+						? { ...card, audio: { ...card.audio, ...patch } }
+						: card,
+				),
+			})),
+		[update],
 	);
 
 	const replaceCard = useCallback(
@@ -268,6 +295,48 @@ export function ReviewLessonPage() {
 				await validateCards(data.lesson.id, ids);
 				const cards = await fetchLessonCards(data.lesson.id);
 				update(() => ({ cards }));
+			}),
+		validateRestAudio: () =>
+			act("admin.review_audio_bulk_failed", async () => {
+				const ids = data.cards
+					.filter((card) => card.audio && cardState(card.audio) === "to_review")
+					.map((card) => card.id);
+				const recordings = await validateRecordings(data.lesson.id, ids);
+				for (const { id, status, validatedAt, reviewNote } of recordings) {
+					patchAudio(id, { status, validatedAt, reviewNote });
+				}
+			}),
+		validateAudio: (audio) =>
+			act("admin.review_audio_validate_failed", async () => {
+				const { status, validatedAt } = await setAudioStatus(
+					audio.id,
+					"validated",
+				);
+				const reviewNote = audio.reviewNote
+					? await setAudioReviewNote(audio.id, "")
+					: null;
+				patchAudio(audio.id, { status, validatedAt, reviewNote });
+			}),
+		flagAudio: (audio, note) =>
+			act("admin.review_audio_flag_failed", async () => {
+				const reviewNote = await setAudioReviewNote(audio.id, note);
+				if (audio.status === "validated") {
+					const { status, validatedAt } = await setAudioStatus(
+						audio.id,
+						"to_review",
+					);
+					patchAudio(audio.id, { status, validatedAt, reviewNote });
+				} else {
+					patchAudio(audio.id, { reviewNote });
+				}
+			}),
+		sendBackAudio: (audio) =>
+			act("admin.review_audio_send_back_failed", async () => {
+				const { status, validatedAt } = await setAudioStatus(
+					audio.id,
+					"to_review",
+				);
+				patchAudio(audio.id, { status, validatedAt });
 			}),
 		setStatusOf: (kind, status) => {
 			void act("admin.review_status_failed", async () => {

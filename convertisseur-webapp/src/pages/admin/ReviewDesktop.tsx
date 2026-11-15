@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Arabic } from "@/components/Arabic";
 import type { Card } from "@/lib/content";
 import { trackLabels } from "@/lib/contentLabels";
@@ -10,10 +10,13 @@ import type { ReviewActions, ReviewData } from "@/pages/admin/ReviewLessonPage";
 import {
 	CardStatePill,
 	countCards,
+	describeRecordings,
 	describeReview,
 	FlagIcon,
 	LessonAudio,
+	NoteForm,
 	Progress,
+	RecordingReview,
 	totalOf,
 	VisibilityPanel,
 } from "@/pages/admin/reviewParts";
@@ -24,13 +27,12 @@ interface ViewProps {
 	error: string | undefined;
 }
 
-const MAX_NOTE_CHARS = 2000;
-
 /** The desktop's review: every card of the lesson on one page. */
 export function ReviewDesktop({ data, actions, error }: ViewProps) {
 	const { lesson, unit, cards } = data;
 	const [flagging, setFlagging] = useState<string | undefined>();
 	const counts = countCards(cards);
+	const audiosLeft = counts.recordings.toReview;
 
 	return (
 		<div className="admin-content review-desktop">
@@ -104,6 +106,7 @@ export function ReviewDesktop({ data, actions, error }: ViewProps) {
 							lesson={lesson}
 							onUpload={actions.uploadLessonAudio}
 							onRemove={actions.removeLessonAudio}
+							actions={actions}
 						/>
 					</section>
 				</aside>
@@ -111,9 +114,18 @@ export function ReviewDesktop({ data, actions, error }: ViewProps) {
 				<section className="review-cards" aria-label="Cartes de la leçon">
 					<div className="review-summary-bar">
 						<span className="review-summary">
-							{cards.length === 0
-								? "Cette leçon n'a aucune carte."
-								: describeReview(counts)}
+							{cards.length === 0 ? (
+								"Cette leçon n'a aucune carte."
+							) : (
+								<>
+									<span className="review-summary-line">
+										{describeReview(counts)}
+									</span>
+									<span className="review-summary-line">
+										{describeRecordings(counts)}
+									</span>
+								</>
+							)}
 						</span>
 						{counts.toReview > 0 ? (
 							<button
@@ -125,6 +137,18 @@ export function ReviewDesktop({ data, actions, error }: ViewProps) {
 								{counts.toReview === 1
 									? "Valider la carte restante"
 									: `Valider les ${counts.toReview} cartes restantes`}
+							</button>
+						) : null}
+						{audiosLeft > 0 ? (
+							<button
+								type="button"
+								className="button-solid"
+								disabled={actions.busy}
+								onClick={() => void actions.validateRestAudio()}
+							>
+								{audiosLeft === 1
+									? "Valider l'audio restant"
+									: `Valider les ${audiosLeft} audios restants`}
 							</button>
 						) : null}
 					</div>
@@ -216,22 +240,6 @@ function CardRow({
 }: CardRowProps) {
 	const state = cardState(card);
 	const flagButton = useRef<HTMLButtonElement>(null);
-	const field = useRef<HTMLTextAreaElement>(null);
-	const [note, setNote] = useState(card.reviewNote ?? "");
-	const fieldId = useId();
-	const wasFlagging = useRef(false);
-
-	// The form takes the focus when it opens, and gives it back to the flag
-	// button when it closes.
-	useEffect(() => {
-		if (flagging) {
-			setNote(card.reviewNote ?? "");
-			field.current?.focus();
-		} else if (wasFlagging.current) {
-			flagButton.current?.focus();
-		}
-		wasFlagging.current = flagging;
-	}, [flagging, card.reviewNote]);
 
 	return (
 		<article
@@ -284,7 +292,15 @@ function CardRow({
 				compact
 				onUpload={actions.uploadCardAudio(card)}
 				onRemove={actions.removeCardAudio(card)}
-			/>
+			>
+				{card.audio ? (
+					<RecordingReview
+						audio={card.audio}
+						of={`de la carte ${number}`}
+						actions={actions}
+					/>
+				) : null}
+			</AudioBlock>
 			{card.reviewNote && !flagging ? (
 				<div className="review-note-box review-note-inline">
 					<span className="review-note-label">Remarque</span>
@@ -292,46 +308,18 @@ function CardRow({
 				</div>
 			) : null}
 			{flagging ? (
-				<form
-					className="review-flag-form"
-					onSubmit={async (event) => {
-						event.preventDefault();
+				<NoteForm
+					initial={card.reviewNote ?? ""}
+					busy={actions.busy}
+					placeholder="Ex. : la vocalisation du 2e mot est fausse"
+					returnFocus={flagButton}
+					onCancel={onFlagDone}
+					onSubmit={async (note) => {
 						if (await actions.flag(card, note)) {
 							onFlagDone();
 						}
 					}}
-					onKeyDown={(event) => {
-						if (event.key === "Escape") {
-							onFlagDone();
-						}
-					}}
-				>
-					<label htmlFor={fieldId} className="field-label">
-						Qu'est-ce qui ne va pas ?
-					</label>
-					<textarea
-						ref={field}
-						id={fieldId}
-						className="field-input field-textarea"
-						rows={2}
-						maxLength={MAX_NOTE_CHARS}
-						placeholder="Ex. : la vocalisation du 2e mot est fausse"
-						value={note}
-						onChange={(event) => setNote(event.target.value)}
-					/>
-					<div className="dialog-actions">
-						<button type="button" className="button-small" onClick={onFlagDone}>
-							Annuler
-						</button>
-						<button
-							type="submit"
-							className="button-danger-solid"
-							disabled={actions.busy || note.trim() === ""}
-						>
-							Signaler
-						</button>
-					</div>
-				</form>
+				/>
 			) : null}
 		</article>
 	);

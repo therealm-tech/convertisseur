@@ -12,6 +12,9 @@ const recording = {
 	sizeBytes: 1000,
 	durationMs: 1200,
 	createdAt: "2026-10-01T09:00:00Z",
+	status: "validated" as const,
+	validatedAt: "2026-10-02T09:00:00Z",
+	reviewNote: null,
 };
 
 /**
@@ -327,6 +330,23 @@ describe("lesson", () => {
 		await userEvent.click(screen.getByRole("button", { name: "Suivante" }));
 
 		expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+		expect(
+			screen.queryByRole("button", { name: "Écouter" }),
+		).not.toBeInTheDocument();
+		expect(document.querySelector("audio")).toBeNull();
+	});
+
+	it("keeps a recording silent until it is validated", async () => {
+		const api = loggedIn();
+		seedTracks(api);
+		const card = api.content.row("c-ba");
+		if (card) {
+			card.audio = { ...recording, status: "to_review", validatedAt: null };
+		}
+
+		await renderAt("/tracks/arabe/lessons/l-letters");
+
+		expect(await screen.findByText("بَ")).toBeInTheDocument();
 		expect(
 			screen.queryByRole("button", { name: "Écouter" }),
 		).not.toBeInTheDocument();

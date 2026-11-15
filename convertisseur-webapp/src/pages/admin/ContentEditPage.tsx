@@ -22,6 +22,8 @@ import {
 	type ItemOf,
 	type Kind,
 	listContent,
+	setAudioReviewNote,
+	setAudioStatus,
 	setReviewNote,
 	setStatus,
 	type Track,
@@ -43,6 +45,10 @@ import {
 	StatusPill,
 	useContentFailure,
 } from "@/pages/admin/contentParts";
+import {
+	type RecordingActions,
+	RecordingReview,
+} from "@/pages/admin/reviewParts";
 
 type Loaded = { [K in Kind]: { kind: K; item: ItemOf[K] } }[Kind];
 type Draft = { [K in Kind]: { kind: K; fields: FieldsOf[K] } }[Kind];
@@ -458,6 +464,51 @@ function ContentEditor({ kind: pageKind, id, parentId }: ContentEditorProps) {
 		setToast(message);
 	}
 
+	/** Runs a review of the recording, then reloads the item. */
+	async function reviewAudio(
+		current: Loaded,
+		run: () => Promise<string>,
+	): Promise<boolean> {
+		begin();
+		try {
+			await refresh(current, await run());
+			return true;
+		} catch (failure) {
+			onFailure("admin.content_audio_review_failed", failure);
+			setError(UNEXPECTED);
+			return false;
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	function recordingActions(current: Loaded): RecordingActions {
+		return {
+			busy,
+			validateAudio: (audio) =>
+				reviewAudio(current, async () => {
+					await setAudioStatus(audio.id, "validated");
+					if (audio.reviewNote) {
+						await setAudioReviewNote(audio.id, "");
+					}
+					return "Audio validé.";
+				}),
+			sendBackAudio: (audio) =>
+				reviewAudio(current, async () => {
+					await setAudioStatus(audio.id, "to_review");
+					return "Audio repassé à écouter.";
+				}),
+			flagAudio: (audio, text) =>
+				reviewAudio(current, async () => {
+					await setAudioReviewNote(audio.id, text);
+					if (audio.status === "validated") {
+						await setAudioStatus(audio.id, "to_review");
+					}
+					return "Audio signalé.";
+				}),
+		};
+	}
+
 	async function toggleStatus(current: Loaded) {
 		const next =
 			current.item.status === "validated" ? "to_review" : "validated";
@@ -598,14 +649,22 @@ function ContentEditor({ kind: pageKind, id, parentId }: ContentEditorProps) {
 									filename,
 									durationMs,
 								);
-								await refresh(loaded, "Audio enregistré : à relire.");
+								await refresh(loaded, "Audio enregistré : à écouter.");
 							}}
 							onRemove={async () => {
 								setToast(undefined);
 								await deleteAudio(loaded.kind, loaded.item.id);
-								await refresh(loaded, "Audio supprimé : à relire.");
+								await refresh(loaded, "Audio supprimé.");
 							}}
-						/>
+						>
+							{loaded.item.audio ? (
+								<RecordingReview
+									audio={loaded.item.audio}
+									of={`de la ${kindLabels[kind].toLowerCase()}`}
+									actions={recordingActions(loaded)}
+								/>
+							) : null}
+						</AudioBlock>
 					) : null}
 					{!loaded && kind !== "unit" ? (
 						<p className="field-hint">

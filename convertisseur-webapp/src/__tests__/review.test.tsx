@@ -5,13 +5,37 @@ import type { Audio } from "@/lib/content";
 import { type FakeApi, installFakeApi } from "./fakeApi";
 import { renderAt } from "./helpers";
 
+vi.mock("@/lib/mediaDuration", () => ({ readDuration: async () => null }));
+
 const recording: Audio = {
 	id: "a-1",
 	contentType: "audio/mpeg",
 	sizeBytes: 40_000,
 	durationMs: 2_000,
 	createdAt: "2026-11-05T10:00:00Z",
+	status: "validated",
+	validatedAt: "2026-11-06T10:00:00Z",
+	reviewNote: null,
 };
+
+/** A recording waiting to be listened to. */
+function toHear(id: string, reviewNote: string | null = null): Audio {
+	return {
+		...recording,
+		id,
+		status: "to_review",
+		validatedAt: null,
+		reviewNote,
+	};
+}
+
+/** Gives the row `id` a recording to listen to. */
+function giveAudio(api: FakeApi, id: string, audio: Audio) {
+	const row = api.content.row(id);
+	if (row) {
+		row.audio = audio;
+	}
+}
 
 const validated = {
 	status: "validated" as const,
@@ -299,7 +323,12 @@ describe("reviewing on a phone", () => {
 		expect(calls(api, "PUT", "/api/v1/cards/c-labas/status")).toHaveLength(1);
 		expect(api.content.row("c-labas")?.status).toBe("validated");
 		expect(
-			screen.getByText("2 validées · 1 signalée · 0 à relire"),
+			screen.getByText("Texte : 2 validées · 1 signalée · 0 à relire"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Audio : 1 validé · 0 signalé · 0 à écouter · 2 manquants",
+			),
 		).toBeInTheDocument();
 		const flagged = screen.getByRole("region", { name: "Signalées" });
 		expect(
@@ -356,7 +385,7 @@ describe("reviewing on a phone", () => {
 		expect(api.content.row("c-labas")?.reviewNote).toBe("Il faut un alif long");
 		expect(api.content.row("c-labas")?.status).toBe("to_review");
 		expect(
-			screen.getByText("1 validée · 2 signalées · 0 à relire"),
+			screen.getByText("Texte : 1 validée · 2 signalées · 0 à relire"),
 		).toBeInTheDocument();
 	});
 
@@ -383,7 +412,7 @@ describe("reviewing on a phone", () => {
 
 		expect(
 			screen.getByText(
-				"Les apprenants ne voient une carte que si sa leçon et son unité sont validées aussi.",
+				"Les apprenants ne voient une carte que si sa leçon et son unité sont validées aussi, et n'entendent son audio qu'une fois validé.",
 			),
 		).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Valider la leçon" }));
@@ -393,7 +422,7 @@ describe("reviewing on a phone", () => {
 
 		expect(
 			await screen.findByText(
-				"Les cartes validées de cette leçon sont visibles des apprenants.",
+				"Les apprenants voient les cartes validées de cette leçon, et entendent leur audio une fois validé.",
 			),
 		).toBeInTheDocument();
 		expect(api.content.row("l-saluer")?.status).toBe("validated");
@@ -467,7 +496,7 @@ describe("reviewing on a desktop", () => {
 			),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText("1 validée · 1 signalée · 1 à relire"),
+			screen.getByText("Texte : 1 validée · 1 signalée · 1 à relire"),
 		).toBeInTheDocument();
 	});
 
@@ -479,7 +508,7 @@ describe("reviewing on a desktop", () => {
 			screen.getByRole("button", { name: "Valider la carte restante" }),
 		);
 
-		await screen.findByText("2 validées · 1 signalée · 0 à relire");
+		await screen.findByText("Texte : 2 validées · 1 signalée · 0 à relire");
 		expect(
 			calls(api, "POST", "/api/v1/lessons/l-saluer/card-validations").map(
 				(call) => call.body,
@@ -549,5 +578,213 @@ describe("content page", () => {
 		expect(
 			await screen.findByRole("article", { name: "Carte 3" }),
 		).toBeInTheDocument();
+	});
+});
+
+describe("reviewing recordings", () => {
+	it("validates a card's recording, its text left as it is", async () => {
+		const { api, user } = await open(
+			"/admin/review/lessons/l-saluer",
+			true,
+			(api) => giveAudio(api, "c-salam", toHear("a-1")),
+		);
+		const card = await screen.findByRole("article", { name: "Carte 1" });
+		expect(within(card).getByText("Validée")).toBeInTheDocument();
+		expect(within(card).getByText("À écouter")).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Audio : 0 validé · 0 signalé · 1 à écouter · 2 manquants",
+			),
+		).toBeInTheDocument();
+
+		await user.click(
+			within(card).getByRole("button", { name: "Valider l'audio" }),
+		);
+
+		expect(await within(card).findByText("Validé")).toBeInTheDocument();
+		expect(
+			within(card).getByRole("button", { name: "Repasser à écouter" }),
+		).toBeInTheDocument();
+		expect(
+			calls(api, "PUT", "/api/v1/audio/a-1/status").map((call) => call.body),
+		).toEqual([{ status: "validated" }]);
+		expect(api.content.row("c-salam")?.audio?.status).toBe("validated");
+		expect(calls(api, "PUT", "/api/v1/cards/c-salam/status")).toHaveLength(0);
+		expect(
+			screen.getByText(
+				"Audio : 1 validé · 0 signalé · 0 à écouter · 2 manquants",
+			),
+		).toBeInTheDocument();
+	});
+
+	it("flags a recording with a note and gives the focus back", async () => {
+		const { api, user } = await open("/admin/review/lessons/l-saluer", true);
+		const card = await screen.findByRole("article", { name: "Carte 1" });
+		const flag = within(card).getByRole("button", {
+			name: "Signaler l'audio de la carte 1",
+		});
+
+		await user.click(flag);
+		const field = within(card).getByLabelText("Qu'est-ce qui ne va pas ?");
+		expect(field).toHaveFocus();
+		await user.type(field, "Le ع est avalé");
+		await user.click(within(card).getByRole("button", { name: "Signaler" }));
+
+		expect(await within(card).findByText("Le ع est avalé")).toBeInTheDocument();
+		expect(flag).toHaveFocus();
+		expect(within(card).getByText("Signalé")).toBeInTheDocument();
+		expect(within(card).getByText("Validée")).toBeInTheDocument();
+		expect(api.content.row("c-salam")?.audio).toMatchObject({
+			status: "to_review",
+			reviewNote: "Le ع est avalé",
+		});
+		expect(api.content.row("c-salam")?.status).toBe("validated");
+	});
+
+	it("validates the recordings left, the flagged one aside", async () => {
+		const { api, user } = await open(
+			"/admin/review/lessons/l-saluer",
+			true,
+			(api) => {
+				giveAudio(api, "c-salam", toHear("a-1"));
+				giveAudio(api, "c-wach-rak", toHear("a-3", "On entend un souffle"));
+				giveAudio(api, "c-labas", toHear("a-4"));
+			},
+		);
+		await screen.findByText(
+			"Audio : 0 validé · 1 signalé · 2 à écouter · 0 manquant",
+		);
+
+		await user.click(
+			screen.getByRole("button", { name: "Valider les 2 audios restants" }),
+		);
+
+		await screen.findByText(
+			"Audio : 2 validés · 1 signalé · 0 à écouter · 0 manquant",
+		);
+		expect(
+			calls(api, "POST", "/api/v1/lessons/l-saluer/audio-validations").map(
+				(call) => call.body,
+			),
+		).toEqual([{ cardIds: ["c-salam", "c-labas"] }]);
+		expect(api.content.row("c-wach-rak")?.audio?.status).toBe("to_review");
+		expect(api.content.row("c-labas")?.status).toBe("to_review");
+		expect(
+			screen.queryByRole("button", { name: /audios? restants?$/ }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Valider la carte restante" }),
+		).toBeInTheDocument();
+	});
+
+	it("validates the lesson's own recording", async () => {
+		const { api, user } = await open(
+			"/admin/review/lessons/l-saluer",
+			true,
+			(api) => giveAudio(api, "l-saluer", toHear("a-lesson")),
+		);
+		const panel = await screen.findByRole("region", {
+			name: "Visible des apprenants ?",
+		});
+
+		await user.click(
+			within(panel).getByRole("button", { name: "Valider l'audio" }),
+		);
+
+		expect(
+			await within(panel).findByRole("button", { name: "Repasser à écouter" }),
+		).toBeInTheDocument();
+		expect(api.content.row("l-saluer")?.audio?.status).toBe("validated");
+		expect(api.content.row("l-saluer")?.status).toBe("to_review");
+	});
+
+	it("replaces a recording, to listen to, the card still validated", async () => {
+		const { api, user } = await open("/admin/review/lessons/l-saluer", true);
+		const card = await screen.findByRole("article", { name: "Carte 1" });
+		expect(within(card).getByText("Validé")).toBeInTheDocument();
+
+		await user.click(within(card).getByRole("button", { name: "Remplacer" }));
+		await user.upload(
+			within(card).getByLabelText("Téléverser un fichier"),
+			new File([new Uint8Array(2_500)], "salam.mp3", { type: "audio/mpeg" }),
+		);
+
+		expect(await within(card).findByText("À écouter")).toBeInTheDocument();
+		expect(within(card).getByText("Validée")).toBeInTheDocument();
+		expect(api.content.row("c-salam")?.status).toBe("validated");
+	});
+
+	it("opens a phone on the first card whose text or audio waits", async () => {
+		const { user } = await open(
+			"/admin/review/lessons/l-saluer",
+			false,
+			(api) => giveAudio(api, "c-salam", toHear("a-1")),
+		);
+		const card = await screen.findByRole("article", { name: "Carte 1" });
+
+		await user.click(
+			within(card).getByRole("button", { name: "Valider l'audio" }),
+		);
+
+		expect(await within(card).findByText("Validé")).toBeInTheDocument();
+	});
+});
+
+describe("recordings to listen to", () => {
+	it("filters the lessons with a recording to review, flagged or not", async () => {
+		const { user, router } = await open("/admin/content", false, (api) => {
+			giveAudio(api, "c-salam", toHear("a-1"));
+			giveAudio(api, "c-wach-rak", toHear("a-3", "On entend un souffle"));
+			giveAudio(api, "l-lettres", toHear("a-lesson"));
+		});
+
+		await user.click(
+			await screen.findByRole("button", { name: "Audio à écouter · 3" }),
+		);
+
+		expect(router.state.location.search).toEqual({ audio: "to-review" });
+		expect(
+			screen.getByRole("button", { name: "Audio à écouter · 3" }),
+		).toHaveAttribute("aria-pressed", "true");
+		const saluer = screen.getByRole("link", { name: /^Saluer/ });
+		expect(saluer).toHaveTextContent("2 audios à écouter");
+		expect(saluer).not.toHaveTextContent("signalée");
+		expect(
+			screen.getByRole("link", { name: /^Les lettres/ }),
+		).toHaveTextContent("1 audio à écouter");
+		expect(
+			screen.queryByRole("link", { name: /^Politesse/ }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "Écouter Saluer" }),
+		).toHaveAttribute("href", "/admin/review/lessons/l-saluer");
+	});
+
+	it("keeps the cards of a lesson whose recording is to review", async () => {
+		await open("/admin/content?lesson=l-saluer&audio=to-review", false, (api) =>
+			giveAudio(api, "c-salam", toHear("a-1")),
+		);
+
+		await screen.findByRole("link", { name: "Modifier la leçon" });
+		expect(screen.getAllByRole("row")).toHaveLength(2);
+		const row = screen.getByRole("row", { name: /salam 3likoum/ });
+		expect(within(row).getByText("À écouter")).toBeVisible();
+		expect(
+			screen.getByRole("button", { name: "Audio à écouter · 1" }),
+		).toHaveAttribute("aria-pressed", "true");
+		expect(screen.getByText("1 audio à écouter")).toBeInTheDocument();
+	});
+
+	it("counts them in the admin navigation", async () => {
+		await open("/admin/content", false, (api) =>
+			giveAudio(api, "c-salam", toHear("a-1")),
+		);
+
+		const nav = screen.getByRole("navigation", { name: "Administration" });
+		const first = within(nav).getAllByRole("link")[0];
+		await waitFor(() =>
+			expect(first).toHaveAccessibleName("Contenu, 4 à relire, 1 à écouter"),
+		);
+		expect(first).toHaveTextContent("Contenu5");
 	});
 });

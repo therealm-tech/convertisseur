@@ -35,6 +35,9 @@ function seedContent(api: FakeApi) {
 			sizeBytes: 1_200_000,
 			durationMs: 3_000,
 			createdAt: "2026-11-05T10:00:00Z",
+			status: "to_review",
+			validatedAt: null,
+			reviewNote: null,
 		},
 	});
 	const pillars = content.seed("unit", {
@@ -235,7 +238,7 @@ describe("a lesson's cards", () => {
 		expect(titles()).toEqual(["شُكْرًا · shukran", "عَفْوًا · ʿafwan"]);
 		const [shukran, afwan] = screen.getAllByRole("row").slice(1);
 		expect(shukran).toHaveTextContent("merci");
-		expect(shukran).toHaveTextContent("Oui");
+		expect(shukran).toHaveTextContent("À écouter");
 		expect(shukran).toHaveTextContent("À relire");
 		expect(afwan).toHaveTextContent("Non");
 		expect(afwan).toHaveTextContent("Validée");

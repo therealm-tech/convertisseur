@@ -4,6 +4,7 @@ import type { ContentSearch } from "@/lib/contentRoutes";
 import {
 	buildTree,
 	type Filters,
+	recordingsToReview,
 	type TreeData,
 	type UnitNode,
 } from "@/lib/contentTree";
@@ -22,8 +23,11 @@ function emptyMessage(filters: Filters): string {
 	if (filters.status === "to_review" && !filters.note && !filters.audio) {
 		return "Rien à relire.";
 	}
-	if (filters.audio && !filters.status && !filters.note) {
+	if (filters.audio === "missing" && !filters.status && !filters.note) {
 		return "Toutes les cartes ont leur audio.";
+	}
+	if (filters.audio === "to_review" && !filters.status && !filters.note) {
+		return "Rien à écouter.";
 	}
 	return "Aucun contenu ne correspond.";
 }
@@ -80,7 +84,9 @@ interface UnitSectionProps {
 function UnitSection({ node, filters, search }: UnitSectionProps) {
 	const { unit, lessons, lessonCount } = node;
 	const unfiltered =
-		filters.status === undefined && !filters.note && !filters.audio;
+		filters.status === undefined &&
+		!filters.note &&
+		filters.audio === undefined;
 	return (
 		<section className="review-group" aria-label={unit.title}>
 			<div className="review-group-head">
@@ -129,6 +135,41 @@ interface LessonRowProps {
 	search: ContentSearch;
 }
 
+interface Left {
+	count: number;
+	singular: string;
+	plural: string;
+	/** Whether the count is about the cards' text rather than their audio. */
+	text: boolean;
+}
+
+/** What is left to do in the lesson, as its filter sees it. */
+function leftIn(lesson: LessonSummary, filters: Filters): Left {
+	const counts = lesson.cardCounts;
+	if (filters.status !== "to_review" && filters.audio === "missing") {
+		return {
+			count: counts.withoutAudio,
+			singular: "carte sans audio",
+			plural: "cartes sans audio",
+			text: false,
+		};
+	}
+	if (filters.status !== "to_review" && filters.audio === "to_review") {
+		return {
+			count: recordingsToReview(lesson),
+			singular: "audio à écouter",
+			plural: "audios à écouter",
+			text: false,
+		};
+	}
+	return {
+		count: counts.toReview + counts.flagged,
+		singular: "carte à relire",
+		plural: "cartes à relire",
+		text: true,
+	};
+}
+
 /**
  * A lesson with its cards, the count its filter is about, and the way to
  * review it while it is filtered to review.
@@ -136,13 +177,15 @@ interface LessonRowProps {
 function LessonRow({ lesson, filters, search }: LessonRowProps) {
 	const counts = lesson.cardCounts;
 	const total = totalOf(counts);
-	const silent = filters.audio && filters.status !== "to_review";
-	const left = silent ? counts.withoutAudio : counts.toReview + counts.flagged;
-	const [singular, plural] = silent
-		? ["carte sans audio", "cartes sans audio"]
-		: ["carte à relire", "cartes à relire"];
-	const started = !silent && left > 0 && counts.validated > 0;
-	const flagged = !silent && counts.flagged > 0;
+	const { count: left, singular, plural, text } = leftIn(lesson, filters);
+	const started = text && left > 0 && counts.validated > 0;
+	const flagged = text && counts.flagged > 0;
+	const review =
+		filters.status === "to_review"
+			? "Relire"
+			: filters.audio === "to_review"
+				? "Écouter"
+				: undefined;
 	return (
 		<>
 			<Link
@@ -185,14 +228,14 @@ function LessonRow({ lesson, filters, search }: LessonRowProps) {
 				) : null}
 				<ChevronIcon />
 			</Link>
-			{filters.status === "to_review" ? (
+			{review ? (
 				<Link
 					to="/admin/review/lessons/$lessonId"
 					params={{ lessonId: lesson.id }}
 					className="button-outline content-tree-review"
-					aria-label={`Relire ${lesson.title}`}
+					aria-label={`${review} ${lesson.title}`}
 				>
-					Relire
+					{review}
 				</Link>
 			) : null}
 		</>

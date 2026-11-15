@@ -37,6 +37,8 @@ interface AudioBlockProps {
 	recordLabel?: string;
 	/** Leaves out the formats hint and the upload date, for a list. */
 	compact?: boolean;
+	/** The recording's review, shown under it. */
+	children?: ReactNode;
 }
 
 type Mode =
@@ -84,6 +86,7 @@ export function AudioBlock({
 	label = "Audio",
 	recordLabel = "Enregistrer",
 	compact = false,
+	children,
 }: AudioBlockProps) {
 	const [state, setState] = useState<Mode>({ mode: "idle" });
 	const [error, setError] = useState<string | undefined>();
@@ -245,6 +248,7 @@ export function AudioBlock({
 					/>
 				</div>
 			) : null}
+			{showFile ? children : null}
 
 			{state.mode === "recording" ? (
 				<div className="audio-recording">

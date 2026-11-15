@@ -8,6 +8,8 @@ import {
 	TrackSchema,
 } from "@/lib/content";
 
+const timestamp = z.iso.datetime({ offset: true });
+
 const LessonSummarySchema = z.object({
 	id: z.string(),
 	position: z.number(),
@@ -15,6 +17,8 @@ const LessonSummarySchema = z.object({
 	status: StatusSchema,
 	reviewNote: z.string().nullable(),
 	hasAudio: z.boolean(),
+	/** The status of the lesson's own recording; `null` when it has none. */
+	audioStatus: StatusSchema.nullable(),
 	unit: z.object({
 		id: z.string(),
 		track: TrackSchema,
@@ -28,6 +32,12 @@ const LessonSummarySchema = z.object({
 		flagged: z.number(),
 		toReview: z.number(),
 		withoutAudio: z.number(),
+		/** The cards' recordings, reviewed apart from the cards' text. */
+		recordings: z.object({
+			validated: z.number(),
+			flagged: z.number(),
+			toReview: z.number(),
+		}),
 	}),
 });
 export type LessonSummary = z.infer<typeof LessonSummarySchema>;
@@ -38,6 +48,7 @@ const LessonSummaryPageSchema = z.object({
 	perPage: z.number(),
 	total: z.number(),
 	itemsToReview: z.number(),
+	recordingsToReview: z.number(),
 	cardsWithoutAudio: z.number(),
 });
 export type LessonSummaryPage = z.infer<typeof LessonSummaryPageSchema>;
@@ -53,17 +64,40 @@ const CardValidationsSchema = z.object({
 	cards: z.array(z.object({ id: z.string(), status: StatusSchema })),
 });
 
+const RecordingReviewSchema = z.object({
+	cardId: z.string(),
+	id: z.string(),
+	status: StatusSchema,
+	validatedAt: timestamp.nullable(),
+	reviewNote: z.string().nullable(),
+});
+export type RecordingReview = z.infer<typeof RecordingReviewSchema>;
+
+const RecordingValidationsSchema = z.object({
+	recordings: z.array(RecordingReviewSchema),
+});
+
 /** Which lessons to list; a filter left out matches every lesson. */
 export interface LessonFilter {
 	unitId?: string;
 	pendingReview?: boolean;
 	missingAudio?: boolean;
+	/** A recording to review, the lesson's own or a card's. */
+	pendingAudio?: boolean;
 }
 
 /** What the queue's header and the admin navigation count. */
-export interface ReviewTotals {
-	itemsToReview: number;
-	cardsWithoutAudio: number;
+export type ReviewTotals = Pick<
+	LessonSummaryPage,
+	"itemsToReview" | "recordingsToReview" | "cardsWithoutAudio"
+>;
+
+function totalsOf(page: LessonSummaryPage): ReviewTotals {
+	return {
+		itemsToReview: page.itemsToReview,
+		recordingsToReview: page.recordingsToReview,
+		cardsWithoutAudio: page.cardsWithoutAudio,
+	};
 }
 
 export async function listLessons(
@@ -84,6 +118,9 @@ export async function listLessons(
 	if (filter.missingAudio) {
 		params.set("missingAudio", "true");
 	}
+	if (filter.pendingAudio) {
+		params.set("pendingAudio", "true");
+	}
 	const response = await send("GET", `/api/v1/lessons?${params}`);
 	await expectOk(response);
 	return LessonSummaryPageSchema.parse(await response.json());
@@ -96,22 +133,12 @@ export async function listAllLessons(
 	const { first, items } = await allPages<LessonSummary, LessonSummaryPage>(
 		(page) => listLessons(filter, page),
 	);
-	return {
-		lessons: items,
-		totals: {
-			itemsToReview: first.itemsToReview,
-			cardsWithoutAudio: first.cardsWithoutAudio,
-		},
-	};
+	return { lessons: items, totals: totalsOf(first) };
 }
 
 /** The counts alone, for the navigation's badge. */
 export async function fetchReviewTotals(): Promise<ReviewTotals> {
-	const page = await listLessons({ pendingReview: true }, 1, 1);
-	return {
-		itemsToReview: page.itemsToReview,
-		cardsWithoutAudio: page.cardsWithoutAudio,
-	};
+	return totalsOf(await listLessons({ pendingReview: true }, 1, 1));
 }
 
 /** Every card of the lesson, in order, whatever its status. */
@@ -145,6 +172,24 @@ export async function validateCards(
 	await expectOk(response);
 	const { cards } = CardValidationsSchema.parse(await response.json());
 	return new Map(cards.map((card) => [card.id, card.status]));
+}
+
+/**
+ * Validates the recordings of the cards among `cardIds` that are to review
+ * without a review note, at once; returns the review state of each card's
+ * recording.
+ */
+export async function validateRecordings(
+	lessonId: string,
+	cardIds: string[],
+): Promise<RecordingReview[]> {
+	const response = await send(
+		"POST",
+		`/api/v1/lessons/${encodeURIComponent(lessonId)}/audio-validations`,
+		{ cardIds },
+	);
+	await expectOk(response);
+	return RecordingValidationsSchema.parse(await response.json()).recordings;
 }
 
 /** How a card stands in review: flagged is to review with a note. */

@@ -9,7 +9,12 @@ import {
 	type Track,
 } from "@/lib/content";
 import { kindLabels, trackLabels } from "@/lib/contentLabels";
-import { type ContentSearch, sectionOf, statusOf } from "@/lib/contentRoutes";
+import {
+	audioOf,
+	type ContentSearch,
+	sectionOf,
+	statusOf,
+} from "@/lib/contentRoutes";
 import {
 	type Counts,
 	type Filters,
@@ -57,7 +62,7 @@ function filtersOf(search: ContentSearch): Filters {
 	return {
 		status: statusOf(search.status),
 		note: search.note === true,
-		audio: search.audio === "missing",
+		audio: audioOf(search.audio),
 		track: search.track,
 		unit: search.unit,
 	};
@@ -327,7 +332,7 @@ function SearchResults({
 		: undefined;
 	// The search spans every unit, and the API has no audio filter: both
 	// belong to the tree alone.
-	const searched: Filters = { ...filters, audio: false, unit: undefined };
+	const searched: Filters = { ...filters, audio: undefined, unit: undefined };
 
 	return (
 		<>
