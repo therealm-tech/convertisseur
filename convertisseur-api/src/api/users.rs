@@ -111,8 +111,7 @@ pub(super) fn validate_password(password: &str) -> Result<(), ValidationError> {
 pub struct UserResponse {
     id: Uuid,
     username: String,
-    /// `null` for an account created before emails were required, until it
-    /// sets one.
+    /// `null` for the `super_admin` until it sets one.
     email: Option<String>,
     role: RoleResponse,
 }
@@ -245,7 +244,7 @@ pub struct UserPageResponse {
 pub struct UserListItemResponse {
     id: Uuid,
     username: String,
-    /// `null` until an account created before emails were required sets one.
+    /// `null` for the `super_admin` until it sets one.
     email: Option<String>,
     role: RoleResponse,
     created_at: DateTime<Utc>,

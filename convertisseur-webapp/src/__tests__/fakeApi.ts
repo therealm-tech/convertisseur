@@ -32,7 +32,7 @@ export interface FakeApi {
 	goOffline(): void;
 	/** The account named `username`, as the server holds it. */
 	account(username: string): Account | undefined;
-	/** Leaves `username` without an email, as an account created before it. */
+	/** Leaves `username` without an email, as the bootstrapped super admin. */
 	clearEmail(username: string): void;
 	/** The units, lessons and cards, as the server holds them. */
 	content: FakeContent;
