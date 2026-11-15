@@ -13,7 +13,6 @@ use convertisseur_api::{
 };
 use serde_json::{Value, json};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 const LETTERS: &str = "
 key: alphabet
@@ -51,14 +50,13 @@ struct Fixture {
     server: Server,
     store: MemoryStore,
     admin: String,
-    author: Uuid,
 }
 
 impl Fixture {
     /// [`LETTERS`] synced, and an admin logged in.
     async fn new(pool: &PgPool) -> Self {
         let store = MemoryStore::default();
-        let author = ensure_super_admin(pool, "admin", PASSWORD.to_owned())
+        ensure_super_admin(pool, "admin", PASSWORD.to_owned())
             .await
             .unwrap();
         sync_files(pool, &store, &[("arabe/01-alphabet.yaml", LETTERS)])
@@ -71,7 +69,6 @@ impl Fixture {
             server,
             store,
             admin,
-            author,
         }
     }
 
@@ -87,18 +84,6 @@ impl Fixture {
     async fn card(&self, pool: &PgPool, key: &str) -> Value {
         let id = imported_id(pool, "cards", &format!("arabe/alphabet/lettres/{key}")).await;
         self.get(&format!("/api/v1/cards/{id}")).await
-    }
-}
-
-async fn validate_everything(pool: &PgPool, by: Uuid) {
-    for table in ["units", "lessons", "cards"] {
-        sqlx::query(sqlx::AssertSqlSafe(format!(
-            "UPDATE {table} SET status = 'validated', validated_by = $1, validated_at = now()"
-        )))
-        .bind(by)
-        .execute(pool)
-        .await
-        .unwrap();
     }
 }
 
@@ -146,7 +131,6 @@ async fn a_card_written_in_the_admin_area_has_no_forms(pool: PgPool) {
 #[sqlx::test]
 async fn learners_see_the_forms_of_the_cards_they_study(pool: PgPool) {
     let f = Fixture::new(&pool).await;
-    validate_everything(&pool, f.author).await;
     create_account(&pool, "eleve", "user").await;
     let learner = f.server.session("eleve").await;
     let lesson = imported_id(&pool, "lessons", "arabe/alphabet/lettres").await;
@@ -180,11 +164,17 @@ async fn learners_see_the_forms_of_the_cards_they_study(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn a_form_changed_in_the_files_sends_the_card_back_to_review(pool: PgPool) {
+async fn a_form_changed_in_the_files_validates_the_card_again(pool: PgPool) {
     let f = Fixture::new(&pool).await;
-    validate_everything(&pool, f.author).await;
+    sqlx::query(
+        "UPDATE cards SET status = 'to_review', validated_by = NULL, validated_at = NULL \
+         WHERE import_key = 'arabe/alphabet/lettres/ba'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let before = f.card(&pool, "ba").await;
-    assert_eq!(before["status"], "validated");
+    assert_eq!(before["status"], "to_review");
 
     let without_forms = LETTERS.replace(
         "        forms:\n          initial: بـ\n          medial: ـبـ\n          final: ـب\n",
@@ -202,7 +192,7 @@ async fn a_form_changed_in_the_files_sends_the_card_back_to_review(pool: PgPool)
     let after = f.card(&pool, "ba").await;
     assert_eq!(after["id"], before["id"]);
     assert_eq!(after["forms"], Value::Null);
-    assert_eq!(after["status"], "to_review");
+    assert_eq!(after["status"], "validated");
     assert_eq!(f.card(&pool, "dal").await["status"], "validated");
 
     let report = sync_files(&pool, &f.store, &[("arabe/01-alphabet.yaml", LETTERS)])

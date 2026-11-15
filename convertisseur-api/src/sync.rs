@@ -17,7 +17,7 @@ use uuid::Uuid;
 pub use catalogue::{Catalogue, InvalidCatalogue};
 
 use crate::{
-    content::{self, CardFields, LessonFields, Track, UnitFields, Variety},
+    content::{self, CardFields, LessonFields, Status, Track, UnitFields, Variety},
     db::{
         self,
         content::{Cards, Lessons, Ordered, Units},
@@ -32,7 +32,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Tally {
     pub created: usize,
-    /// Its text changed in the files: rewritten, back to review.
+    /// Its text changed in the files: rewritten, validated again.
     pub updated: usize,
     /// Its parent, or its order among its imported siblings, changed.
     pub moved: usize,
@@ -449,7 +449,7 @@ async fn write<L: Level>(
                 L::overwrite(conn, row.id, &entry.text, author).await?;
                 tracing::info!(
                     kind = ?L::KIND, key, id = %row.id,
-                    "content rewritten from the files, to review"
+                    "content rewritten from the files, validated"
                 );
                 if row.review_note.is_some() {
                     tracing::info!(
@@ -463,7 +463,9 @@ async fn write<L: Level>(
             None => {
                 let position = i32::try_from(index + 1).unwrap_or(i32::MAX);
                 let id = L::insert(conn, entry.parent, &entry.text, position, key, author).await?;
-                tracing::info!(kind = ?L::KIND, key, %id, "content created, to review");
+                db::content::set_status::<L>(&mut *conn, id, Status::Validated, Some(author))
+                    .await?;
+                tracing::info!(kind = ?L::KIND, key, %id, "content created, validated");
                 tally.created += 1;
                 (id, Change::Created)
             }

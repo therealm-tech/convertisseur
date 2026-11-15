@@ -70,6 +70,19 @@ async fn validate(pool: &PgPool, table: &str, key: &str, by: Uuid, note: Option<
     .unwrap();
 }
 
+/// Sends the card back to review with `note`, as a reviewer flagging it does.
+async fn flag(pool: &PgPool, key: &str, note: &str) {
+    sqlx::query(
+        "UPDATE cards SET status = 'to_review', validated_by = NULL, validated_at = NULL, \
+         review_note = $2 WHERE import_key = $1",
+    )
+    .bind(key)
+    .bind(note)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 async fn count(pool: &PgPool, table: &str) -> usize {
     let count: i64 = sqlx::query_scalar(AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
         .fetch_one(pool)
@@ -145,7 +158,7 @@ fn without_politesse() -> String {
 }
 
 #[sqlx::test]
-async fn the_first_sync_creates_the_content_files_to_review(pool: PgPool) {
+async fn the_first_sync_creates_the_content_files_validated(pool: PgPool) {
     let author = super_admin(&pool).await;
 
     let report = sync_content(&pool, &memory()).await.unwrap();
@@ -170,7 +183,12 @@ async fn the_first_sync_creates_the_content_files_to_review(pool: PgPool) {
         for row in rows {
             assert_eq!(
                 row,
-                ("to_review".to_owned(), Some(author), Some(author), None)
+                (
+                    "validated".to_owned(),
+                    Some(author),
+                    Some(author),
+                    Some(author)
+                )
             );
         }
     }
@@ -204,12 +222,14 @@ async fn a_second_sync_changes_nothing(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn a_text_changed_in_the_files_goes_back_to_review_without_its_note(pool: PgPool) {
+async fn a_text_changed_in_the_files_is_validated_without_its_note(pool: PgPool) {
     let store = MemoryStore::default();
     let author = synced(&pool, &store).await;
     let salam = "arabe/salutations/bonjour/salam";
     let sbah = "arabe/salutations/bonjour/sbah";
-    validate(&pool, "cards", salam, author, Some("Il manque le tanwin")).await;
+    let msa = "arabe/salutations/bonjour/msa";
+    flag(&pool, salam, "Il manque le tanwin").await;
+    flag(&pool, msa, "Mauvaise variété").await;
     validate(&pool, "cards", sbah, author, Some("Rien à redire")).await;
     validate(&pool, "lessons", "arabe/salutations/bonjour", author, None).await;
     let before = card(&pool, salam).await;
@@ -224,7 +244,15 @@ async fn a_text_changed_in_the_files_goes_back_to_review_without_its_note(pool: 
     assert_eq!(after.position, 1);
     assert_eq!(
         review(&pool, "cards", salam).await,
-        ("to_review".to_owned(), None, None)
+        ("validated".to_owned(), Some(author), None)
+    );
+    assert_eq!(
+        review(&pool, "cards", msa).await,
+        (
+            "to_review".to_owned(),
+            None,
+            Some("Mauvaise variété".to_owned())
+        )
     );
     assert_eq!(
         review(&pool, "cards", sbah).await,

@@ -1,11 +1,12 @@
--- The content files' text replaces the lesson's: it goes back to review, and
--- its review note, answered by the change, is cleared.
+-- The content files' text replaces the lesson's: the files are reviewed in
+-- pull requests, so it is validated by the author of the sync, and its
+-- review note, answered by the change, is cleared.
 UPDATE lessons
 SET
     title = $2,
-    status = 'to_review',
-    validated_by = NULL,
-    validated_at = NULL,
+    status = 'validated',
+    validated_by = $3,
+    validated_at = now(),
     review_note = NULL,
     updated_by = $3,
     updated_at = now()
