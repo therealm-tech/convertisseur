@@ -1,11 +1,12 @@
 import type { Card, ContentItem, Status, Track } from "@/lib/content";
+import type { AudioFilter } from "@/lib/contentRoutes";
 import { type LessonSummary, lessonOrder } from "@/lib/review";
 
 /** The filters the tree, a lesson's cards and their counts apply. */
 export interface Filters {
 	status: Status | undefined;
 	note: boolean;
-	audio: boolean;
+	audio: AudioFilter | undefined;
 	track: Track | undefined;
 	unit: string | undefined;
 }
@@ -38,6 +39,8 @@ export interface Counts {
 	validated: number;
 	noted: number;
 	withoutAudio: number;
+	/** Recordings to review, flagged or not. */
+	audioToReview: number;
 }
 
 const tracks: Track[] = ["arabe", "islam"];
@@ -52,8 +55,31 @@ export function needsReview(lesson: LessonSummary): boolean {
 	);
 }
 
+/** The lesson's recordings to review, flagged or not: its own and its cards'. */
+export function recordingsToReview(lesson: LessonSummary): number {
+	const recordings = lesson.cardCounts.recordings;
+	return (
+		recordings.toReview +
+		recordings.flagged +
+		(lesson.audioStatus === "to_review" ? 1 : 0)
+	);
+}
+
 function filtering(filters: Filters): boolean {
-	return filters.status !== undefined || filters.note || filters.audio;
+	return (
+		filters.status !== undefined || filters.note || filters.audio !== undefined
+	);
+}
+
+function audioMatches(lesson: LessonSummary, audio: AudioFilter | undefined) {
+	switch (audio) {
+		case undefined:
+			return true;
+		case "missing":
+			return lesson.cardCounts.withoutAudio > 0;
+		case "to_review":
+			return recordingsToReview(lesson) > 0;
+	}
 }
 
 function inScope(
@@ -87,7 +113,7 @@ function lessonMatcher(data: TreeData, filters: Filters) {
 		(filters.status === undefined ||
 			needsReview(lesson) === (filters.status === "to_review")) &&
 		(!filters.note || noted.has(lesson.id)) &&
-		(!filters.audio || lesson.cardCounts.withoutAudio > 0);
+		audioMatches(lesson, filters.audio);
 }
 
 /**
@@ -98,7 +124,7 @@ function unitShows(unit: ContentItem, filters: Filters): boolean {
 	if (!filtering(filters)) {
 		return true;
 	}
-	if (filters.audio || filters.status === "validated") {
+	if (filters.audio !== undefined || filters.status === "validated") {
 		return false;
 	}
 	return (
@@ -161,8 +187,8 @@ export function neighbours(
 /**
  * The units, lessons and cards in the tree's scope, per status under the
  * note filter, and the noted ones under the status filter. Cards without
- * audio are counted whatever the status: the lesson summaries do not split
- * them by status.
+ * audio and recordings to review are counted whatever the status: the
+ * lesson summaries do not split them by status.
  */
 export function treeCounts(data: TreeData, filters: Filters): Counts {
 	const units = data.units.filter((unit) =>
@@ -201,10 +227,25 @@ export function treeCounts(data: TreeData, filters: Filters): Counts {
 			(sum, lesson) => sum + lesson.cardCounts.withoutAudio,
 			0,
 		),
+		audioToReview: lessons.reduce(
+			(sum, lesson) => sum + recordingsToReview(lesson),
+			0,
+		),
 	};
 }
 
 type CardFilter = "status" | "note" | "audio";
+
+function cardAudioMatches(card: Card, audio: AudioFilter | undefined) {
+	switch (audio) {
+		case undefined:
+			return true;
+		case "missing":
+			return card.audio === null;
+		case "to_review":
+			return card.audio?.status === "to_review";
+	}
+}
 
 function cardMatches(card: Card, filters: Filters, skip?: CardFilter) {
 	return (
@@ -212,7 +253,7 @@ function cardMatches(card: Card, filters: Filters, skip?: CardFilter) {
 			filters.status === undefined ||
 			card.status === filters.status) &&
 		(skip === "note" || !filters.note || card.reviewNote !== null) &&
-		(skip === "audio" || !filters.audio || card.audio === null)
+		(skip === "audio" || cardAudioMatches(card, filters.audio))
 	);
 }
 
@@ -229,11 +270,15 @@ export function cardCounts(cards: Card[], filters: Filters): Counts {
 	const toReview = byStatus.filter(
 		(card) => card.status === "to_review",
 	).length;
+	const byAudio = under("audio");
 	return {
 		all: byStatus.length,
 		toReview,
 		validated: byStatus.length - toReview,
 		noted: under("note").filter((card) => card.reviewNote !== null).length,
-		withoutAudio: under("audio").filter((card) => card.audio === null).length,
+		withoutAudio: byAudio.filter((card) => cardAudioMatches(card, "missing"))
+			.length,
+		audioToReview: byAudio.filter((card) => cardAudioMatches(card, "to_review"))
+			.length,
 	};
 }

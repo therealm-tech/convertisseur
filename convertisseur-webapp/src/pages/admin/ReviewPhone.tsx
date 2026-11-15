@@ -11,9 +11,11 @@ import type { ReviewActions, ReviewData } from "@/pages/admin/ReviewLessonPage";
 import {
 	CardStatePill,
 	countCards,
+	describeRecordings,
 	describeReview,
 	FlagIcon,
 	LessonAudio,
+	RecordingReview,
 	VisibilityPanel,
 } from "@/pages/admin/reviewParts";
 
@@ -34,7 +36,11 @@ interface ViewProps {
 const MAX_NOTE_CHARS = 2000;
 
 function firstToReview(cards: Card[]): number {
-	const index = cards.findIndex((card) => cardState(card) === "to_review");
+	const index = cards.findIndex(
+		(card) =>
+			cardState(card) === "to_review" ||
+			(card.audio !== null && cardState(card.audio) === "to_review"),
+	);
 	return Math.max(index, 0);
 }
 
@@ -133,7 +139,15 @@ export function ReviewPhone({ data, actions, error }: ViewProps) {
 						compact
 						onUpload={actions.uploadCardAudio(card)}
 						onRemove={actions.removeCardAudio(card)}
-					/>
+					>
+						{card.audio ? (
+							<RecordingReview
+								audio={card.audio}
+								of={`de la carte ${index + 1}`}
+								actions={actions}
+							/>
+						) : null}
+					</AudioBlock>
 					{card.reviewNote ? (
 						<div className="review-note-box">
 							<span className="review-note-label">Ta remarque</span>
@@ -150,7 +164,8 @@ export function ReviewPhone({ data, actions, error }: ViewProps) {
 				</article>
 				{card.importKey ? (
 					<p className="review-footnote">
-						Texte géré dans le repo : une erreur signalée y est corrigée.
+						Texte géré dans le repo : une erreur de texte signalée y est
+						corrigée.
 					</p>
 				) : null}
 				{error ? (
@@ -278,6 +293,7 @@ function DoneScreen({
 }: DoneScreenProps) {
 	const { cards, lesson, unit } = data;
 	const flagged = cards.filter((card) => cardState(card) === "flagged");
+	const counts = countCards(cards);
 	return (
 		<div className="review-phone">
 			<div className="review-phone-body">
@@ -289,9 +305,18 @@ function DoneScreen({
 						{cards.length === 0 ? lesson.title : "Leçon relue"}
 					</h1>
 					<p className="review-summary">
-						{cards.length === 0
-							? "Cette leçon n'a aucune carte."
-							: describeReview(countCards(cards))}
+						{cards.length === 0 ? (
+							"Cette leçon n'a aucune carte."
+						) : (
+							<>
+								<span className="review-summary-line">
+									{describeReview(counts)}
+								</span>
+								<span className="review-summary-line">
+									{describeRecordings(counts)}
+								</span>
+							</>
+						)}
 					</p>
 				</div>
 
@@ -325,6 +350,7 @@ function DoneScreen({
 						lesson={lesson}
 						onUpload={actions.uploadLessonAudio}
 						onRemove={actions.removeLessonAudio}
+						actions={actions}
 					/>
 				</section>
 				{error ? (

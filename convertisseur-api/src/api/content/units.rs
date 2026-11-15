@@ -12,8 +12,8 @@ use uuid::Uuid;
 use validator::Validate;
 
 use super::{
-    Resource, ReviewResponse, TAG, TrackJson, created, delete, delete_docs, set_review_note,
-    set_review_note_docs, set_status, set_status_docs, validate_title,
+    Deletable, Resource, ReviewResponse, TAG, TrackJson, created, delete, delete_docs,
+    set_review_note, set_review_note_docs, set_status, set_status_docs, validate_title,
 };
 use crate::{
     api::{
@@ -53,10 +53,13 @@ pub struct UnitResource;
 impl Resource for UnitResource {
     type Rows = Units;
     type Path = UnitPath;
+    const NOT_FOUND_DOCS: &'static str = "No unit has this id";
+}
+
+impl Deletable for UnitResource {
     const DELETE_SUMMARY: &'static str = "Delete a unit";
     const DELETE_DOCS: &'static str = "Deletes an empty unit; the next ones in its track move up. \
          Answers 204 when it is already gone.";
-    const NOT_FOUND_DOCS: &'static str = "No unit has this id";
 }
 
 /// Names one unit in the path.

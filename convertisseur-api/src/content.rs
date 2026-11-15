@@ -15,7 +15,7 @@ use crate::{
     db::{
         self,
         audio::NewAudio,
-        content::{Ordered, WithAudio},
+        content::{Ordered, Reviewed, WithAudio},
     },
     letters::FormColumns,
     storage::{ObjectStore, Storage},
@@ -122,7 +122,8 @@ pub struct Card {
     pub review: Review,
 }
 
-/// A stored recording.
+/// A stored recording, and its review: a new one is to review, and a
+/// flagged one is to review with a review note.
 #[derive(sqlx::FromRow)]
 pub struct Audio {
     pub id: Uuid,
@@ -130,6 +131,9 @@ pub struct Audio {
     pub size_bytes: i64,
     pub duration_ms: Option<i32>,
     pub created_at: DateTime<Utc>,
+    pub status: Status,
+    pub validated_at: Option<DateTime<Utc>>,
+    pub review_note: Option<String>,
 }
 
 /// The recording a card or lesson holds, all `NULL` when it holds none.
@@ -145,6 +149,12 @@ pub struct AudioColumns {
     pub duration_ms: Option<i32>,
     #[sqlx(rename = "audio_created_at")]
     pub created_at: Option<DateTime<Utc>>,
+    #[sqlx(rename = "audio_status")]
+    pub status: Option<Status>,
+    #[sqlx(rename = "audio_validated_at")]
+    pub validated_at: Option<DateTime<Utc>>,
+    #[sqlx(rename = "audio_review_note")]
+    pub review_note: Option<String>,
 }
 
 impl AudioColumns {
@@ -156,6 +166,9 @@ impl AudioColumns {
             size_bytes: self.size_bytes?,
             duration_ms: self.duration_ms,
             created_at: self.created_at?,
+            status: self.status?,
+            validated_at: self.validated_at,
+            review_note: self.review_note,
         })
     }
 }
@@ -402,7 +415,8 @@ pub(crate) async fn delete_object(storage: &Storage, key: &str) {
 }
 
 /// Stores a recording and attaches it to the row in place of the one it
-/// had, which is deleted, row and object. The row goes back to review.
+/// had, which is deleted, row and object. The new recording is to review;
+/// the row keeps its own status.
 ///
 /// The object is written before the row that points at it, and the old
 /// object deleted after the row stops pointing at it, so that a failure
@@ -463,7 +477,7 @@ pub async fn attach_audio<O: WithAudio>(
         Ok((audio, replaced)) => {
             tracing::info!(
                 kind = ?O::KIND, %id, actor_id = %actor.id, %audio_id, content_type, size,
-                "recording attached, back to review"
+                "recording attached"
             );
             if let Some(replaced) = replaced {
                 delete_object(storage, &replaced).await;
@@ -477,8 +491,8 @@ pub async fn attach_audio<O: WithAudio>(
     }
 }
 
-/// Removes the row's recording, row and object; the row goes back to
-/// review. Succeeds when it has none.
+/// Removes the row's recording, row and object; the row keeps its status.
+/// Succeeds when it has none.
 pub async fn detach_audio<O: WithAudio>(
     pool: &PgPool,
     storage: &Storage,
@@ -497,7 +511,7 @@ pub async fn detach_audio<O: WithAudio>(
     db::content::set_audio::<O>(&mut *tx, id, None, actor.id).await?;
     let key = db::audio::delete(&mut *tx, previous).await?;
     tx.commit().await?;
-    tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, "recording removed, back to review");
+    tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, "recording removed");
     if let Some(key) = key {
         delete_object(storage, &key).await;
     }
@@ -506,7 +520,7 @@ pub async fn detach_audio<O: WithAudio>(
 
 /// Validates a row, or sends it back to review. Setting the status it
 /// already has changes nothing.
-pub async fn set_status<O: Ordered>(
+pub async fn set_status<O: Reviewed>(
     pool: &PgPool,
     actor: &User,
     id: Uuid,
@@ -516,14 +530,14 @@ pub async fn set_status<O: Ordered>(
     let change = db::content::set_status::<O>(pool, id, status, validator)
         .await?
         .ok_or(ContentRefusal::NotFound)?;
-    tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, ?status, "review status set");
+    tracing::info!(item = O::ITEM, %id, actor_id = %actor.id, ?status, "review status set");
     Ok(change)
 }
 
 /// Writes the row's review note, or clears it with `None`. The note
 /// leaves the status as it is: sending the row back to review is a
 /// decision of its own.
-pub async fn set_review_note<O: Ordered>(
+pub async fn set_review_note<O: Reviewed>(
     pool: &PgPool,
     actor: &User,
     id: Uuid,
@@ -533,7 +547,7 @@ pub async fn set_review_note<O: Ordered>(
     let note = db::content::set_review_note::<O>(pool, id, note.as_deref())
         .await?
         .ok_or(ContentRefusal::NotFound)?;
-    tracing::info!(kind = ?O::KIND, %id, actor_id = %actor.id, chars, "review note set");
+    tracing::info!(item = O::ITEM, %id, actor_id = %actor.id, chars, "review note set");
     Ok(note)
 }
 

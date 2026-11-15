@@ -47,6 +47,10 @@ const AudioSchema = z.object({
 	sizeBytes: z.number(),
 	durationMs: z.number().nullable(),
 	createdAt: timestamp,
+	/** Reviewed apart from the card or lesson holding the recording. */
+	status: StatusSchema,
+	validatedAt: timestamp.nullable(),
+	reviewNote: z.string().nullable(),
 });
 export type Audio = z.infer<typeof AudioSchema>;
 
@@ -234,36 +238,58 @@ export async function updateItem<K extends Kind>(
 	return parseItem(kind, await response.json());
 }
 
-export async function setStatus(
-	kind: Kind,
-	id: string,
-	status: Status,
-): Promise<StatusChange> {
-	const response = await send("PUT", `${itemPath(kind, id)}/status`, {
-		status,
-	});
+async function putStatus(path: string, status: Status): Promise<StatusChange> {
+	const response = await send("PUT", `${path}/status`, { status });
 	await expectOk(response);
 	return StatusChangeSchema.parse(await response.json());
 }
 
 const ReviewNoteSchema = z.object({ text: z.string().nullable() });
 
+async function putReviewNote(
+	path: string,
+	text: string,
+): Promise<string | null> {
+	const response = await send("PUT", `${path}/review-note`, { text });
+	await expectOk(response);
+	return ReviewNoteSchema.parse(await response.json()).text;
+}
+
+export function setStatus(
+	kind: Kind,
+	id: string,
+	status: Status,
+): Promise<StatusChange> {
+	return putStatus(itemPath(kind, id), status);
+}
+
 /** Keeps a review note on an item; a blank text clears it. */
-export async function setReviewNote(
+export function setReviewNote(
 	kind: Kind,
 	id: string,
 	text: string,
 ): Promise<string | null> {
-	const response = await send("PUT", `${itemPath(kind, id)}/review-note`, {
-		text,
-	});
-	await expectOk(response);
-	return ReviewNoteSchema.parse(await response.json()).text;
+	return putReviewNote(itemPath(kind, id), text);
 }
 
 /** The address an `<audio>` element plays a recording from. */
 export function audioUrl(audioId: string): string {
 	return `/api/v1/audio/${encodeURIComponent(audioId)}`;
+}
+
+export function setAudioStatus(
+	audioId: string,
+	status: Status,
+): Promise<StatusChange> {
+	return putStatus(audioUrl(audioId), status);
+}
+
+/** Keeps a review note on a recording; a blank text clears it. */
+export function setAudioReviewNote(
+	audioId: string,
+	text: string,
+): Promise<string | null> {
+	return putReviewNote(audioUrl(audioId), text);
 }
 
 /**

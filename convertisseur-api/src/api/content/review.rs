@@ -1,5 +1,6 @@
 //! The review queue: lessons with the review and audio state of their
-//! cards, a lesson's cards in order, and their validation in one go.
+//! cards, a lesson's cards in order, and the validation in one go of the
+//! cards or of their recordings.
 
 use aide::{
     axum::{
@@ -27,7 +28,7 @@ use crate::{
     content::{self, ContentRefusal},
     db,
     error::ApiError,
-    review::{self, CardReview, LessonFilter, LessonSummary},
+    review::{self, CardReview, LessonFilter, LessonSummary, RecordingReview},
     router::AppState,
 };
 
@@ -43,6 +44,10 @@ pub fn routes() -> ApiRouter<AppState> {
         .api_route(
             "/api/v1/lessons/{lessonId}/card-validations",
             post_with(validate_cards, validate_cards_docs),
+        )
+        .api_route(
+            "/api/v1/lessons/{lessonId}/audio-validations",
+            post_with(validate_recordings, validate_recordings_docs),
         )
 }
 
@@ -68,6 +73,9 @@ pub struct ListLessonsQuery {
     /// `true` lists only the lessons with a card without a recording,
     /// whatever their status.
     missing_audio: Option<bool>,
+    /// `true` lists only the lessons with a recording to review, flagged or
+    /// not: the lesson's own or a card's.
+    pending_audio: Option<bool>,
 }
 
 /// The unit a lesson of the queue belongs to.
@@ -94,6 +102,19 @@ pub struct CardCountsResponse {
     to_review: u64,
     /// The cards without a recording, whatever their status.
     without_audio: u64,
+    /// How the cards' recordings stand, apart from the cards' text.
+    recordings: RecordingCountsResponse,
+}
+
+/// How the recordings of a lesson's cards stand. They add up to the cards
+/// with a recording: a flagged one is to review with a review note.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingCountsResponse {
+    validated: u64,
+    flagged: u64,
+    /// The recordings to review without a review note.
+    to_review: u64,
 }
 
 /// A lesson of the queue.
@@ -108,6 +129,8 @@ pub struct LessonSummaryResponse {
     review_note: Option<String>,
     /// Whether the lesson holds a recording of its own, which is optional.
     has_audio: bool,
+    /// The status of the lesson's own recording; `null` when it has none.
+    audio_status: Option<StatusJson>,
     unit: QueueUnitResponse,
     card_counts: CardCountsResponse,
 }
@@ -121,6 +144,7 @@ impl From<LessonSummary> for LessonSummaryResponse {
             status: lesson.status.into(),
             review_note: lesson.review_note,
             has_audio: lesson.has_audio,
+            audio_status: lesson.audio_status.map(Into::into),
             unit: QueueUnitResponse {
                 id: lesson.unit_id,
                 track: lesson.unit_track.into(),
@@ -134,6 +158,11 @@ impl From<LessonSummary> for LessonSummaryResponse {
                 flagged: count(lesson.flagged_cards),
                 to_review: count(lesson.cards_to_review),
                 without_audio: count(lesson.cards_without_audio),
+                recordings: RecordingCountsResponse {
+                    validated: count(lesson.validated_recordings),
+                    flagged: count(lesson.flagged_recordings),
+                    to_review: count(lesson.recordings_to_review),
+                },
             },
         }
     }
@@ -152,6 +181,9 @@ pub struct LessonSummaryPageResponse {
     /// Units, lessons and cards to review, flagged or not, whatever the
     /// filters.
     items_to_review: u64,
+    /// Recordings of cards and lessons to review, flagged or not, whatever
+    /// the filters.
+    recordings_to_review: u64,
     /// Cards without a recording, whatever the filters.
     cards_without_audio: u64,
 }
@@ -167,6 +199,7 @@ pub(super) async fn list_lessons(
         unit_id: query.unit_id,
         pending_review: query.pending_review.unwrap_or(false),
         missing_audio: query.missing_audio.unwrap_or(false),
+        pending_audio: query.pending_audio.unwrap_or(false),
     };
     let offset = i64::from(page - 1) * i64::from(per_page);
     let lessons = db::review::lessons(&state.pool, &filter, per_page.into(), offset).await?;
@@ -179,6 +212,7 @@ pub(super) async fn list_lessons(
         per_page,
         total,
         items_to_review: count(totals.items_to_review),
+        recordings_to_review: count(totals.recordings_to_review),
         cards_without_audio: count(totals.cards_without_audio),
     }))
 }
@@ -188,9 +222,10 @@ pub(super) fn list_lessons_docs(op: TransformOperation<'_>) -> TransformOperatio
         .summary("List lessons for review")
         .description(
             "The lessons in the order of the tracks, each with its unit and how its cards \
-             stand: validated, flagged, to review and without a recording. \
-             `itemsToReview` and `cardsWithoutAudio` count the whole content, for the review \
-             queue's header.",
+             stand: validated, flagged, to review and without a recording, and how their \
+             recordings stand, reviewed apart from the cards' text. `itemsToReview`, \
+             `recordingsToReview` and `cardsWithoutAudio` count the whole content, for the \
+             review queue's header.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<LessonSummaryPageResponse>, _>(|r| {
@@ -315,6 +350,19 @@ pub struct CardValidationsResponse {
     cards: Vec<CardReviewResponse>,
 }
 
+/// Maps the refusal of a validation in bulk: an id that is not a card of
+/// the lesson breaks `card_not_in_lesson`.
+fn card_refusal(refusal: ContentRefusal) -> ApiError {
+    match refusal {
+        ContentRefusal::NotInParent => {
+            let mut errors = ValidationErrors::new();
+            errors.add("card_ids", ValidationError::new("card_not_in_lesson"));
+            ApiError::Validation(errors)
+        }
+        other => other.into(),
+    }
+}
+
 async fn validate_cards(
     State(state): State<AppState>,
     RequireRole { user: actor, .. }: RequireRole<Admin>,
@@ -323,14 +371,7 @@ async fn validate_cards(
 ) -> Result<Json<CardValidationsResponse>, ApiError> {
     let cards = review::validate_cards(&state.pool, &actor, path.lesson_id, &request.card_ids)
         .await
-        .map_err(|refusal| match refusal {
-            ContentRefusal::NotInParent => {
-                let mut errors = ValidationErrors::new();
-                errors.add("card_ids", ValidationError::new("card_not_in_lesson"));
-                ApiError::Validation(errors)
-            }
-            other => other.into(),
-        })?;
+        .map_err(card_refusal)?;
     let usernames =
         content::usernames(&state.pool, cards.iter().map(|card| card.validated_by)).await?;
     Ok(Json(CardValidationsResponse {
@@ -360,6 +401,89 @@ fn validate_cards_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, Json<CardValidationsResponse>, _>(|r| {
             r.description("The review state of every card named")
+        })
+        .response_with::<400, ApiError, _>(|r| {
+            r.description("The body is not JSON of the expected shape")
+        })
+        .response_with::<401, ApiError, _>(|r| r.description("No live session"))
+        .response_with::<403, ApiError, _>(|r| {
+            r.description("`forbidden`: the account is a `user`")
+        })
+        .response_with::<404, ApiError, _>(|r| r.description("No lesson has this id"))
+        .response_with::<415, ApiError, _>(|r| r.description("The body is not `application/json`"))
+        .response_with::<422, ApiError, _>(|r| {
+            r.description(
+                "`length`: no card or more than 100; `card_not_in_lesson`: an id is not a \
+                 card of the lesson",
+            )
+        })
+}
+
+/// A card's recording's review state after the validation.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingReviewResponse {
+    card_id: Uuid,
+    /// The recording's id.
+    id: Uuid,
+    status: StatusJson,
+    validated_at: Option<DateTime<Utc>>,
+    validated_by: Option<AuthorResponse>,
+    /// Set on a flagged recording, which the validation leaves to review.
+    review_note: Option<String>,
+}
+
+/// The recording of every card the request named that holds one, in the
+/// lesson's order.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingValidationsResponse {
+    recordings: Vec<RecordingReviewResponse>,
+}
+
+async fn validate_recordings(
+    State(state): State<AppState>,
+    RequireRole { user: actor, .. }: RequireRole<Admin>,
+    ApiPath(path): ApiPath<LessonPath>,
+    ValidJson(request): ValidJson<ValidateCardsRequest>,
+) -> Result<Json<RecordingValidationsResponse>, ApiError> {
+    let recordings =
+        review::validate_recordings(&state.pool, &actor, path.lesson_id, &request.card_ids)
+            .await
+            .map_err(card_refusal)?;
+    let usernames = content::usernames(
+        &state.pool,
+        recordings.iter().map(|recording| recording.validated_by),
+    )
+    .await?;
+    Ok(Json(RecordingValidationsResponse {
+        recordings: recordings
+            .into_iter()
+            .map(|recording: RecordingReview| RecordingReviewResponse {
+                card_id: recording.card_id,
+                id: recording.id,
+                status: recording.status.into(),
+                validated_at: recording.validated_at,
+                validated_by: author(&usernames, recording.validated_by),
+                review_note: recording.review_note,
+            })
+            .collect(),
+    }))
+}
+
+fn validate_recordings_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
+    op.tag(TAG)
+        .summary("Validate the recordings of a lesson's cards")
+        .description(
+            "Validates, in one transaction, the recordings of the named cards that are to \
+             review without a review note; a flagged recording stays to review, a validated \
+             one keeps its validation, and a card without a recording is skipped. The cards' \
+             own status is left alone. When an id is not a card of the lesson, nothing is \
+             validated.",
+        )
+        .security_requirement(SESSION_SECURITY)
+        .response_with::<200, Json<RecordingValidationsResponse>, _>(|r| {
+            r.description("The review state of the recording of every card named that holds one")
         })
         .response_with::<400, ApiError, _>(|r| {
             r.description("The body is not JSON of the expected shape")

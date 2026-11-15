@@ -1,10 +1,13 @@
-//! Recordings: uploading one for a card or a lesson, removing it, and
-//! playing it back.
+//! Recordings: uploading one for a card or a lesson, removing it, reviewing
+//! it, and playing it back.
 
 use std::ops::RangeInclusive;
 
 use aide::{
-    axum::{ApiRouter, routing::get_with},
+    axum::{
+        ApiRouter,
+        routing::{get_with, put_with},
+    },
     transform::TransformOperation,
 };
 use axum::{
@@ -19,7 +22,10 @@ use serde::Deserialize;
 use uuid::Uuid;
 use validator::{ValidationError, ValidationErrors};
 
-use super::{AudioResponse, Resource, TAG};
+use super::{
+    AudioResponse, Resource, TAG, set_review_note, set_review_note_docs, set_status,
+    set_status_docs,
+};
 use crate::{
     api::{
         SESSION_SECURITY,
@@ -27,7 +33,10 @@ use crate::{
     },
     audio::{self, Format},
     content::{self, Upload},
-    db::{self, content::WithAudio},
+    db::{
+        self,
+        content::{Recordings, WithAudio},
+    },
     error::ApiError,
     router::AppState,
     storage::ObjectStore,
@@ -43,7 +52,31 @@ pub fn upload_limit() -> DefaultBodyLimit {
 }
 
 pub fn routes() -> ApiRouter<AppState> {
-    ApiRouter::new().api_route("/api/v1/audio/{audioId}", get_with(play, play_docs))
+    ApiRouter::new()
+        .api_route("/api/v1/audio/{audioId}", get_with(play, play_docs))
+        .api_route(
+            "/api/v1/audio/{audioId}/status",
+            put_with(
+                set_status::<AudioResource>,
+                set_status_docs::<AudioResource>,
+            ),
+        )
+        .api_route(
+            "/api/v1/audio/{audioId}/review-note",
+            put_with(
+                set_review_note::<AudioResource>,
+                set_review_note_docs::<AudioResource>,
+            ),
+        )
+}
+
+/// The recordings, reviewed apart from the card or lesson holding them.
+pub struct AudioResource;
+
+impl Resource for AudioResource {
+    type Rows = Recordings;
+    type Path = AudioPath;
+    const NOT_FOUND_DOCS: &'static str = "No recording has this id";
 }
 
 fn invalid(field: &'static str, code: &'static str) -> ApiError {
@@ -133,8 +166,9 @@ pub fn put_audio_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOpera
             "A `multipart/form-data` body whose `file` part is an MP3, MP4 audio (AAC, `.m4a`), \
              Ogg (Opus or Vorbis), WebM (Opus) or WAV file of at most 10 MB. The type is read \
              from the file's first bytes, whatever the client says, and the file is stored \
-             as is. It replaces the recording the item had, which is deleted, and sends the \
-             item back to `to_review`. The optional `durationMs` part is the length the client measured, \
+             as is. It replaces the recording the item had, which is deleted. The new \
+             recording is `to_review`, and learners hear it once it is validated; the item \
+             keeps its own status. The optional `durationMs` part is the length the client measured, \
              a whole number of milliseconds from 1 to 600000; it is stored only when the server \
              cannot read the length from the file itself (MP3, MP4 and WebM), and a length the \
              server reads wins over it.",
@@ -174,8 +208,7 @@ pub fn delete_audio_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOp
     op.tag(TAG)
         .summary("Remove the recording")
         .description(
-            "Deletes the recording, and sends the item back to `to_review`. Answers 204 when \
-             it has none.",
+            "Deletes the recording; the item keeps its status. Answers 204 when it has none.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<204, NoContent, _>(|r| r.description("The item has no recording"))
@@ -191,6 +224,12 @@ pub fn delete_audio_docs<R: Resource>(op: TransformOperation<'_>) -> TransformOp
 #[serde(rename_all = "camelCase")]
 pub struct AudioPath {
     audio_id: Uuid,
+}
+
+impl From<AudioPath> for Uuid {
+    fn from(path: AudioPath) -> Self {
+        path.audio_id
+    }
 }
 
 /// What a `Range` header asks of a file of `size` bytes.
@@ -303,9 +342,9 @@ fn play_docs(op: TransformOperation<'_>) -> TransformOperation<'_> {
         .summary("Play a recording")
         .description(
             "Streams the file with its own `Content-Type`. Honours a single `Range: bytes=…`, \
-             which `<audio>` seeking needs, with a 206. Any logged-in account plays the \
-             recording of a card or lesson learners see: validated, with its lesson and unit. \
-             An `admin` plays them all. Others answer 404.",
+             which `<audio>` seeking needs, with a 206. Any logged-in account plays a \
+             validated recording of a card or lesson learners see: validated, with its lesson \
+             and unit. An `admin` plays them all. Others answer 404.",
         )
         .security_requirement(SESSION_SECURITY)
         .response_with::<200, (), _>(|r| r.description("The whole file, `audio/*`"))

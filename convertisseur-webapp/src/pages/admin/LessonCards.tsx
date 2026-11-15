@@ -21,6 +21,7 @@ import {
 	useContentFailure,
 } from "@/pages/admin/contentParts";
 import {
+	AudioStatePill,
 	CardStatePill,
 	countCards,
 	Progress,
@@ -97,6 +98,7 @@ export function LessonCards({
 	const { lesson, cards } = loading;
 	const counts = countCards(cards);
 	const total = totalOf(counts);
+	const toHear = counts.recordings.toReview + counts.recordings.flagged;
 	const shown = filterCards(cards, filters);
 	const around = tree ? neighbours(tree, filters, lesson.id) : undefined;
 	return (
@@ -153,6 +155,11 @@ export function LessonCards({
 					) : null}
 					{counts.withoutAudio > 0 ? (
 						<span>{`${counts.withoutAudio} sans audio`}</span>
+					) : null}
+					{toHear > 0 ? (
+						<span>
+							{countOf(toHear, "audio à écouter", "audios à écouter")}
+						</span>
 					) : null}
 				</p>
 			</div>
@@ -259,7 +266,13 @@ function CardTable({
 							{card.reviewNote ? <NoteFlag /> : null}
 						</th>
 						<td className="lesson-cards-meaning">{card.meaningFr}</td>
-						<td className="lesson-cards-audio">{card.audio ? "Oui" : "Non"}</td>
+						<td className="lesson-cards-audio">
+							{card.audio ? (
+								<AudioStatePill state={cardState(card.audio)} />
+							) : (
+								"Non"
+							)}
+						</td>
 						<td className="lesson-cards-state">
 							<CardStatePill state={cardState(card)} />
 						</td>

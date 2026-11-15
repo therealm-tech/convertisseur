@@ -37,7 +37,9 @@ const memberPath =
 	/^\/api\/v1\/(units|lessons|cards)(?:\/([^/]+))?(\/status|\/audio|\/review-note)?$/;
 
 const lessonCardsPath =
-	/^\/api\/v1\/lessons\/([^/]+)\/(cards|card-validations)$/;
+	/^\/api\/v1\/lessons\/([^/]+)\/(cards|card-validations|audio-validations)$/;
+
+const audioReviewPath = /^\/api\/v1\/audio\/([^/]+)\/(status|review-note)$/;
 
 const trackPath = /^\/api\/v1\/tracks(?:\/([^/]+))?(?:\/lessons\/([^/]+))?$/;
 
@@ -59,8 +61,9 @@ interface LessonState {
 	exercise: ExerciseResult | null;
 }
 
+/** Learners hear a recording once it is validated. */
 const playback = (audio: Audio | null) =>
-	audio
+	audio?.status === "validated"
 		? { url: `/api/v1/audio/${audio.id}`, durationMs: audio.durationMs }
 		: null;
 
@@ -277,13 +280,7 @@ export class FakeContent {
 		}
 	}
 
-	private audio(
-		row: Row,
-		method: string,
-		body: unknown,
-		actor: User,
-	): Response {
-		const before = row.audio;
+	private audio(row: Row, method: string, body: unknown): Response {
 		if (method === "DELETE") {
 			row.audio = null;
 		} else {
@@ -302,13 +299,10 @@ export class FakeContent {
 				sizeBytes: file.size,
 				durationMs: claimed > 0 ? claimed : null,
 				createdAt: this.tick(),
+				status: "to_review",
+				validatedAt: null,
+				reviewNote: null,
 			};
-		}
-		if (before !== row.audio) {
-			row.status = "to_review";
-			row.validatedBy = null;
-			row.validatedAt = null;
-			row.createdBy = row.createdBy ?? actor;
 		}
 		return row.audio && method === "PUT"
 			? json(200, row.audio)
@@ -546,7 +540,6 @@ export class FakeContent {
 		});
 	}
 
-	/** A lesson as the review queue lists it. */
 	/** The unit and lesson ids the review list gives each item. */
 	private parents(row: Row): {
 		unitId: string | null;
@@ -567,8 +560,11 @@ export class FakeContent {
 		const cards = this.rows.filter(
 			(row) => row.kind === "card" && row.parentId === lesson.id,
 		);
-		const flagged = (row: Row) =>
+		const flagged = (row: { status: Status; reviewNote: string | null }) =>
 			row.status === "to_review" && row.reviewNote !== null;
+		const recordings = cards.flatMap((card) =>
+			card.audio ? [card.audio] : [],
+		);
 		return {
 			id: lesson.id,
 			position: lesson.position,
@@ -576,6 +572,7 @@ export class FakeContent {
 			status: lesson.status,
 			reviewNote: lesson.reviewNote,
 			hasAudio: lesson.audio !== null,
+			audioStatus: lesson.audio?.status ?? null,
 			unit: {
 				id: unit.id,
 				track: unit.track,
@@ -591,6 +588,14 @@ export class FakeContent {
 					(card) => card.status === "to_review" && !flagged(card),
 				).length,
 				withoutAudio: cards.filter((card) => card.audio === null).length,
+				recordings: {
+					validated: recordings.filter((audio) => audio.status === "validated")
+						.length,
+					flagged: recordings.filter(flagged).length,
+					toReview: recordings.filter(
+						(audio) => audio.status === "to_review" && !flagged(audio),
+					).length,
+				},
 			},
 		};
 	}
@@ -623,6 +628,13 @@ export class FakeContent {
 					params.get("missingAudio") !== "true" ||
 					cardsOf(lesson).some((card) => card.audio === null),
 			)
+			.filter(
+				(lesson) =>
+					params.get("pendingAudio") !== "true" ||
+					[lesson, ...cardsOf(lesson)].some(
+						(row) => row.audio?.status === "to_review",
+					),
+			)
 			.sort(
 				(a, b) =>
 					unitOf(a).track.localeCompare(unitOf(b).track) ||
@@ -638,6 +650,9 @@ export class FakeContent {
 			total: matching.length,
 			itemsToReview: this.rows.filter((row) => row.status === "to_review")
 				.length,
+			recordingsToReview: this.rows.filter(
+				(row) => row.audio?.status === "to_review",
+			).length,
 			cardsWithoutAudio: this.rows.filter(
 				(row) => row.kind === "card" && row.audio === null,
 			).length,
@@ -666,15 +681,48 @@ export class FakeContent {
 				total: cards.length,
 			});
 		}
-		if (method === "POST" && sub === "card-validations") {
+		const named = (): Row[] | Response => {
 			const { cardIds } = body as { cardIds: string[] };
-			const named = cards.filter((card) => cardIds.includes(card.id));
-			if (cardIds.length === 0 || new Set(cardIds).size !== named.length) {
-				return problem(422, "validation", {}, [
-					{ field: "cardIds", code: "card_not_in_lesson" },
-				]);
+			const found = cards.filter((card) => cardIds.includes(card.id));
+			return cardIds.length === 0 || new Set(cardIds).size !== found.length
+				? problem(422, "validation", {}, [
+						{ field: "cardIds", code: "card_not_in_lesson" },
+					])
+				: found;
+		};
+		if (method === "POST" && sub === "audio-validations") {
+			const found = named();
+			if (found instanceof Response) {
+				return found;
 			}
-			for (const card of named) {
+			const recordings = found.flatMap((card) => {
+				const audio = card.audio;
+				if (audio?.status === "to_review" && audio.reviewNote === null) {
+					card.audio = {
+						...audio,
+						status: "validated",
+						validatedAt: this.tick(),
+					};
+				}
+				return card.audio ? [{ card, audio: card.audio }] : [];
+			});
+			return json(200, {
+				recordings: recordings.map(({ card, audio }) => ({
+					cardId: card.id,
+					id: audio.id,
+					status: audio.status,
+					validatedAt: audio.validatedAt,
+					validatedBy: audio.status === "validated" ? author(actor) : null,
+					reviewNote: audio.reviewNote,
+				})),
+			});
+		}
+		if (method === "POST" && sub === "card-validations") {
+			const found = named();
+			if (found instanceof Response) {
+				return found;
+			}
+			for (const card of found) {
 				if (card.status === "to_review" && card.reviewNote === null) {
 					card.status = "validated";
 					card.validatedBy = actor;
@@ -682,7 +730,7 @@ export class FakeContent {
 				}
 			}
 			return json(200, {
-				cards: named.map((card) => ({
+				cards: found.map((card) => ({
 					id: card.id,
 					status: card.status,
 					validatedAt: card.validatedAt,
@@ -692,6 +740,39 @@ export class FakeContent {
 			});
 		}
 		return problem(404, "not-found");
+	}
+
+	/** `PUT /api/v1/audio/{audioId}/status` and `…/review-note`. */
+	private reviewAudio(
+		audioId: string,
+		sub: string,
+		fields: Record<string, unknown>,
+		actor: User,
+	): Response {
+		const row = this.rows.find((candidate) => candidate.audio?.id === audioId);
+		if (!row?.audio) {
+			return problem(404, "not-found");
+		}
+		// A new object, not a change in place: tests share their recordings.
+		if (sub === "review-note") {
+			const reviewNote = String(fields.text ?? "").trim() || null;
+			row.audio = { ...row.audio, reviewNote };
+			return json(200, { text: reviewNote });
+		}
+		const next = fields.status as Status;
+		if (row.audio.status !== next) {
+			row.audio = {
+				...row.audio,
+				status: next,
+				validatedAt: next === "validated" ? this.tick() : null,
+			};
+		}
+		const audio = row.audio;
+		return json(200, {
+			status: audio.status,
+			validatedAt: audio.validatedAt,
+			validatedBy: audio.status === "validated" ? author(actor) : null,
+		});
 	}
 
 	handle(method: string, url: URL, body: unknown, actor: User): Response {
@@ -709,6 +790,16 @@ export class FakeContent {
 				this.row(decodeURIComponent(lessonId)),
 				sub,
 				body,
+				actor,
+			);
+		}
+		const audioReview = url.pathname.match(audioReviewPath);
+		if (audioReview && method === "PUT") {
+			const [, audioId = "", sub = ""] = audioReview;
+			return this.reviewAudio(
+				decodeURIComponent(audioId),
+				sub,
+				(body ?? {}) as Record<string, unknown>,
 				actor,
 			);
 		}
@@ -732,7 +823,7 @@ export class FakeContent {
 		}
 		const row = id ? this.row(decodeURIComponent(id)) : undefined;
 		if (row && sub === "/audio") {
-			return this.audio(row, method, body, actor);
+			return this.audio(row, method, body);
 		}
 		if (row && sub === "/review-note" && method === "PUT") {
 			const text = String(fields.text ?? "").trim();

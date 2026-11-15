@@ -3082,6 +3082,10 @@ a.button-secondary {
 	font-weight: 800;
 }
 
+.review-summary-line {
+	display: block;
+}
+
 .review-flagged {
 	display: flex;
 	flex-direction: column;

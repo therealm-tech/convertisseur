@@ -60,7 +60,8 @@ function seed(
 const memberPath =
 	/^\/api\/v1\/users\/([^/]+)(\/role|\/password|\/password-resets|\/email)?$/;
 
-const contentPath = /^\/api\/v1\/(content-items|units|lessons|cards)(\/|$)/;
+const contentPath =
+	/^\/api\/v1\/((content-items|units|lessons|cards)(\/|$)|audio\/[^/]+\/)/;
 
 export function installFakeApi(): FakeApi {
 	const accounts: Account[] = [

@@ -102,6 +102,9 @@ function seed(api: FakeApi, withAudio: boolean) {
 					sizeBytes: 48_000,
 					durationMs: null,
 					createdAt: "2026-11-05T10:00:00Z",
+					status: "to_review",
+					validatedAt: null,
+					reviewNote: null,
 				}
 			: null,
 	});
@@ -156,7 +159,7 @@ describe("audio block", () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("uploads a chosen file, which sends the card back to review", async () => {
+	it("uploads a chosen file to listen to, the card still validated", async () => {
 		const { api, user, panel } = await openCard(false);
 
 		await user.upload(
@@ -167,12 +170,47 @@ describe("audio block", () => {
 		expect(await within(panel).findByText("MP3 · 3 ko")).toBeVisible();
 		expect(audioCalls(api)[0]?.method).toBe("PUT");
 		expect(uploadedFile(api).name).toBe("shukran.mp3");
-		expect(api.content.row("c-1")?.status).toBe("to_review");
+		expect(within(panel).getByRole("status")).toHaveTextContent(
+			"Audio enregistré : à écouter.",
+		);
+		expect(within(panel).getByText("À écouter")).toBeVisible();
+		expect(api.content.row("c-1")?.status).toBe("validated");
+		expect(api.content.row("c-1")?.audio?.status).toBe("to_review");
+		expect(within(panel).getByText(/^Validé par bilal/)).toBeVisible();
 		expect(
-			within(panel).getByText(
-				"En attente de relecture. Invisible pour les apprenants.",
-			),
+			within(panel).getByRole("button", { name: "Repasser à relire" }),
 		).toBeVisible();
+	});
+
+	it("validates the recording apart from the card, or sends it back", async () => {
+		const { api, user, panel } = await openCard(true);
+
+		expect(within(panel).getByText("À écouter")).toBeVisible();
+		await user.click(
+			within(panel).getByRole("button", { name: "Valider l'audio" }),
+		);
+
+		expect(await within(panel).findByText("Audio validé.")).toBeVisible();
+		expect(api.content.row("c-1")?.audio?.status).toBe("validated");
+		expect(
+			api.calls.filter((call) => call.path === "/api/v1/audio/a-1/status"),
+		).toEqual([
+			{
+				method: "PUT",
+				path: "/api/v1/audio/a-1/status",
+				body: { status: "validated" },
+			},
+		]);
+
+		await user.click(
+			within(panel).getByRole("button", { name: "Repasser à écouter" }),
+		);
+
+		expect(
+			await within(panel).findByText("Audio repassé à écouter."),
+		).toBeVisible();
+		expect(api.content.row("c-1")?.audio?.status).toBe("to_review");
+		expect(api.content.row("c-1")?.status).toBe("validated");
 	});
 
 	it("records from the microphone with a live timer, then uploads", async () => {

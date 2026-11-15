@@ -22,4 +22,15 @@ WHERE
             FROM cards AS silent
             WHERE silent.lesson_id = lessons.id AND silent.audio_id IS NULL
         )
+    )
+    AND (
+        $4::boolean IS NOT TRUE
+        OR EXISTS (
+            SELECT 1
+            FROM audio AS unheard
+            LEFT JOIN cards AS holder ON unheard.id = holder.audio_id
+            WHERE
+                unheard.status = 'to_review'
+                AND (holder.lesson_id = lessons.id OR unheard.id = lessons.audio_id)
+        )
     );

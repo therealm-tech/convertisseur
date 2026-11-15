@@ -91,7 +91,16 @@ impl Fixture {
 
     /// Uploads a recording for the item, then validates it again, since a
     /// new recording sends it back to review. Returns the recording's URL.
+    /// Uploads a recording for the item and validates it; returns its URL.
     async fn record(&self, collection: &str, id: &str) -> String {
+        let url = self.upload(collection, id).await;
+        self.validate("audio", url.trim_start_matches("/api/v1/audio/"))
+            .await;
+        url
+    }
+
+    /// Uploads a recording for the item, left to review; returns its URL.
+    async fn upload(&self, collection: &str, id: &str) -> String {
         let request = Request::put(format!("/api/v1/{collection}/{id}/audio"))
             .header(header::COOKIE, &self.admin)
             .header(
@@ -102,7 +111,6 @@ impl Fixture {
             .unwrap();
         let answer = self.server.request(request).await;
         assert_eq!(answer.status, StatusCode::OK, "{}", answer.body);
-        self.validate(collection, id).await;
         format!("/api/v1/audio/{}", answer.body["id"].as_str().unwrap())
     }
 
@@ -432,6 +440,37 @@ async fn refuses_the_recordings_of_content_learners_do_not_see(pool: PgPool) {
     fixture.validate("units", &unit).await;
     for url in [&lesson_audio, &card_audio] {
         assert_eq!(fixture.read(url).await.status, StatusCode::OK, "{url}");
+    }
+}
+
+#[sqlx::test]
+async fn keeps_the_recordings_to_review_from_learners(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let unit = fixture.unit("arabe", "Salutations").await;
+    let lesson = fixture.lesson(&unit, "En darija").await;
+    let card = fixture.card(&lesson, "صَحَّة").await;
+    for (collection, id) in [("units", &unit), ("lessons", &lesson), ("cards", &card)] {
+        fixture.validate(collection, id).await;
+    }
+    let lesson_audio = fixture.upload("lessons", &lesson).await;
+    let card_audio = fixture.upload("cards", &card).await;
+
+    let read = fixture
+        .read(&format!("/api/v1/tracks/arabe/lessons/{lesson}"))
+        .await;
+
+    assert_eq!(read.status, StatusCode::OK, "{}", read.body);
+    assert_eq!(read.body["audio"], Value::Null);
+    assert_eq!(
+        read.body["cards"][0]["arabic"], "صَحَّة",
+        "the card shows all the same"
+    );
+    assert_eq!(read.body["cards"][0]["audio"], Value::Null);
+    for url in [&lesson_audio, &card_audio] {
+        fixture
+            .read(url)
+            .await
+            .assert_problem(StatusCode::NOT_FOUND, "not-found");
     }
 }
 

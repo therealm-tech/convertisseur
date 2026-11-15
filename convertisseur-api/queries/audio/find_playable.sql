@@ -1,11 +1,11 @@
--- A recording, and whether learners see what holds it: a card validated with
--- its lesson and unit, or a lesson validated with its unit. FALSE when
--- nothing holds it.
+-- A recording, and whether learners hear it: validated itself, and held by
+-- a card validated with its lesson and unit, or by a lesson validated with
+-- its unit. FALSE when nothing holds it.
 SELECT
     audio.object_key,
     audio.content_type,
     audio.size_bytes,
-    coalesce(
+    audio.status = 'validated' AND coalesce(
         cards.status = 'validated'
         AND card_lessons.status = 'validated'
         AND card_units.status = 'validated',

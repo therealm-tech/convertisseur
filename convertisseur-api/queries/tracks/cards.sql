@@ -1,5 +1,5 @@
 -- The cards of a lesson learners see, in order: they, their lesson and its
--- unit are validated.
+-- unit are validated. A recording shows only once validated.
 SELECT
     cards.id,
     cards.arabic,
@@ -9,12 +9,12 @@ SELECT
     cards.initial_form,
     cards.medial_form,
     cards.final_form,
-    cards.audio_id,
+    audio.id AS audio_id,
     audio.duration_ms AS audio_duration_ms
 FROM cards
 INNER JOIN lessons ON cards.lesson_id = lessons.id
 INNER JOIN units ON lessons.unit_id = units.id
-LEFT JOIN audio ON cards.audio_id = audio.id
+LEFT JOIN audio ON cards.audio_id = audio.id AND audio.status = 'validated'
 WHERE
     cards.lesson_id = $1
     AND cards.status = 'validated'

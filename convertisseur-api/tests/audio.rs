@@ -204,9 +204,11 @@ async fn stores_a_recognised_file_whatever_the_client_calls_it(pool: PgPool) {
     assert_eq!(answer.body["contentType"], "audio/wav");
     assert_eq!(answer.body["sizeBytes"], 8_044);
     assert_eq!(answer.body["durationMs"], 1_000);
+    assert_eq!(answer.body["status"], "to_review");
+    assert_eq!(answer.body["reviewNote"], Value::Null);
     let card = fixture.get(&fixture.card).await;
     assert_eq!(card["audio"], answer.body);
-    assert_eq!(card["status"], "to_review");
+    assert_eq!(card["status"], "validated");
     assert_eq!(
         fixture.store.keys(),
         [format!("audio/{}", answer.body["id"].as_str().unwrap())]
@@ -305,7 +307,7 @@ async fn replacing_or_removing_a_recording_leaves_no_orphan(pool: PgPool) {
     assert_eq!(removed.status, StatusCode::NO_CONTENT);
     let card = fixture.get(&fixture.card).await;
     assert_eq!(card["audio"], Value::Null);
-    assert_eq!(card["status"], "to_review");
+    assert_eq!(card["status"], "validated");
     assert_eq!(fixture.store.keys(), Vec::<String>::new());
     assert_eq!(audio_rows(&pool).await, 0);
     let again = fixture
@@ -393,6 +395,10 @@ async fn learners_play_only_recordings_of_visible_content(pool: PgPool) {
     unit_to_review.assert_problem(StatusCode::NOT_FOUND, "not-found");
 
     fixture.validate(&fixture.unit).await;
+    let recording_to_review = fixture.play(Some(&learner), id, None).await;
+    recording_to_review.assert_problem(StatusCode::NOT_FOUND, "not-found");
+
+    fixture.validate(&format!("/api/v1/audio/{id}")).await;
     let shown = fixture.play(Some(&learner), id, None).await;
     assert_eq!(shown.status, StatusCode::OK);
 
@@ -413,6 +419,63 @@ async fn learners_play_only_recordings_of_visible_content(pool: PgPool) {
         )
         .await;
     unknown.assert_problem(StatusCode::NOT_FOUND, "not-found");
+}
+
+#[sqlx::test]
+async fn reviews_a_recording_apart_from_its_card(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let audio = fixture.upload(&fixture.card, &wav()).await.body;
+    let recording = format!("/api/v1/audio/{}", audio["id"].as_str().unwrap());
+
+    let flagged = fixture
+        .server
+        .send(
+            Method::PUT,
+            &format!("{recording}/review-note"),
+            Some(&fixture.admin),
+            Some(&json!({ "text": "Le ḥ sort comme un h simple" })),
+        )
+        .await;
+    assert_eq!(flagged.status, StatusCode::OK, "{}", flagged.body);
+    assert_eq!(flagged.body["text"], "Le ḥ sort comme un h simple");
+
+    fixture.validate(&recording).await;
+    let card = fixture.get(&fixture.card).await;
+    assert_eq!(card["status"], "to_review");
+    assert_eq!(card["reviewNote"], Value::Null);
+    assert_eq!(card["audio"]["status"], "validated");
+    assert!(card["audio"]["validatedAt"].is_string());
+    assert_eq!(card["audio"]["reviewNote"], "Le ḥ sort comme un h simple");
+
+    let replaced = fixture.upload(&fixture.card, &wav()).await.body;
+    assert_eq!(replaced["status"], "to_review");
+    assert_eq!(replaced["validatedAt"], Value::Null);
+    assert_eq!(replaced["reviewNote"], Value::Null);
+
+    for path in ["status", "review-note"] {
+        fixture
+            .server
+            .send(
+                Method::PUT,
+                &format!("{recording}/{path}"),
+                Some(&fixture.admin),
+                Some(&json!({ "status": "validated", "text": "x" })),
+            )
+            .await
+            .assert_problem(StatusCode::NOT_FOUND, "not-found");
+    }
+    create_account(&pool, "aicha", "user").await;
+    let learner = fixture.server.session("aicha").await;
+    fixture
+        .server
+        .send(
+            Method::PUT,
+            &format!("/api/v1/audio/{}/status", replaced["id"].as_str().unwrap()),
+            Some(&learner),
+            Some(&json!({ "status": "validated" })),
+        )
+        .await
+        .assert_problem(StatusCode::FORBIDDEN, "forbidden");
 }
 
 #[sqlx::test]

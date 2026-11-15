@@ -67,15 +67,21 @@ function BackIcon() {
 	);
 }
 
-/** The content entry, with how many items wait for a reviewer. */
+/** The content entry, with how many items and recordings wait for a reviewer. */
 function ContentLink() {
 	const { totals } = useReviewTotals();
-	const count = totals?.itemsToReview;
+	const toRead = totals?.itemsToReview ?? 0;
+	const toHear = totals?.recordingsToReview ?? 0;
+	const count = toRead + toHear;
+	const waiting = [
+		toRead ? `${toRead} à relire` : undefined,
+		toHear ? `${toHear} à écouter` : undefined,
+	].filter(Boolean);
 	return (
 		<Link
 			to="/admin/content"
 			className="admin-nav-link"
-			aria-label={count ? `Contenu, ${count} à relire` : undefined}
+			aria-label={count ? `Contenu, ${waiting.join(", ")}` : undefined}
 		>
 			<ContentIcon />
 			Contenu
