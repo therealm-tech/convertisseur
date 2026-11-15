@@ -73,8 +73,8 @@ staff write and review the learning content (see
 
 `/admin/content` keeps its filters in its query string, each change
 replacing the history entry rather than adding one: `status`, `note` (a
-review note), `audio=missing` (cards without a recording) and `track`
-narrow what it shows. It shows one of three things:
+review note), `audio=missing` (cards without a recording), `audio=to-review`
+(recordings to review) and `track` narrow what it shows. It shows one of three things:
 
 - **The tree**, by default: the tracks, their units and their lessons, each
   lesson with its cards and what is left to review. `unit` narrows it to one
@@ -218,6 +218,8 @@ erDiagram
         text object_key "in the object store"
         text content_type
         bigint size_bytes
+        content_status status "its own review"
+        text review_note "NULL unless a reviewer wrote one"
     }
 ```
 
@@ -232,7 +234,8 @@ erDiagram
 - **A recording is an `audio` row**, held by one card or one lesson through
   its `audio_id`. The row holds the key of the object in the object store,
   `audio/<the row's id>`, its content type, its size, its length when known,
-  and who uploaded it.
+  who uploaded it, and its own review: a `status`, `validated_by` and
+  `validated_at`, and a `review_note`.
 - **A row created by the content sync carries its `import_key`**, the path
   of keys of its entry in `content/`, unique in its table; a row written in
   the admin area has none.
@@ -273,6 +276,14 @@ Staff write units, lessons and cards in the admin area; a reviewer, any
   undo. Its status, its recording and its review note stay open, and so do
   its children written in the admin area: a card added to an imported lesson
   is edited, moved and deleted like any other.
+- **A recording is reviewed apart from what holds it.** A card's or lesson's
+  status covers its text; its recording carries a review of its own, through
+  `PUT /api/v1/audio/{audioId}/status` and `…/review-note`. Uploading,
+  replacing or removing a recording leaves the card's or lesson's status as
+  it is, and a new recording starts `to_review`. The text of the starter
+  content is reviewed in pull requests and its recordings are not in the
+  files, so a single status would hide a validated card each time it gets a
+  recording.
 - **A review note is not a status.** `PUT …/review-note` writes or clears it
   on any row, imported or not, and leaves the status alone: a reviewer who
   wants the row hidden again sends it back to review as well.
@@ -297,7 +308,8 @@ strips the Arabic short vowels, other diacritics and the tatweel, so `شكرا` 
 `/admin/content?status=to-review`, where `/admin/review` leads, lists the
 lessons a reviewer has something to do in, by track and unit, each with the
 cards left to review and a way to review it; `audio=missing` lists them by
-the cards without a recording instead.
+the cards without a recording instead, and `audio=to-review` by the
+recordings to review, the lesson's own or a card's.
 `/admin/review/lessons/{lessonId}` reviews one of them: on a screen under
 1024px wide, card by card and full screen, without the admin bar, whose
 place the card needs; above, every card on one page, beside the admin
@@ -307,15 +319,17 @@ take `RequireRole<Admin>` like the rest of the content:
 
 - **`GET /api/v1/lessons` lists lesson summaries in the order of the
   tracks**: units by track and position, lessons by position. Each carries
-  its unit and how its cards stand: validated, flagged, to review and
-  without a recording. `pendingReview=true` keeps the lessons where the
-  lesson, its unit or a card is to review; `missingAudio=true` the lessons
-  with a card without a recording, whatever their status; `unitId` the
-  lessons of one unit. Every page also gives `itemsToReview`, the units,
-  lessons and cards to review, flagged or not, and `cardsWithoutAudio`, for
+  its unit, the status of its own recording, and how its cards stand:
+  validated, flagged, to review and without a recording, and how their
+  recordings stand. `pendingReview=true` keeps the lessons where the lesson,
+  its unit or a card is to review; `missingAudio=true` the lessons with a
+  card without a recording, whatever their status; `pendingAudio=true` the
+  lessons with a recording to review; `unitId` the lessons of one unit.
+  Every page also gives `itemsToReview`, the units, lessons and cards to
+  review, flagged or not, `recordingsToReview`, and `cardsWithoutAudio`, for
   the navigation's badge.
-- **A flagged card is a card to review with a review note**, not a status of
-  its own. Flagging writes the note and sends a validated card back to
+- **A flagged card, or recording, is one to review with a review note**, not
+  a status of its own. Flagging writes the note and sends a validated card back to
   review; validating a flagged card clears its note.
 - **A lesson's recording is optional**: learners are offered it only when it
   exists. "Without audio" counts cards alone; the review page still lets the
@@ -327,9 +341,11 @@ take `RequireRole<Admin>` like the rest of the content:
   content lock. Flagged cards stay to review and validated ones keep their
   first validation. An id that is not a card of the lesson answers `422`
   `card_not_in_lesson` and validates nothing.
-- **"Previous" and "next" lesson move among the lessons left to review**, in
-  the order of the tracks, so that a reviewer goes from one task to the next
-  without passing lessons with nothing to do.
+  `POST /api/v1/lessons/{lessonId}/audio-validations` does the same for the
+  recordings of the cards it names, and leaves the cards' own status alone.
+- **"Previous" and "next" lesson move among the lessons left to review**,
+  their text or a recording, in the order of the tracks, so that a reviewer
+  goes from one task to the next without passing lessons with nothing to do.
 
 ## What learners see
 
@@ -341,7 +357,8 @@ gets the same `403` as everywhere else.
 
 - **A unit, lesson or card is visible when it and every row above it are
   validated.** A validated lesson in a unit to review is hidden, and so are
-  its cards. The rule lives in the SQL under
+  its cards. A recording plays only once it is validated as well; until
+  then the card shows without it. The rule lives in the SQL under
   [`queries/tracks/`](convertisseur-api/queries/tracks/) and in the
   recording lookup, which join up to the unit and test every status.
 - **Hidden content does not exist for learners.** It is left out of the
@@ -595,10 +612,10 @@ sequenceDiagram
   deleting the card or lesson that holds it, deletes the row and then the
   object. A failed object deletion leaves an orphan that nothing references
   and logs a warning; it never fails the request.
-- **A new or removed recording is an edit**: the card or lesson goes back to
-  `to_review`.
+- **A new recording is to review**, whatever the status of the card or
+  lesson holding it, which a new or removed recording leaves alone.
 - **Playback goes through the API** (`GET /api/v1/audio/{audioId}`), which
-  streams the object from the store. Any logged-in account plays the
+  streams the object from the store. Any logged-in account plays a validated
   recording of a card or lesson learners see (validated, with every row above
   it), an `admin` plays any; anything else is a `404`, which says nothing of
   what exists. It honours a single
@@ -1047,7 +1064,8 @@ rather than a part of it.
 - **Learners see only what is validated together with every row above it.**
   A card needs its lesson and unit validated, a lesson its unit; this holds
   for the track outline, the lesson and its cards, and the playback of a
-  recording. Sending a unit back to review hides everything under it at once.
+  recording, which must be validated itself. Sending a unit back to review
+  hides everything under it at once.
 - **The configured super admin's username is not reserved.** It exists from
   the first start-up, so registering it answers the same `409` as any other
   taken username. Its format is exempt from the registration rules.

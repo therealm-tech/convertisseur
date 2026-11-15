@@ -30,11 +30,14 @@ an admin has validated, together with everything above it, is shown. In the
 admin area, admins write and review the
 learning content at `/admin/content`: units, lessons and cards, with audio
 uploaded or recorded from the device's microphone, each "to review" until an
-admin validates it, and leave a review note on what needs a correction. The
+admin validates it, and leave a review note on what needs a correction. A
+recording is reviewed apart from its card's text: a card shows to learners
+once its text is validated, and its recording plays once validated too. The
 starter content is written in the repository, reviewed in pull requests and
 kept in step by the server, which validates it; the admin area shows it read-only, apart from its review, its recording and
 its note. The content shows as a tree of the tracks, units and lessons,
-filtered to what is left to review, without audio or noted, down to one
+filtered to what is left to review, without audio, with audio to listen to
+or noted, down to one
 lesson's cards; a reviewer goes through each lesson left to review, card by
 card on a phone, and records the cards without audio. At
 `/admin/users`, they search
