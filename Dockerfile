@@ -12,7 +12,7 @@ COPY assets/ ../assets/
 COPY convertisseur-webapp/ ./
 RUN npm run build
 
-FROM rust:1.99.1-alpine3.24@sha256:44819b27be4c97b0e4d7203bd2e02c4820f97700211b6a37fb4c246a2de59383 AS chef
+FROM rust:1.100.0-alpine3.24@sha256:8d0e82abfdf9a38071e07cabc5afba4ddbe077631a80e4e742a760c38beadc33 AS chef
 ARG CARGO_CHEF_VERSION
 RUN cargo install cargo-chef --locked --version "${CARGO_CHEF_VERSION}"
 WORKDIR /usr/local/src/convertisseur
